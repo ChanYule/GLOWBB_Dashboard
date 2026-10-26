@@ -1,0 +1,136 @@
+export type User = { username: string; role: "admin" | "planner" | "viewer" };
+export type Settings = {
+  seniorAge: number;
+  minority: string[];
+  ageBands: number[];
+  minSessions: number;
+  minParticipants: number;
+  privacyMinimum: number;
+};
+export type Stats = {
+  unique: number;
+  male: number;
+  minority: number;
+  knownGender: number;
+  knownRace: number;
+  malePct: number | null;
+  minorityPct: number | null;
+  unknownGender: number;
+  unknownRace: number;
+  attendance: number;
+  seniorAttendance: number;
+  sessions: number;
+  repeat: number;
+  firstObserved: number;
+  frequency: number;
+  average: number;
+  allAges: number;
+};
+export type Trend = Stats & { label: string; partial?: boolean };
+export type Programme = Stats & {
+  id: string;
+  name: string;
+  domain: string;
+  recurring: boolean;
+  trend: Trend[];
+  sessionList: {
+    id: string;
+    date: string;
+    start: number;
+    end: number;
+    venue?: string;
+  }[];
+  optional: Record<string, unknown>;
+};
+export type Recommendation = {
+  id: string;
+  programme: string;
+  category: string;
+  target: string;
+  evidence: string;
+  figures: string;
+  reason: string;
+  action: string;
+  next: string;
+  limitations: string;
+};
+export type Filters = {
+  from: string;
+  to: string;
+  domain: string;
+  programme: string;
+  target: string;
+  interval: string;
+  gender: string;
+  race: string;
+  client: string;
+  boundary: string;
+  ageBand: string;
+};
+export type Target = {
+  id: number;
+  metric: string;
+  value: number;
+  start: string;
+  end: string;
+  programme_id?: string;
+  current: number;
+  progress: number;
+  gap: number;
+  daysRemaining: number;
+};
+export type Decision = {
+  id: string;
+  status: string;
+  notes: string;
+  updated: string;
+};
+export type Dashboard = {
+  summary: Stats;
+  previous: (Stats & { from: string; to: string }) | null;
+  trends: Trend[];
+  programmes: Programme[];
+  domains: Trend[];
+  gender: Count[];
+  race: Count[];
+  ages: Count[];
+  clients: Count[];
+  boundary: Count[];
+  frequency: Count[];
+  timing: Trend[];
+  recommendations: Recommendation[];
+  period: { from: string; to: string; now: string };
+  coverage: { from: string | null; to: string | null };
+  quality: Record<string, number>;
+  options: {
+    domains: string[];
+    programmes: { id: string; name: string }[];
+    races: string[];
+  };
+  settings: Settings;
+  targets: Target[];
+  decisions: Decision[];
+};
+export type Count = { label: string; value: number };
+export type Preview = {
+  id: string;
+  rawRows: number;
+  ready: number;
+  duplicates: number;
+  invalid: number;
+  skipped: number;
+  exactDuplicates: number;
+  issues: { row: number; message: string }[];
+  variants: string[][];
+  preview: {
+    row: number;
+    programme: string;
+    domain: string;
+    date: string;
+    start: number;
+    end: number;
+    warnings: string[];
+  }[];
+  reference: Record<string, string | number | null>;
+  expectedReference: Record<string, string | number>;
+};
