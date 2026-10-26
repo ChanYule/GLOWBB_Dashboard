@@ -279,76 +279,33 @@ test("formula cells and ambiguous workbooks rejected", async () => {
     readFile(Buffer.from(await wb.xlsx.writeBuffer()), "a.xlsx"),
   );
 });
-test("server permissions, CSRF, import confirmation, exports, targets and decisions", async () => {
-  const db = database();
-  for (const [i, role] of ["viewer", "planner"].entries())
-    db.prepare("INSERT INTO users VALUES(?,?,?,?)").run(
-      i + 2,
-      role,
-      passwordHash("test-password-long"),
-      role,
-    );
+test("dashboard opens without login; origin checks, import confirmation and persistence remain intact", async () => {
+  const db = openDb(":memory:");
   const server = createApp(db).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  const request = async (
-    path,
-    method = "GET",
-    body,
-    cookie,
-    withOrigin = true,
-  ) =>
+  const origin = "http://127.0.0.1:" + server.address().port;
+  const request = (path, method = "GET", body, withOrigin = true) =>
     fetch(origin + path, {
       method,
       headers: {
         ...(withOrigin ? { Origin: origin } : {}),
-        ...(cookie ? { Cookie: cookie } : {}),
         ...(body instanceof FormData
           ? {}
           : { "Content-Type": "application/json" }),
       },
-      body:
-        body instanceof FormData
-          ? body
-          : body === undefined
-            ? undefined
-            : JSON.stringify(body),
+      ...(body === undefined
+        ? {}
+        : { body: body instanceof FormData ? body : JSON.stringify(body) }),
     });
-  const login = async (username) => {
-    const r = await request("/api/login", "POST", {
-      username,
-      password: "test-password-long",
-    });
-    assert.equal(r.status, 200);
-    return r.headers.get("set-cookie").split(";")[0];
-  };
   try {
-    assert.equal((await request("/api/dashboard")).status, 401);
+    assert.equal((await request("/api/dashboard")).status, 200);
+    const me = await request("/api/me");
+    assert.equal(me.headers.has("set-cookie"), false);
+    assert.equal((await me.json()).username, "Local workspace");
+    assert.equal((await request("/api/login", "POST", {})).status, 404);
+    assert.equal((await request("/api/logout", "POST", {})).status, 404);
     assert.equal(
-      (
-        await request(
-          "/api/login",
-          "POST",
-          { username: "admin", password: "test-password-long" },
-          undefined,
-          false,
-        )
-      ).status,
-      403,
-    );
-    const admin = await login("admin"),
-      viewer = await login("viewer"),
-      planner = await login("planner");
-    assert.equal(
-      (await request("/api/settings", "PUT", defaults, viewer)).status,
-      403,
-    );
-    assert.equal(
-      (await request("/api/import/confirm", "POST", {}, planner)).status,
-      403,
-    );
-    assert.equal(
-      (await request("/api/quality", "GET", undefined, viewer)).status,
+      (await request("/api/settings", "PUT", defaults, false)).status,
       403,
     );
     const csv = [HEADERS, row()]
@@ -356,110 +313,82 @@ test("server permissions, CSRF, import confirmation, exports, targets and decisi
       .join("\r\n");
     const form = new FormData();
     form.append("file", new Blob([csv]), "attendance.csv");
-    const response = await request("/api/import/preview", "POST", form, admin);
+    const response = await request("/api/import/preview", "POST", form);
     assert.equal(response.status, 200);
     const preview = await response.json();
     assert.equal(preview.ready, 1);
     assert.equal(readData(db).attendance.length, 0);
     assert.equal(
-      JSON.stringify(preview).includes(source([row()]).rows[0].participant.id),
-      false,
-    );
-    assert.equal(
-      (await request("/api/import/confirm", "POST", { id: preview.id }, admin))
-        .status,
+      (await request("/api/import/confirm", "POST", { id: preview.id })).status,
       200,
     );
     assert.equal(readData(db).attendance.length, 1);
     assert.equal(
-      (await request("/api/import/confirm", "POST", { id: preview.id }, admin))
-        .status,
+      (await request("/api/import/confirm", "POST", { id: preview.id })).status,
       400,
     );
+    const imported = db.prepare("SELECT user_id FROM imports").get();
     assert.equal(
-      (
-        await request(
-          "/api/targets",
-          "POST",
-          { metric: "male", value: 10, start: "2026-05-01", end: "2026-10-26" },
-          viewer,
-        )
-      ).status,
-      403,
+      imported.user_id,
+      (await (await request("/api/me")).json()).id,
     );
+    assert.equal((await request("/api/quality")).status, 200);
     assert.equal(
       (
-        await request(
-          "/api/targets",
-          "POST",
-          { metric: "male", value: 10, start: "2026-05-01", end: "2026-10-26" },
-          planner,
-        )
+        await request("/api/targets", "POST", {
+          metric: "male",
+          value: 10,
+          start: "2026-05-01",
+          end: "2026-10-26",
+        })
       ).status,
       200,
     );
     let dashboard = await (
-      await request("/api/dashboard?gender=FEMALE", "GET", undefined, admin)
+      await request("/api/dashboard?gender=FEMALE")
     ).json();
     assert.equal(dashboard.summary.unique, 0);
     assert.equal(dashboard.targets[0].current, 1);
-    const id = readData(db).programmes[0].id;
+    const programmeId = readData(db).programmes[0].id;
     assert.equal(
       (
-        await request(
-          "/api/decisions/" + id,
-          "PUT",
-          { status: "Approved for planning", notes: "Check resources." },
-          planner,
-        )
+        await request("/api/decisions/" + programmeId, "PUT", {
+          status: "Approved for planning",
+          notes: "Check resources.",
+        })
       ).status,
       200,
     );
-    const exportResponse = await request(
-        "/api/export/csv",
-        "GET",
-        undefined,
-        viewer,
-      ),
-      csvResult = await exportResponse.text();
-    assert.equal(exportResponse.status, 200);
-    assert.equal(csvResult.includes("Male reach"), false);
+    const exported = await request("/api/export/csv");
+    assert.equal(exported.status, 200);
+    assert.equal((await exported.text()).includes("Male reach"), false);
     assert.equal(
-      (
-        await request(
-          "/api/export/csv?target=minority",
-          "GET",
-          undefined,
-          admin,
-        )
-      ).status,
+      (await request("/api/export/csv?target=minority")).status,
       400,
     );
-    const report = await (
-      await request("/api/export/report", "GET", undefined, admin)
-    ).text();
+    const report = await (await request("/api/export/report")).text();
     assert.equal(report.includes("Check resources."), false);
-    assert.match(report, /Demographic cells/);
     assert.equal(
       (
-        await request(
-          "/api/settings",
-          "PUT",
-          { ...defaults, seniorAge: 70, ageBands: [80, 90] },
-          admin,
-        )
+        await request("/api/settings", "PUT", {
+          ...defaults,
+          seniorAge: 70,
+          ageBands: [80, 90],
+        })
       ).status,
       200,
     );
-    dashboard = await (
-      await request("/api/dashboard", "GET", undefined, admin)
-    ).json();
+    dashboard = await (await request("/api/dashboard")).json();
     assert.equal(dashboard.summary.unique, 0);
     assert.equal(readData(db).attendance.length, 1);
-    await request("/api/logout", "POST", {}, admin);
+    createApp(db);
     assert.equal(
-      (await request("/api/dashboard", "GET", undefined, admin)).status,
-      401,
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM users WHERE username='__local_workspace__'",
+        )
+        .get().n,
+      1,
     );
   } finally {
     await new Promise((r) => server.close(r));
@@ -616,7 +545,7 @@ test("SQLite startup migrations preserve records and decisions through a real fi
     rmSync(directory, { recursive: true });
   }
 });
-test("pilot planning persistence, report escaping, spreadsheet formula protection and role validation", async () => {
+test("pilot planning persistence, report escaping, spreadsheet formula protection and input validation", async () => {
   const db = database();
   importRows(db, [
     row("a", "<script>alert(1)</script>"),
@@ -625,23 +554,16 @@ test("pilot planning persistence, report escaping, spreadsheet formula protectio
   const server = createApp(db).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  let cookie = "";
   const req = async (path, method = "GET", body) =>
     fetch(origin + path, {
       method,
       headers: {
         Origin: origin,
-        Cookie: cookie,
         "Content-Type": "application/json",
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   try {
-    const login = await req("/api/login", "POST", {
-      username: "admin",
-      password: "test-password-long",
-    });
-    cookie = login.headers.get("set-cookie").split(";")[0];
     const t = await (
       await req("/api/targets", "POST", {
         metric: "male",

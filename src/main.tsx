@@ -14,7 +14,6 @@ import {
   HeartHandshake,
   Info,
   LayoutDashboard,
-  LogOut,
   Plus,
   Search,
   Settings2,
@@ -84,8 +83,6 @@ async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
         : { "Content-Type": "application/json", ...options.headers },
   });
   const data = await res.json();
-  if (res.status === 401 && url !== "/api/login")
-    document.dispatchEvent(new Event("staff-session-expired"));
   if (!res.ok) throw Error(data.error || "Unable to complete request.");
   return data;
 }
@@ -345,99 +342,6 @@ function Modal({
     </dialog>
   );
 }
-function Login({ onLogin }: { onLogin: (u: User) => void }) {
-  const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    setBusy(true);
-    setError("");
-    try {
-      onLogin(
-        await api<User>("/api/login", {
-          method: "POST",
-          body: JSON.stringify(Object.fromEntries(fd)),
-        }),
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="login-page">
-      <div className="login-brand">
-        <Brand />
-        <span className="eyebrow">GLOW BUKIT BATOK</span>
-        <h1>
-          Better programmes.
-          <br />
-          Meaningful connections.
-        </h1>
-        <p>
-          Understand participation, explore outreach opportunities and plan the
-          next chapter.
-        </p>
-        <div className="login-art">
-          <div>
-            <Users size={38} />
-            <span>
-              People at the heart
-              <br />
-              of every programme.
-            </span>
-          </div>
-        </div>
-        <span className="muted">
-          Programme impact & outreach · Staff workspace
-        </span>
-      </div>
-      <main className="login-main">
-        <form className="login-card" onSubmit={submit}>
-          <div className="icon-tile">
-            <ShieldCheck />
-          </div>
-          <h2>Welcome to your workspace</h2>
-          <p className="muted">Sign in with your authorised staff account.</p>
-          <label className="field">
-            <span>Username</span>
-            <input
-              name="username"
-              autoComplete="username"
-              required
-              maxLength={200}
-            />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              maxLength={512}
-            />
-          </label>
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          <Button primary type="submit" disabled={busy}>
-            {busy ? "Signing in…" : "Sign in"}
-            <ArrowRight size={18} />
-          </Button>
-          <Note>
-            Access is restricted to staff. An administrator must configure your
-            account before you can sign in.
-          </Note>
-        </form>
-      </main>
-    </div>
-  );
-}
 function Brand() {
   return (
     <div className="brand">
@@ -452,9 +356,8 @@ function Brand() {
   );
 }
 function App() {
-  const [user, setUser] = useState<User | null>(null),
-    [checked, setChecked] = useState(false),
-    [tab, setTab] = useState("Overview"),
+  const user: User = { username: "Local workspace", role: "admin" };
+  const [tab, setTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>(emptyFilters),
     [data, setData] = useState<Dashboard | null>(null),
     [error, setError] = useState(""),
@@ -464,23 +367,6 @@ function App() {
     [revision, setRevision] = useState(0),
     [toast, setToast] = useState("");
   useEffect(() => {
-    const expire = () => {
-      setUser(null);
-      setData(null);
-      setModal("");
-      setProgramme(null);
-    };
-    document.addEventListener("staff-session-expired", expire);
-    return () => document.removeEventListener("staff-session-expired", expire);
-  }, []);
-  useEffect(() => {
-    api<User>("/api/me")
-      .then(setUser)
-      .catch(() => {})
-      .finally(() => setChecked(true));
-  }, []);
-  useEffect(() => {
-    if (!user) return;
     let live = true;
     setLoading(true);
     api<Dashboard>("/api/dashboard?" + new URLSearchParams(filters))
@@ -502,7 +388,7 @@ function App() {
     return () => {
       live = false;
     };
-  }, [user, filters, revision]);
+  }, [filters, revision]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 6000);
@@ -512,8 +398,6 @@ function App() {
     setRevision((n) => n + 1);
     setToast(message);
   };
-  if (!checked) return <div className="loading">Opening staff workspace…</div>;
-  if (!user) return <Login onLogin={setUser} />;
   const tabs = [
     { name: "Overview", icon: LayoutDashboard },
     { name: "Programme Performance", icon: BarChart3 },
@@ -577,17 +461,6 @@ function App() {
               <strong>{user.username}</strong>
               <small>{user.role}</small>
             </div>
-            <button
-              aria-label="Sign out"
-              className="icon-button"
-              onClick={async () => {
-                await api("/api/logout", { method: "POST" });
-                setUser(null);
-                setData(null);
-              }}
-            >
-              <LogOut size={18} />
-            </button>
           </div>
         </div>
       </aside>
@@ -598,7 +471,7 @@ function App() {
           </span>
           <div>
             <span className="restricted">
-              <ShieldCheck size={15} /> Staff only
+              <ShieldCheck size={15} /> Local workspace
             </span>
             <span className="top-date">{pretty(sgToday())}</span>
           </div>
@@ -2661,5 +2534,4 @@ export {
   Programmes,
   ImportDialog,
   Modal,
-  Login,
 };

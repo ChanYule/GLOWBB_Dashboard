@@ -215,7 +215,7 @@ test("global filters expand, submit exact filter changes and reset", () => {
   fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   assert.equal(next.race, "");
 });
-test("empty application permits planning targets while guarding administrator import UI", async () => {
+test("application opens directly with import, settings and planning and no login controls", async () => {
   const original = globalThis.fetch;
   const empty = {
     ...dashboard(),
@@ -236,10 +236,10 @@ test("empty application permits planning targets while guarding administrator im
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    assert.equal(
-      screen.queryByRole("button", { name: "Import attendance" }),
-      null,
-    );
+    assert.ok(screen.getByRole("button", { name: "Import attendance" }));
+    assert.ok(screen.getByRole("button", { name: "Data & settings" }));
+    assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
+    assert.equal(screen.queryByRole("button", { name: "Sign out" }), null);
     fireEvent.click(
       screen.getByRole("button", { name: "Planning & Recommendations" }),
     );

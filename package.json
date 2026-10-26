@@ -10,14 +10,12 @@
     "test": "node --test --test-isolation=none tests/*.test.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "setup-admin": "node server/admin.js",
     "format": "prettier --write src server tests docs README.md"
   },
   "dependencies": {
     "csv-parse": "^7.0.3",
     "exceljs": "^4.4.0",
     "express": "^5.3.0",
-    "express-rate-limit": "^8.7.1",
     "lucide-react": "^1.61.0",
     "multer": "^2.5.0",
     "react": "^19.3.1",

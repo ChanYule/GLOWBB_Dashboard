@@ -8,28 +8,21 @@ Requires Node.js 24.14 or later (uses the built-in SQLite API) and npm.
 
 ```powershell
 npm.cmd ci
-$env:STAFF_USERNAME = 'your.staff.username'
-$staffSecret = Read-Host 'Choose a password of at least 12 characters' -AsSecureString
-$env:STAFF_PASSWORD = [System.Net.NetworkCredential]::new('', $staffSecret).Password
-npm.cmd run setup-admin
-Remove-Item Env:STAFF_PASSWORD
-$staffSecret.Dispose()
-Remove-Variable staffSecret
 npm.cmd run dev
 ```
 
-Open http://127.0.0.1:3000 and sign in using the account you configured. Password entry above is a terminal setup step; use a private terminal. There is no default password and no public registration endpoint. Repeat setup with `STAFF_ROLE` set to `planner` or `viewer` to create those roles; the default is `admin`. Reconfiguring an existing username updates its role/password and revokes its sessions. Clear temporary environment variables afterwards.
+Open http://127.0.0.1:3000. The dashboard opens directly without an account or sign-in. Import, settings, targets and planning actions are available in this local workspace.
 
 ```powershell
 npm.cmd run build
 npm.cmd start
 ```
 
-The production server serves the built React app and API together. Default binding is loopback only. `PORT`, `HOST`, `DB_PATH`, `APP_ORIGIN` and `COOKIE_SECURE` are supported. For hosting behind an approved HTTPS reverse proxy, set `APP_ORIGIN` to the exact public origin, `COOKIE_SECURE=true`, and configure the proxy and network policy. Do not put the database or a backup in a public web directory. No deployment was performed.
+The production server serves the built React app and API together. Default binding is loopback only. `PORT`, `HOST`, `DB_PATH` and `APP_ORIGIN` are supported. Login has been removed; anyone who can reach the application can view and change its data. The default loopback binding limits access to this computer. Do not put the database or a backup in a public web directory. No deployment was performed.
 
 ## Import the attendance workbook
 
-1. Sign in as an administrator and select **Import attendance**.
+1. Select **Import attendance**.
 2. Choose `.xlsx` or UTF-8 `.csv`, under 8 MB, up to 50,000 rows. `.xls` is not supported. XLSX expanded contents are limited to 64 MB. Export formula cells as values first.
 3. Put these exact headers in row 1, in any order, on exactly one worksheet:
 
@@ -51,9 +44,9 @@ The import preview includes the supplied reference checks: 3,101 raw rows, 385 a
 - **Programme Performance:** search and rank programmes; open a programme for session timing, attendance trend, average attendance, senior subgroups and evidence limits. A single observed session is not assumed to be the programme’s only intended delivery.
 - **Audience & Outreach:** gender/race, configured age bands, client/boundary status, frequency and weekday/time-of-day comparisons. Timing is descriptive. Venue and living-arrangement charts are unavailable because these fields were not supplied.
 - **Planning & Recommendations:** review transparent Expand/Maintain/Improve/Review prompts; configure targets to identify Pilot opportunities. Switch the 3/6-month discussion sequence. Save a planning status and resource assumptions for a programme or target-led pilot. No programme or attendance is automatically changed. Target progress always uses that target’s own dates/programme scope; global dashboard filters do not redefine goals.
-- **Data & settings** (admin): data quality, import history, audit events, senior threshold, minority categories, age-band boundaries and evidence thresholds. Changes recalculate metrics and targets without rewriting attendance.
+- **Data & settings**: data quality, import history, audit events, senior threshold, minority categories, age-band boundaries and evidence thresholds. Changes recalculate metrics and targets without rewriting attendance.
 - Global reporting period, domain, programme and audience filters affect all applicable observed charts, programme comparisons and programme recommendations. More filters expands age, gender, race, client and boundary choices. Reset restores available history. Target-driven opportunities explicitly retain the target’s own scope.
-- **Export report:** filtered aggregate programme CSV or a print-friendly HTML summary; use the browser’s Print → Save as PDF. Reporting period, observed trends, findings, recommendations and limitations are included. Audience-filtered shared exports are blocked. Shared exports omit all demographic breakdowns and staff notes, rather than selectively releasing small demographic cells. Internal dashboards remain staff-only and display small counts with cautions.
+- **Export report:** filtered aggregate programme CSV or a print-friendly HTML summary; use the browser’s Print → Save as PDF. Reporting period, observed trends, findings, recommendations and limitations are included. Audience-filtered shared exports are blocked. Shared exports omit all demographic breakdowns and staff notes, rather than selectively releasing small demographic cells. Internal dashboards display small counts with cautions.
 
 ## Calculation and recommendation rules
 
@@ -70,8 +63,8 @@ Sufficient programme evidence requires at least 3 sessions and 5 seniors by defa
 - `server/db.js` applies additive schema version 1 on startup using `CREATE TABLE IF NOT EXISTS` and non-destructive initial settings. It does not reset existing data. No separate manual SQL migration is required for this new database.
 - Tables: participants, programmes, sessions, attendance, imports, settings, targets, decisions, opportunity_decisions, audit, users, logins, schema_version. Foreign keys enforce relationships. Imports run in a transaction. Participant details and programme/session optional JSON fields reserve future extension without making missing optional data invalid.
 - Default persistent database: `data/glowbb.sqlite` (ignored by Git). Existing data survives ordinary restarts. The built-in SQLite API is documented at https://nodejs.org/api/sqlite.html.
-- Admin: import and definition changes; planner/admin: targets and programme planning decisions; viewer: read-only analytics and restricted aggregate exports. All API analytics and exports require sign-in. Eight-hour server sessions, hashed passwords/tokens, HttpOnly SameSite cookies, origin checks for mutations and login rate limits are implemented. There is no external identity provider, staff-task assignment or existing organisational permission service in the empty starting folder.
-- Audits record account configuration, sign-in, imports, definitions, target and planning changes; no participant IDs or free-text notes are written to audit output/logs. Data and settings screens are admin-only.
+- The application opens without authentication. Import, settings, targets, planning and reports are available directly. Existing account/session tables are retained for data compatibility but are no longer used for sign-in. The server retains same-origin checks for mutations and a loopback default binding.
+- Audits record imports, definitions, target and planning changes under a persistent Local workspace actor. This is a technical audit identity, not an authenticated person. No participant IDs or free-text notes are written to audit output/logs.
 - Stop the server before a filesystem backup and copy the complete `data` directory (including any SQLite WAL/SHM files) to approved encrypted storage. Restore with the server stopped. Apply organisation-approved filesystem permissions, encryption, retention and backup schedules. No organisational policy was supplied, and no retention period is invented. Import previews exist only in server memory; uploaded source buffers are discarded after parsing. Downloaded row reports are staff data and should follow the same retention rules.
 
 Future optional fields reserved in the JSON extension contract: preferredLanguage, livingArrangement, referralSource, interests, accessibilityNeeds, transportBarriers, firstRegistrationDate; venue, theme, capacity, cost, staffHours, registrationCount, waitingListCount, objectives, feedback, outreachMethod. They are not populated or editable in this release because the source data contains none of these values and there is no existing profile/calendar system to connect. Costs or capacity efficiencies must not be inferred from attendance. A future integration must use stable participant/programme/session IDs, authorised write validation and migrations before presenting those metrics.
@@ -86,4 +79,4 @@ npm.cmd run build
 npm.cmd audit
 ```
 
-See [delivery and QA notes](docs/DELIVERY.md) for actual results and limits. Main implementation: `server/domain.js` (parsing/analytics), `server/db.js` (persistence), `server/app.js` (protected API), `server/admin.js` (staff provisioning), `server/index.js` (app server), `src/main.tsx` / `src/types.ts` / `src/styles.css` (dashboard), `tests` (automated checks). No existing files or data were removed.
+See [delivery and QA notes](docs/DELIVERY.md) for actual results and limits. Main implementation: `server/domain.js` (parsing/analytics), `server/db.js` (persistence), `server/app.js` (local workspace API), `server/index.js` (app server), `src/main.tsx` / `src/types.ts` / `src/styles.css` (dashboard), `tests` (automated checks). Existing attendance and planning data are preserved.

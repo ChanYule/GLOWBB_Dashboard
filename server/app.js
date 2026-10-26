@@ -1,17 +1,8 @@
 import express from "express";
 import multer from "multer";
-import { rateLimit } from "express-rate-limit";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { readFile, inspectImport, analytics } from "./domain.js";
-import {
-  openDb,
-  readData,
-  getSettings,
-  saveImport,
-  verifyPassword,
-  audit,
-} from "./db.js";
-const digest = (x) => createHash("sha256").update(x).digest("hex");
+import { openDb, readData, getSettings, saveImport, audit } from "./db.js";
 const error = (status, message) => Object.assign(Error(message), { status });
 const date = (x) =>
   typeof x === "string" &&
@@ -57,78 +48,22 @@ export function createApp(db = openDb(), { production = false } = {}) {
     }
     next();
   });
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 10,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-    message: { error: "Too many sign-in attempts. Try again in 15 minutes." },
-  });
-  app.post("/api/login", limiter, (req, res) => {
-    const { username, password } = req.body;
-    if (
-      typeof username !== "string" ||
-      typeof password !== "string" ||
-      password.length > 512
-    )
-      throw error(400, "Enter a username and password.");
-    const u = db.prepare("SELECT * FROM users WHERE username=?").get(username);
-    if (!u || !verifyPassword(password, u.password))
-      throw error(401, "Username or password is incorrect.");
-    const token = randomBytes(32).toString("hex");
-    db.prepare("DELETE FROM logins WHERE expires<?").run(Date.now());
-    db.prepare("INSERT INTO logins VALUES(?,?,?)").run(
-      digest(token),
-      u.id,
-      Date.now() + 8 * 60 * 60 * 1000,
-    );
-    res.cookie("glow_session", token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.COOKIE_SECURE === "true",
-      maxAge: 8 * 60 * 60 * 1000,
-      path: "/",
-    });
-    audit(db, u.id, "staff.login");
-    res.json({ username: u.username, role: u.role });
-  });
+  // Retain an audit actor for foreign-key relationships without requiring an account.
+  db.prepare(
+    "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
+  ).run("__local_workspace__", "disabled");
+  const localActor = db
+    .prepare("SELECT id FROM users WHERE username=?")
+    .get("__local_workspace__");
   app.use("/api", (req, res, next) => {
-    const token = req.headers.cookie
-      ?.split(";")
-      .map((s) => s.trim())
-      .find((s) => s.startsWith("glow_session="))
-      ?.slice(13);
-    const u =
-      token &&
-      db
-        .prepare(
-          "SELECT users.id,username,role FROM logins JOIN users ON users.id=logins.user_id WHERE token=? AND expires>?",
-        )
-        .get(digest(token), Date.now());
-    if (!u)
-      return res
-        .status(401)
-        .json({ error: "Please sign in with a staff account." });
-    req.user = u;
-    req.sessionToken = token;
+    req.user = {
+      id: localActor.id,
+      username: "Local workspace",
+      role: "admin",
+    };
     next();
   });
-  const role =
-    (...allowed) =>
-    (req, res, next) =>
-      allowed.includes(req.user.role)
-        ? next()
-        : res
-            .status(403)
-            .json({ error: "Your staff role cannot make this change." });
   app.get("/api/me", (req, res) => res.json(req.user));
-  app.post("/api/logout", (req, res) => {
-    db.prepare("DELETE FROM logins WHERE token=?").run(
-      digest(req.sessionToken),
-    );
-    res.clearCookie("glow_session");
-    res.json({ ok: true });
-  });
   const filters = (req) => {
     const f = { ...req.query };
     for (const k of ["from", "to"])
@@ -184,7 +119,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
     storage: multer.memoryStorage(),
     limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 0 },
   }).single("file");
-  app.post("/api/import/preview", role("admin"), upload, async (req, res) => {
+  app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
     for (const [key, value] of previews)
       if (value.expires < Date.now()) previews.delete(key);
@@ -304,12 +239,12 @@ export function createApp(db = openDb(), { production = false } = {}) {
       },
     });
   });
-  app.delete("/api/import/preview/:id", role("admin"), (req, res) => {
+  app.delete("/api/import/preview/:id", (req, res) => {
     const p = previews.get(req.params.id);
     if (p?.user === req.user.id) previews.delete(req.params.id);
     res.json({ ok: true });
   });
-  app.post("/api/import/confirm", role("admin"), (req, res) => {
+  app.post("/api/import/confirm", (req, res) => {
     const p = previews.get(req.body.id);
     if (!p || p.user !== req.user.id || p.expires < Date.now())
       throw error(400, "Preview expired. Upload the file again.");
@@ -322,7 +257,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
     previews.delete(req.body.id);
     res.json(result);
   });
-  app.get("/api/quality", role("admin"), (req, res) =>
+  app.get("/api/quality", (req, res) =>
     res.json({
       imports: db
         .prepare(
@@ -335,7 +270,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
         .all(),
     }),
   );
-  app.put("/api/settings", role("admin"), (req, res) => {
+  app.put("/api/settings", (req, res) => {
     const s = req.body;
     if (
       !Number.isInteger(s.seniorAge) ||
@@ -383,7 +318,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
     audit(db, req.user.id, "definitions.updated");
     res.json(clean);
   });
-  app.post("/api/targets", role("admin", "planner"), (req, res) => {
+  app.post("/api/targets", (req, res) => {
     const t = req.body;
     if (
       !["unique", "male", "minority", "firstObserved"].includes(t.metric) ||
@@ -411,12 +346,12 @@ export function createApp(db = openDb(), { production = false } = {}) {
     audit(db, req.user.id, "target.created", { id });
     res.json({ id });
   });
-  app.delete("/api/targets/:id", role("admin", "planner"), (req, res) => {
+  app.delete("/api/targets/:id", (req, res) => {
     db.prepare("DELETE FROM targets WHERE id=?").run(req.params.id);
     audit(db, req.user.id, "target.removed");
     res.json({ ok: true });
   });
-  app.put("/api/decisions/:id", role("admin", "planner"), (req, res) => {
+  app.put("/api/decisions/:id", (req, res) => {
     const { status, notes } = req.body;
     const opportunity = /^target-\d+$/.test(req.params.id);
     const entityId = opportunity
