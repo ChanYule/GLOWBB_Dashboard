@@ -2,6 +2,8 @@
 
 Keep the existing Vercel project (`https://glowbbdashboard.vercel.app`). Vercel hosts the Vite frontend and the Express API through `api/[...path].js`. Supabase PostgreSQL stores attendance, settings, targets, decisions, audit history and import previews. No Render service or persistent disk is needed for this setup.
 
+**Already configured Supabase and seeing `SELF_SIGNED_CERT_IN_CHAIN`?** Deploy the latest source from this repository. Supabase's public CA certificate is now bundled and loaded automatically. You do not need to download a certificate or add `DATABASE_CA_CERT`. Keep the existing `DATABASE_URL` and `APP_ORIGIN` values.
+
 The code is prepared locally. No Supabase project has been created, no environment variables have been set in Vercel, and no deployment has been performed.
 
 ## 1. Create the Supabase project
@@ -23,19 +25,20 @@ postgresql://postgres.PROJECT_REF:ENCODED_PASSWORD@POOLER_HOST:6543/postgres
 
 Replace the password placeholder with your database password, URL-encoding special characters. Use the exact username and host from the dialog. This is the **database password**, not a publishable, anon or service-role API key.
 
-[Supabase recommends transaction pooling for serverless connections](https://supabase.com/docs/guides/database/connecting-to-postgres). This app uses one PostgreSQL connection per warm function instance, unnamed queries, and a single checked-out connection for each transaction. TLS certificate verification stays enabled. If your connection requires a project root certificate, download it from Supabase's database SSL settings and put the PEM contents in `DATABASE_CA_CERT`. Standard trusted certificate authorities remain supported alongside that certificate.
+[Supabase recommends transaction pooling for serverless connections](https://supabase.com/docs/guides/database/connecting-to-postgres). This app uses one PostgreSQL connection per warm function instance, unnamed queries, and a single checked-out connection for each transaction. Supabase's public root certificate is included in the app and automatically trusted for official Supabase database and pooler hosts. TLS certificate and hostname verification stay enabled. No certificate environment variable is needed for the standard Supabase setup.
 
 ## 3. Configure the existing Vercel project
 
 Open the existing project in [Vercel](https://vercel.com/dashboard), then **Settings → Environment Variables**. Add these values for **Production**:
 
-| Variable           | Value                                                                         |
-| ------------------ | ----------------------------------------------------------------------------- |
-| `DATABASE_URL`     | The complete Supabase Transaction pooler URI, including its database password |
-| `APP_ORIGIN`       | `https://glowbbdashboard.vercel.app` (no trailing slash)                      |
-| `DATABASE_CA_CERT` | Optional: downloaded PEM root certificate, if required by your connection     |
+| Variable       | Value                                                                         |
+| -------------- | ----------------------------------------------------------------------------- |
+| `DATABASE_URL` | The complete Supabase Transaction pooler URI, including its database password |
+| `APP_ORIGIN`   | `https://glowbbdashboard.vercel.app` (no trailing slash)                      |
 
 Keep these names server-side. Do not add a `VITE_` prefix, commit credentials, or paste passwords into chat. No Supabase frontend API keys are required.
+
+For a custom PostgreSQL provider, the optional `DATABASE_CA_CERT` variable can supply an additional trusted PEM certificate. It is not part of the normal Supabase setup.
 
 Deploy this repository's updated source to the existing Vercel project. Its configuration already specifies:
 
@@ -86,7 +89,8 @@ If local data is imported before switching, back up SQLite and plan a separate t
 ## Troubleshooting
 
 - **503 mentioning `DATABASE_URL`:** set the variable in the correct Vercel environment and redeploy.
-- **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data. Certificate errors may require `DATABASE_CA_CERT`; do not disable verification.
+- **`SELF_SIGNED_CERT_IN_CHAIN`:** deploy the latest source, which includes Supabase's public root certificate automatically. Standard Supabase connections need no certificate variable. If the error remains, check the actual database hostname and whether the provider has rotated its CA.
+- **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data.
 - **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.
 - **Preview expired:** upload again. The 20-minute limit applies across deployments.
 - **Upload rejected:** use one CSV/XLSX smaller than 4 MB and at most 50,000 rows. `.xls` is unsupported.

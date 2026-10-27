@@ -1,10 +1,46 @@
 import pg from "pg";
 import { rootCertificates } from "node:tls";
+import { readFileSync } from "node:fs";
 import { inspectImport } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
   /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews)\b/g;
+
+const supabaseCa = readFileSync(
+  new URL("./supabase-ca.crt", import.meta.url),
+  "utf8",
+);
+
+export function postgresOptions(
+  connectionString,
+  customCa = process.env.DATABASE_CA_CERT,
+) {
+  if (!connectionString) throw Error("DATABASE_URL is required.");
+  const url = new URL(connectionString);
+  if (!["postgres:", "postgresql:"].includes(url.protocol))
+    throw Error("Invalid DATABASE_URL protocol.");
+  // Connection-string SSL options must not override certificate verification.
+  for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert"])
+    url.searchParams.delete(key);
+  const authorities = [...rootCertificates];
+  if (
+    /^(?:db\.[a-z0-9-]+\.supabase\.co|[a-z0-9-]+\.pooler\.supabase\.com)$/i.test(
+      url.hostname,
+    )
+  )
+    authorities.push(supabaseCa);
+  if (customCa?.trim())
+    authorities.push(customCa.trim().replaceAll("\\n", "\n"));
+  return {
+    connectionString: url.toString(),
+    ssl: { rejectUnauthorized: true, ca: authorities },
+    max: 1,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 10000,
+    allowExitOnIdle: true,
+  };
+}
 
 // Adapt the app's fixed SQLite statements. SQL values always stay parameterized.
 export function postgresStatement(statement) {
@@ -23,31 +59,7 @@ export function postgresStatement(statement) {
 
 export function openPostgres(connectionString, { pool } = {}) {
   if (!pool) {
-    if (!connectionString) throw Error("DATABASE_URL is required.");
-    const url = new URL(connectionString);
-    if (!["postgres:", "postgresql:"].includes(url.protocol))
-      throw Error("Invalid DATABASE_URL protocol.");
-    // Avoid connection-string SSL parameters overriding certificate verification.
-    for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert"])
-      url.searchParams.delete(key);
-    pool = new pg.Pool({
-      connectionString: url.toString(),
-      ssl: {
-        rejectUnauthorized: true,
-        ...(process.env.DATABASE_CA_CERT
-          ? {
-              ca: [
-                ...rootCertificates,
-                process.env.DATABASE_CA_CERT.replaceAll("\\n", "\n"),
-              ],
-            }
-          : {}),
-      },
-      max: 1,
-      connectionTimeoutMillis: 10000,
-      idleTimeoutMillis: 10000,
-      allowExitOnIdle: true,
-    });
+    pool = new pg.Pool(postgresOptions(connectionString));
     pool.on("error", () =>
       console.error("Dashboard database connection interrupted."),
     );
