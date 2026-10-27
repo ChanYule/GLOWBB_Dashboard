@@ -1,0 +1,26 @@
+﻿# Optional hosting template. Creating this service and disk incurs provider charges.
+services:
+  - type: web
+    name: glowbb-dashboard-api
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/ready
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DB_PATH
+        value: /var/data/glowbb.sqlite
+      - key: APP_ORIGIN
+        value: https://glowbbdashboard.vercel.app
+    disk:
+      name: glowbb-data
+      mountPath: /var/data
+      sizeGB: 1

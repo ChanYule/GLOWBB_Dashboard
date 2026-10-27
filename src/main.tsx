@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -74,18 +75,6 @@ const emptyFilters: Filters = {
   boundary: "",
   ageBand: "",
 };
-async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers:
-      options.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json", ...options.headers },
-  });
-  const data = await res.json();
-  if (!res.ok) throw Error(data.error || "Unable to complete request.");
-  return data;
-}
 function Button({
   children,
   onClick,

@@ -63,6 +63,13 @@ export function createApp(db = openDb(), { production = false } = {}) {
     };
     next();
   });
+  app.get("/api/ready", (_req, res) => {
+    const version = db
+      .prepare("SELECT MAX(version) AS version FROM schema_version")
+      .get().version;
+    db.prepare("SELECT count(*) AS count FROM attendance").get();
+    res.json({ ready: true, schemaVersion: version });
+  });
   app.get("/api/me", (req, res) => res.json(req.user));
   const filters = (req) => {
     const f = { ...req.query };

@@ -2,6 +2,8 @@
 
 A local full-stack staff application built in the supplied empty repository. No prior application, database, API, routes, authentication, design system or attendance features existed to preserve or integrate. No reference attendance workbook was attached. The dashboard starts empty and contains no fabricated statistics.
 
+For the existing Vercel deployment, follow [hosted deployment setup](docs/HOSTING.md). A Vite static build alone does not deploy the Express API or persistent database.
+
 ## Run on Windows
 
 Requires Node.js 24.14 or later (uses the built-in SQLite API) and npm.

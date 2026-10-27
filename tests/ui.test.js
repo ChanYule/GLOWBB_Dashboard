@@ -252,3 +252,28 @@ test("application opens directly with import, settings and planning and no login
     globalThis.fetch = original;
   }
 });
+
+test("application displays a useful hosting error and retry instead of a raw JSON parser exception", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response("The page could not be found\nNOT_FOUND", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    });
+  try {
+    render(React.createElement(App));
+    await waitFor(() => assert.ok(screen.getByRole("alert")));
+    assert.match(
+      screen.getByRole("alert").textContent,
+      /data service is not deployed or connected/,
+    );
+    assert.equal(
+      screen.getByRole("alert").textContent.includes("Unexpected token"),
+      false,
+    );
+    assert.ok(screen.getByRole("button", { name: "Try again" }));
+    assert.equal(screen.queryByText("Make every connection count."), null);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

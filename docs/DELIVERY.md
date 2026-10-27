@@ -16,7 +16,7 @@ The login page and authentication gate were subsequently removed at the user’s
 
 | Check                                                                      | Result                                                                                                           |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Automated parser, analytics, persistence, API/security and component suite | 23 tests passed, 0 failed                                                                                        |
+| Automated parser, analytics, persistence, API/security and component suite | 32 tests passed, 0 failed                                                                                        |
 | ESLint (JavaScript and TypeScript, React hook rules)                       | Passed                                                                                                           |
 | TypeScript strict type check                                               | Passed                                                                                                           |
 | Vite production build                                                      | Passed                                                                                                           |
@@ -41,3 +41,7 @@ Component tests use jsdom. They do not measure rendered CSS geometry, browser-na
 See [README](../README.md) for Node requirements, running locally without account setup, exact import headers and preview steps, dashboard operation, settings, target configuration, evidence rules and backup/restore instructions.
 
 For browser acceptance, use synthetic/test records in a separate `DB_PATH`, then check all four tabs at 1366, 1024, 768 and 390 px; keyboard navigation/dialog close and focus return; long names and no page overflow; chart controls and readable values; preview/cancel/confirm/reimport; direct access to imports and settings; filtered report privacy; and browser Print → Save as PDF. These are outstanding manual checks, not passed tests.
+
+## Vercel hosting repair
+
+Live checks confirmed the homepage returns HTTP 200 while `/api/dashboard` and `/api/quality` return plain-text 404 responses. Added `src/api.ts` for safe response handling, `api/[...path].js` for same-origin forwarding to a persistent backend, `vercel.json`, `render.yaml`, `/api/ready`, and [hosting instructions](HOSTING.md). Proxy/client regression tests cover the reported response, malformed JSON, missing backend configuration, filters, JSON mutations, multipart uploads, CSV/PDF report responses, oversized bodies, redirects and failed connections. All 32 tests pass locally. Provider deployment, persistent-disk restart verification and live end-to-end checks remain outstanding; no backend service has been provisioned.
