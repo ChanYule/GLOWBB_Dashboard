@@ -45,3 +45,11 @@ For browser acceptance, use synthetic/test records in a separate `DB_PATH`, then
 ## Vercel hosting repair
 
 Live checks confirmed the homepage returns HTTP 200 while `/api/dashboard` and `/api/quality` return plain-text 404 responses. Added `src/api.ts` for safe response handling, `api/[...path].js` for same-origin forwarding to a persistent backend, `vercel.json`, `render.yaml`, `/api/ready`, and [hosting instructions](HOSTING.md). Proxy/client regression tests cover the reported response, malformed JSON, missing backend configuration, filters, JSON mutations, multipart uploads, CSV/PDF report responses, oversized bodies, redirects and failed connections. All 32 tests pass locally. Provider deployment, persistent-disk restart verification and live end-to-end checks remain outstanding; no backend service has been provisioned.
+
+## Vercel and Supabase preparation — 27 October 2026
+
+The API now runs the Express application directly on Vercel when `DATABASE_URL` is configured. Added a PostgreSQL adapter, a private-schema Supabase migration and database-backed import previews. Import confirmation uses a single transaction, a transaction-scoped lock and bulk inserts; it rechecks conflicts against current records. Local SQLite mode and the previous proxy remain supported. No accounts, cloud resources, environment variables or deployments were changed.
+
+Validation: all 35 tests passed, including three new tests using an embedded PostgreSQL engine for repeatable schema migration, API operations, confirmation across app instances, duplicate imports, planning persistence, exports, expiration and rollback after a forced database failure. ESLint, TypeScript and the Vite production build passed. The build needed the existing approved unsandboxed command because the sandbox blocked a Vite helper process. Dependency installation reported zero vulnerabilities. `git diff --check` passed.
+
+The local database was inspected read-only and contained zero participants, attendance entries, targets and planning decisions. It was not moved or overwritten. Supabase creation, applying the migration, Vercel environment configuration, deployment and live verification remain pending. See [HOSTING.md](HOSTING.md) for those steps and the existing unauthenticated-access limitation.

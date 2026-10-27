@@ -1,6 +1,10 @@
 import { createApp } from "./app.js";
+import { openPostgres } from "./postgres.js";
 const production = process.argv.includes("--production");
-const app = createApp(undefined, { production });
+const app = createApp(
+  process.env.DATABASE_URL ? openPostgres(process.env.DATABASE_URL) : undefined,
+  { production },
+);
 if (production) {
   const express = (await import("express")).default;
   app.use(express.static("dist"));

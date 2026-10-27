@@ -2,7 +2,7 @@
 
 A local full-stack staff application built in the supplied empty repository. No prior application, database, API, routes, authentication, design system or attendance features existed to preserve or integrate. No reference attendance workbook was attached. The dashboard starts empty and contains no fabricated statistics.
 
-For the existing Vercel deployment, follow [hosted deployment setup](docs/HOSTING.md). A Vite static build alone does not deploy the Express API or persistent database.
+For the existing Vercel deployment, follow [Vercel + Supabase setup](docs/HOSTING.md). The hosted API uses Supabase PostgreSQL when `DATABASE_URL` is set; local development continues to support SQLite. A Vite static build alone does not deploy a database.
 
 ## Run on Windows
 
@@ -32,7 +32,7 @@ The production server serves the built React app and API together. Default bindi
 
 4. Session Detail must use e.g. `2026-05-04, 09:00 AM - 09:45 AM`. Dates and times are Singapore local wall time. Overnight ranges are rejected rather than guessed. YES/NO, TRUE/FALSE, Y/N and 1/0 are accepted status values; other values remain unknown.
 5. Preview counts, timing, row errors, demographic warnings and possible naming variants. Download the full row issue report if needed. Nothing has been written yet.
-6. Review the checkbox and confirm **ready rows only**. Invalid and conflicting rows are skipped; duplicate rows are not reinserted. Previews expire after 20 minutes and are not retained after restart. Dashboard values refresh from SQLite.
+6. Review the checkbox and confirm **ready rows only**. Invalid and conflicting rows are skipped; duplicate rows are not reinserted. Previews expire after 20 minutes and are stored in the database across restarts. Dashboard values refresh from the configured database. Hosted uploads must be under 4 MB; local SQLite uploads retain the 8 MB limit.
 
 Programme identity uses the exact trimmed programme name (case and punctuation remain significant). Similar names are flagged but not merged. Session identity includes programme, date, start and end, with absent venue represented explicitly in its key. Attendance identity includes participant and session. Separate same-day sessions remain distinct. Source session notation and import ID are retained on attendance.
 
@@ -63,11 +63,12 @@ Sufficient programme evidence requires at least 3 sessions and 5 seniors by defa
 ## Storage, migrations, access and backup
 
 - `server/db.js` applies additive schema version 1 on startup using `CREATE TABLE IF NOT EXISTS` and non-destructive initial settings. It does not reset existing data. No separate manual SQL migration is required for this new database.
-- Tables: participants, programmes, sessions, attendance, imports, settings, targets, decisions, opportunity_decisions, audit, users, logins, schema_version. Foreign keys enforce relationships. Imports run in a transaction. Participant details and programme/session optional JSON fields reserve future extension without making missing optional data invalid.
+- Tables: participants, programmes, sessions, attendance, imports, settings, targets, decisions, opportunity_decisions, audit, users, logins, schema_version, import_previews. Foreign keys enforce relationships. Imports run in a transaction. Participant details and programme/session optional JSON fields reserve future extension without making missing optional data invalid.
 - Default persistent database: `data/glowbb.sqlite` (ignored by Git). Existing data survives ordinary restarts. The built-in SQLite API is documented at https://nodejs.org/api/sqlite.html.
+- Hosted database: apply `supabase/migrations/001_dashboard.sql` in a new Supabase project and configure the server-only `DATABASE_URL`. The private `glowbb` schema is not accessed through the browser Data API. See [hosting setup](docs/HOSTING.md) for connection pooling, credentials, deployment and verification. The schema migration does not transfer existing SQLite data.
 - The application opens without authentication. Import, settings, targets, planning and reports are available directly. Existing account/session tables are retained for data compatibility but are no longer used for sign-in. The server retains same-origin checks for mutations and a loopback default binding.
 - Audits record imports, definitions, target and planning changes under a persistent Local workspace actor. This is a technical audit identity, not an authenticated person. No participant IDs or free-text notes are written to audit output/logs.
-- Stop the server before a filesystem backup and copy the complete `data` directory (including any SQLite WAL/SHM files) to approved encrypted storage. Restore with the server stopped. Apply organisation-approved filesystem permissions, encryption, retention and backup schedules. No organisational policy was supplied, and no retention period is invented. Import previews exist only in server memory; uploaded source buffers are discarded after parsing. Downloaded row reports are staff data and should follow the same retention rules.
+- For SQLite, stop the server before a filesystem backup and copy the complete `data` directory (including any SQLite WAL/SHM files) to approved encrypted storage. Restore with the server stopped. Supabase needs its own project backups; a SQLite backup does not include hosted data. Apply organisation-approved access, encryption, retention and backup schedules. Import previews store parsed pseudonymised rows, expire after 20 minutes, and are deleted on confirmation, cancellation or cleanup at the next preview upload. See the hosting guide for scheduled cleanup independent of traffic. Uploaded source buffers are discarded after parsing. Downloaded row reports are staff data and should follow the same retention rules.
 
 Future optional fields reserved in the JSON extension contract: preferredLanguage, livingArrangement, referralSource, interests, accessibilityNeeds, transportBarriers, firstRegistrationDate; venue, theme, capacity, cost, staffHours, registrationCount, waitingListCount, objectives, feedback, outreachMethod. They are not populated or editable in this release because the source data contains none of these values and there is no existing profile/calendar system to connect. Costs or capacity efficiencies must not be inferred from attendance. A future integration must use stable participant/programme/session IDs, authorised write validation and migrations before presenting those metrics.
 

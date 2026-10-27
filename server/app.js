@@ -2,7 +2,8 @@ import express from "express";
 import multer from "multer";
 import { randomBytes } from "node:crypto";
 import { readFile, inspectImport, analytics } from "./domain.js";
-import { openDb, readData, getSettings, saveImport, audit } from "./db.js";
+import { openDb, readData, getSettings, audit } from "./db.js";
+import { sqlitePreviews } from "./previews.js";
 const error = (status, message) => Object.assign(Error(message), { status });
 const date = (x) =>
   typeof x === "string" &&
@@ -19,7 +20,8 @@ const esc = (x) =>
   );
 export function createApp(db = openDb(), { production = false } = {}) {
   const app = express(),
-    previews = new Map();
+    previews = db.previews || sqlitePreviews(db);
+  const storage = db.storage || { readData, getSettings, audit };
   app.disable("x-powered-by");
   app.use(express.json({ limit: "64kb" }));
   app.use((req, res, next) => {
@@ -49,25 +51,40 @@ export function createApp(db = openDb(), { production = false } = {}) {
     next();
   });
   // Retain an audit actor for foreign-key relationships without requiring an account.
-  db.prepare(
-    "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
-  ).run("__local_workspace__", "disabled");
-  const localActor = db
-    .prepare("SELECT id FROM users WHERE username=?")
-    .get("__local_workspace__");
-  app.use("/api", (req, res, next) => {
+  if (!db.storage)
+    db.prepare(
+      "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
+    ).run("__local_workspace__", "disabled");
+  const localActor = db.storage
+    ? null
+    : db
+        .prepare("SELECT id FROM users WHERE username=?")
+        .get("__local_workspace__");
+  app.use("/api", async (req, res, next) => {
+    const actor =
+      localActor ||
+      (await db
+        .prepare("SELECT id FROM users WHERE username=?")
+        .get("__local_workspace__"));
+    if (!actor)
+      throw error(
+        503,
+        "Database setup is incomplete. Apply the Supabase migration.",
+      );
     req.user = {
-      id: localActor.id,
+      id: actor.id,
       username: "Local workspace",
       role: "admin",
     };
     next();
   });
-  app.get("/api/ready", (_req, res) => {
-    const version = db
-      .prepare("SELECT MAX(version) AS version FROM schema_version")
-      .get().version;
-    db.prepare("SELECT count(*) AS count FROM attendance").get();
+  app.get("/api/ready", async (_req, res) => {
+    const version = (
+      await db
+        .prepare("SELECT MAX(version) AS version FROM schema_version")
+        .get()
+    ).version;
+    await db.prepare("SELECT count(*) AS count FROM attendance").get();
     res.json({ ready: true, schemaVersion: version });
   });
   app.get("/api/me", (req, res) => res.json(req.user));
@@ -81,15 +98,13 @@ export function createApp(db = openDb(), { production = false } = {}) {
       if (typeof v !== "string") throw error(400, "Invalid filter.");
     return f;
   };
-  function dashboard(req) {
-    const data = readData(db),
-      settings = getSettings(db),
+  async function dashboard(req) {
+    const data = await storage.readData(db),
+      settings = await storage.getSettings(db),
       f = filters(req),
       report = analytics(data, settings, f);
-    const targets = db
-      .prepare("SELECT * FROM targets")
-      .all()
-      .map((t) => {
+    const targets = (await db.prepare("SELECT * FROM targets").all()).map(
+      (t) => {
         const scoped = analytics(data, settings, {
           from: t.start,
           to: t.end,
@@ -109,32 +124,30 @@ export function createApp(db = openDb(), { production = false } = {}) {
           gap: Math.max(0, t.value - value),
           daysRemaining: remaining,
         };
-      });
+      },
+    );
     return {
       ...report,
       settings,
       targets,
-      decisions: db
+      decisions: await db
         .prepare(
           "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
         )
         .all(),
     };
   }
-  app.get("/api/dashboard", (req, res) => res.json(dashboard(req)));
+  app.get("/api/dashboard", async (req, res) => res.json(await dashboard(req)));
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 0 },
+    limits: {
+      fileSize: (db.storage ? 4 : 8) * 1024 * 1024,
+      files: 1,
+      fields: 0,
+    },
   }).single("file");
   app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
-    for (const [key, value] of previews)
-      if (value.expires < Date.now()) previews.delete(key);
-    if (previews.size >= 5)
-      throw error(
-        429,
-        "Several previews are open. Confirm or wait 20 minutes before uploading another.",
-      );
     let parsed;
     try {
       parsed = await readFile(req.file.buffer, req.file.originalname);
@@ -152,13 +165,9 @@ export function createApp(db = openDb(), { production = false } = {}) {
     }
     if (parsed.rawRows > 50000)
       throw error(400, "Maximum 50,000 rows per upload.");
-    const inspection = inspectImport(parsed, readData(db));
+    const inspection = inspectImport(parsed, await storage.readData(db));
     const id = randomBytes(24).toString("hex");
-    previews.set(id, {
-      parsed,
-      user: req.user.id,
-      expires: Date.now() + 20 * 60 * 1000,
-    });
+    await previews.put(id, parsed, req.user.id);
     const referenceRows = inspectImport(parsed, {
       participants: [],
       programmes: [],
@@ -195,7 +204,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
           ).values(),
         ],
       },
-      getSettings(db),
+      await storage.getSettings(db),
     );
     res.json({
       id,
@@ -246,38 +255,31 @@ export function createApp(db = openDb(), { production = false } = {}) {
       },
     });
   });
-  app.delete("/api/import/preview/:id", (req, res) => {
-    const p = previews.get(req.params.id);
-    if (p?.user === req.user.id) previews.delete(req.params.id);
+  app.delete("/api/import/preview/:id", async (req, res) => {
+    await previews.remove(req.params.id, req.user.id);
     res.json({ ok: true });
   });
-  app.post("/api/import/confirm", (req, res) => {
-    const p = previews.get(req.body.id);
-    if (!p || p.user !== req.user.id || p.expires < Date.now())
-      throw error(400, "Preview expired. Upload the file again.");
-    const result = saveImport(
-      db,
-      p.parsed,
-      inspectImport(p.parsed, readData(db)),
-      req.user.id,
-    );
-    previews.delete(req.body.id);
+  app.post("/api/import/confirm", async (req, res) => {
+    if (typeof req.body?.id !== "string")
+      throw error(400, "Select an import preview.");
+    const result = await previews.confirm(req.body.id, req.user.id);
     res.json(result);
   });
-  app.get("/api/quality", (req, res) =>
+  app.get("/api/quality", async (req, res) =>
     res.json({
-      imports: db
-        .prepare(
-          "SELECT id,created,summary FROM imports ORDER BY id DESC LIMIT 100",
-        )
-        .all()
-        .map((r) => ({ ...r, ...JSON.parse(r.summary) })),
-      audit: db
+      imports: (
+        await db
+          .prepare(
+            "SELECT id,created,summary FROM imports ORDER BY id DESC LIMIT 100",
+          )
+          .all()
+      ).map((r) => ({ ...r, ...JSON.parse(r.summary) })),
+      audit: await db
         .prepare("SELECT created,action FROM audit ORDER BY id DESC LIMIT 50")
         .all(),
     }),
   );
-  app.put("/api/settings", (req, res) => {
+  app.put("/api/settings", async (req, res) => {
     const s = req.body;
     if (
       !Number.isInteger(s.seniorAge) ||
@@ -319,13 +321,13 @@ export function createApp(db = openDb(), { production = false } = {}) {
       minParticipants: s.minParticipants,
       privacyMinimum: 5,
     };
-    db.prepare("UPDATE settings SET value=? WHERE id=1").run(
-      JSON.stringify(clean),
-    );
-    audit(db, req.user.id, "definitions.updated");
+    await db
+      .prepare("UPDATE settings SET value=? WHERE id=1")
+      .run(JSON.stringify(clean));
+    await storage.audit(db, req.user.id, "definitions.updated");
     res.json(clean);
   });
-  app.post("/api/targets", (req, res) => {
+  app.post("/api/targets", async (req, res) => {
     const t = req.body;
     if (
       !["unique", "male", "minority", "firstObserved"].includes(t.metric) ||
@@ -336,29 +338,32 @@ export function createApp(db = openDb(), { production = false } = {}) {
       !date(t.end) ||
       t.start > t.end ||
       (t.programmeId &&
-        !db.prepare("SELECT id FROM programmes WHERE id=?").get(t.programmeId))
+        !(await db
+          .prepare("SELECT id FROM programmes WHERE id=?")
+          .get(t.programmeId)))
     )
       throw error(
         400,
         "Enter a valid metric, positive target and reporting period.",
       );
     const id = Number(
-      db
-        .prepare(
-          "INSERT INTO targets(metric,value,start,end,programme_id) VALUES(?,?,?,?,?)",
-        )
-        .run(t.metric, t.value, t.start, t.end, t.programmeId || null)
-        .lastInsertRowid,
+      (
+        await db
+          .prepare(
+            "INSERT INTO targets(metric,value,start,end,programme_id) VALUES(?,?,?,?,?)",
+          )
+          .run(t.metric, t.value, t.start, t.end, t.programmeId || null)
+      ).lastInsertRowid,
     );
-    audit(db, req.user.id, "target.created", { id });
+    await storage.audit(db, req.user.id, "target.created", { id });
     res.json({ id });
   });
-  app.delete("/api/targets/:id", (req, res) => {
-    db.prepare("DELETE FROM targets WHERE id=?").run(req.params.id);
-    audit(db, req.user.id, "target.removed");
+  app.delete("/api/targets/:id", async (req, res) => {
+    await db.prepare("DELETE FROM targets WHERE id=?").run(req.params.id);
+    await storage.audit(db, req.user.id, "target.removed");
     res.json({ ok: true });
   });
-  app.put("/api/decisions/:id", (req, res) => {
+  app.put("/api/decisions/:id", async (req, res) => {
     const { status, notes } = req.body;
     const opportunity = /^target-\d+$/.test(req.params.id);
     const entityId = opportunity
@@ -374,23 +379,25 @@ export function createApp(db = openDb(), { production = false } = {}) {
       ].includes(status) ||
       typeof notes !== "string" ||
       notes.length > 4000 ||
-      !(
+      !(await (
         opportunity
           ? db.prepare("SELECT id FROM targets WHERE id=?")
           : db.prepare("SELECT id FROM programmes WHERE id=?")
-      ).get(entityId)
+      ).get(entityId))
     )
       throw error(400, "Invalid planning decision.");
-    db.prepare(
-      opportunity
-        ? "INSERT INTO opportunity_decisions VALUES(?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id"
-        : "INSERT INTO decisions VALUES(?,?,?,?,?) ON CONFLICT(programme_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id",
-    ).run(entityId, status, notes, new Date().toISOString(), req.user.id);
-    audit(db, req.user.id, "planning.updated");
+    await db
+      .prepare(
+        opportunity
+          ? "INSERT INTO opportunity_decisions VALUES(?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id"
+          : "INSERT INTO decisions VALUES(?,?,?,?,?) ON CONFLICT(programme_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id",
+      )
+      .run(entityId, status, notes, new Date().toISOString(), req.user.id);
+    await storage.audit(db, req.user.id, "planning.updated");
     res.json({ ok: true });
   });
   // Shared reports deliberately omit all demographic cells, free-text notes and target-group filtered data.
-  app.get("/api/export/:format", (req, res) => {
+  app.get("/api/export/:format", async (req, res) => {
     const f = filters(req);
     if (
       ["gender", "race", "target", "ageBand", "client", "boundary"].some(
@@ -401,7 +408,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
         400,
         "Reset audience filters before producing a shareable report. Demographic cells are restricted in shared reports.",
       );
-    const r = dashboard(req);
+    const r = await dashboard(req);
     const period = `${r.period.from || "Available records"} to ${r.period.to} (Asia/Singapore)`;
     const cell = (v) =>
       '"' +
@@ -455,11 +462,18 @@ export function createApp(db = openDb(), { production = false } = {}) {
   );
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
+    if (db.storage && err.code && !(err instanceof multer.MulterError)) {
+      console.error("Dashboard database error code:", String(err.code));
+      return res.status(503).json({
+        error:
+          "The database is unavailable or its setup is incomplete. Check the connection and migration.",
+      });
+    }
     res.status(err.status || 400).json({
       error: err.status
         ? err.message
         : err instanceof multer.MulterError
-          ? "Upload must be a single file under 8 MB."
+          ? `Upload must be a single file under ${db.storage ? 4 : 8} MB.`
           : "The request could not be processed. Check your file or entries and try again.",
     });
   });

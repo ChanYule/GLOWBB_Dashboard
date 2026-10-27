@@ -1,58 +1,94 @@
-﻿# Hosting the Vercel dashboard with persistent data
+﻿# Deploy with Vercel and Supabase
 
-The deployed homepage at `https://glowbbdashboard.vercel.app/` was serving only the Vite build. Its `/api/dashboard` and `/api/quality` paths returned HTTP 404 with plain text `The page could not be found`, which triggered the JSON error in the screenshot.
+Keep the existing Vercel project (`https://glowbbdashboard.vercel.app`). Vercel hosts the Vite frontend and the Express API through `api/[...path].js`. Supabase PostgreSQL stores attendance, settings, targets, decisions, audit history and import previews. No Render service or persistent disk is needed for this setup.
 
-This repository includes two parts:
+The code is prepared locally. No Supabase project has been created, no environment variables have been set in Vercel, and no deployment has been performed.
 
-- **Vercel:** the existing frontend plus `api/[...path].js`, a same-origin API forwarder. It reads `DASHBOARD_BACKEND_URL` from a server-side environment variable.
-- **Persistent server:** the existing Express/SQLite application, deployed as a single service with a persistent disk. `render.yaml` is an optional ready-to-review Render Blueprint for that service.
+## 1. Create the Supabase project
 
-A local SQLite file is not durable storage inside Vercel Functions. Do not point the database at `/tmp` or use a per-function empty database: data would disappear or differ across instances. [Vercel’s SQLite guidance](https://vercel.com/kb/guide/is-sqlite-supported-in-vercel) explains this limitation.
+1. Open the [Supabase dashboard](https://supabase.com/dashboard) and create a project in your organisation.
+2. Choose an appropriate region (Singapore is a nearby option if available) and save the database password privately. Review the plan before creating the project.
+3. Wait for provisioning to finish.
+4. Open **SQL Editor**, create a query, paste the complete contents of [`supabase/migrations/001_dashboard.sql`](../supabase/migrations/001_dashboard.sql), and run it.
 
-## 1. Create the persistent server
+The migration creates a private `glowbb` schema and initial settings. It is additive and can be run again without resetting data. It enables row-level security and denies the `anon` and `authenticated` roles access. The browser uses this app's API rather than the Supabase Data API. Keep `glowbb` out of the Data API's exposed schemas. Use a new dedicated project and its default `postgres` database account on the server for this setup.
 
-The prepared Render Blueprint uses a **paid Starter service and a 1 GB persistent disk**. Review provider pricing and resource settings before creating it; writing this file has not created or billed any resource. You may instead run the same Node application on another server with a persistent volume.
+## 2. Copy the database connection string
 
-For Render, connect this repository and create a Blueprint using `render.yaml`. It specifies:
+In Supabase, click **Connect** and select **Transaction pooler**. Copy the URI shown by your project. It normally has this shape:
 
-| Setting                 | Value                                           |
-| ----------------------- | ----------------------------------------------- |
-| Build                   | `npm ci && npm run build`                       |
-| Start                   | `npm start`                                     |
-| Node                    | 24.19.0                                         |
-| Instances               | 1                                               |
-| Bind address            | `HOST=0.0.0.0`                                  |
-| Database                | `DB_PATH=/var/data/glowbb.sqlite`               |
-| Disk mount              | `/var/data`                                     |
-| Allowed mutation origin | `APP_ORIGIN=https://glowbbdashboard.vercel.app` |
-| Health check            | `/api/ready`                                    |
+```text
+postgresql://postgres.PROJECT_REF:ENCODED_PASSWORD@POOLER_HOST:6543/postgres
+```
 
-Only the mounted disk path persists. Keep one service instance: import previews are held in that server's memory and SQLite is a single-file store. Do not use Render's free ephemeral filesystem for attendance data. See [Render persistent disks](https://render.com/docs/disks).
+Replace the password placeholder with your database password, URL-encoding special characters. Use the exact username and host from the dialog. This is the **database password**, not a publishable, anon or service-role API key.
 
-Wait for the service to deploy, then check `https://YOUR-SERVICE.onrender.com/api/ready`: it must return JSON with `ready: true` and `schemaVersion: 1`. Copy the service origin. No passwords or tokens are needed in this URL.
+[Supabase recommends transaction pooling for serverless connections](https://supabase.com/docs/guides/database/connecting-to-postgres). This app uses one PostgreSQL connection per warm function instance, unnamed queries, and a single checked-out connection for each transaction. TLS certificate verification stays enabled. If your connection requires a project root certificate, download it from Supabase's database SSL settings and put the PEM contents in `DATABASE_CA_CERT`. Standard trusted certificate authorities remain supported alongside that certificate.
 
-For an existing local database, transfer a consistent backup to the mounted disk with the service stopped before importing further data. Do not overwrite an existing remote database. If no attendance has been imported yet, startup creates an empty persistent database.
+## 3. Configure the existing Vercel project
 
-## 2. Connect Vercel
+Open the existing project in [Vercel](https://vercel.com/dashboard), then **Settings → Environment Variables**. Add these values for **Production**:
 
-1. Deploy this repository's updated source to the existing Vercel project. `vercel.json` keeps the Vite build in `dist` and includes the API function.
-2. In the Vercel project's **Environment Variables**, create `DASHBOARD_BACKEND_URL` with the server origin, e.g. `https://YOUR-SERVICE.onrender.com`. This must be HTTPS, with no path, credentials or query string. Do not prefix it with `VITE_`; it is used on the server.
-3. Redeploy Vercel so the function receives the environment variable.
-4. Open `https://glowbbdashboard.vercel.app/api/ready`. It should return the persistent server's readiness JSON.
-5. Reload the dashboard. Import preview, confirmation, targets, planning and reports should now use the same persistent database.
+| Variable           | Value                                                                         |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `DATABASE_URL`     | The complete Supabase Transaction pooler URI, including its database password |
+| `APP_ORIGIN`       | `https://glowbbdashboard.vercel.app` (no trailing slash)                      |
+| `DATABASE_CA_CERT` | Optional: downloaded PEM root certificate, if required by your connection     |
 
-The Vercel proxy supports JSON mutations, raw multipart uploads, CSV downloads and HTML print reports. It forwards the original browser origin, so the backend must use the correct `APP_ORIGIN`. Preview domains need their own isolated backend or matching origin configuration; the supplied Blueprint targets the production domain above.
+Keep these names server-side. Do not add a `VITE_` prefix, commit credentials, or paste passwords into chat. No Supabase frontend API keys are required.
 
-Vercel has its own request limits. The proxy limits incoming bodies to 4 MB to leave room below the platform limit; keep attendance uploads smaller than 4 MB when using the hosted Vercel frontend. Local direct imports retain the existing 8 MB limit. Split larger exports into smaller files; repeat imports remain idempotent. The proxy never stores uploads or attendance in a function's filesystem.
+Deploy this repository's updated source to the existing Vercel project. Its configuration already specifies:
 
-## 3. Verify persistence and normal use
+| Setting          | Value              |
+| ---------------- | ------------------ |
+| Framework        | Vite               |
+| Build command    | `npm run build`    |
+| Output directory | `dist`             |
+| Node.js          | 24.x               |
+| API entry point  | `api/[...path].js` |
 
-Import a small non-sensitive test file, confirm it, and verify calculated metrics. Reimport it and confirm it adds no duplicate attendance. Restart the persistent server, reload the dashboard and confirm the same data remains. Then check exports and planning decisions. Readiness alone does not verify disk persistence across deployment; perform this restart check before real attendance use.
+For a Git-connected project, push the reviewed changes to its configured production branch. Redeploy after changing environment variables; changing them alone does not update an existing deployment.
 
-Login remains removed as requested. Anyone able to reach these URLs can view or change the workspace; the server has no per-person authentication. Same-origin mutation checks and report privacy restrictions remain, but are not authentication.
+`DATABASE_URL` takes precedence over the older `DASHBOARD_BACKEND_URL` proxy setting. Remove the old setting after switching. If no database URL is present, the older proxy remains available when a backend URL is configured. With neither value, the API returns a JSON setup error rather than creating a temporary SQLite database.
 
-If the backend is missing or down, requests now return a clear JSON setup/unavailable error. The client also handles plain-text/HTML responses and invalid JSON without showing a raw parser exception. These changes do not invent empty statistics to hide a failed server connection.
+Use a separate Supabase project and the exact preview origin for preview deployments. Production-only variables do not automatically configure previews. Do not attach previews to production data.
 
-## Current delivery status
+## 4. Verify the deployment
 
-Code and configuration are prepared locally. No Render backend has been created and no Vercel environment variable or deployment has been changed in this task. The existing hosted page will continue to fail until the persistent service is deployed and connected. Use the Vercel and Render integrations to complete account-side deployment, or follow the settings above in their dashboards.
+1. Open `https://glowbbdashboard.vercel.app/api/ready`. Expect JSON containing `ready: true` and `schemaVersion: 1`.
+2. Load the dashboard; it should show empty data until attendance is imported.
+3. Import a small non-sensitive CSV using the exact headers in [`attendance-template.csv`](attendance-template.csv). Preview and confirm it.
+4. Reimport the same file. Confirmation should add zero duplicate attendance.
+5. Save a target or planning decision, redeploy Vercel, and confirm that attendance and saved changes remain.
+6. Check CSV exports and the printable report.
+
+Local tests use an embedded PostgreSQL engine to verify migration SQL, API operations, cross-instance preview confirmation and transaction rollback. A live Supabase/Vercel check is still required after account setup.
+
+Hosted uploads must be **under 4 MB** to leave room for multipart overhead below Vercel's function payload limit. Split larger files. Local SQLite mode retains its 8 MB file limit.
+
+Import previews contain parsed, pseudonymised attendance data and are stored in the database across function restarts. They expire after 20 minutes and are deleted on confirmation, cancellation or cleanup during the next preview upload. Expiration prevents confirmation; it does not schedule physical deletion. For cleanup independent of traffic, schedule this query through your approved database job mechanism:
+
+```sql
+DELETE FROM glowbb.import_previews
+WHERE expires < extract(epoch FROM now()) * 1000;
+```
+
+Login remains removed as in the existing application. Anyone who can reach the deployment can read or modify the workspace; database RLS does not authenticate the Express API. Resolve access control before using a public deployment for personal attendance data.
+
+## Local development and existing SQLite data
+
+Without `DATABASE_URL`, `npm.cmd run dev` continues to use `data/glowbb.sqlite`. The Supabase migration does not move or overwrite that file. At preparation time it contained zero participants, attendance entries, targets or planning decisions.
+
+To develop against a separate test Supabase project, copy `.env.example` to `.env.local`, enter that project's URI, and change `APP_ORIGIN` to `http://127.0.0.1:3000`. `npm.cmd run dev` and `npm.cmd start` load that ignored file. Never use the production database for local testing.
+
+If local data is imported before switching, back up SQLite and plan a separate transfer. The schema migration does not transfer attendance, settings or planning decisions; reimporting source attendance does not transfer staff notes. Supabase backups follow your project plan and backup configuration; SQLite file backups do not back up Supabase.
+
+## Troubleshooting
+
+- **503 mentioning `DATABASE_URL`:** set the variable in the correct Vercel environment and redeploy.
+- **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data. Certificate errors may require `DATABASE_CA_CERT`; do not disable verification.
+- **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.
+- **Preview expired:** upload again. The 20-minute limit applies across deployments.
+- **Upload rejected:** use one CSV/XLSX smaller than 4 MB and at most 50,000 rows. `.xls` is unsupported.
+
+The previous Express/SQLite deployment with `render.yaml` remains an alternative. It needs a persistent disk, `APP_ORIGIN` matching Vercel, and `DASHBOARD_BACKEND_URL` in Vercel. Leave `DATABASE_URL` unset when intentionally using that proxy mode.

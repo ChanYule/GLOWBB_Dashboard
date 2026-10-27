@@ -25,6 +25,9 @@ export function openDb(
  CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,created TEXT NOT NULL,user_id INTEGER,action TEXT NOT NULL,details TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS sessions_date ON sessions(date);
  CREATE INDEX IF NOT EXISTS attendance_session ON attendance(session_id);`);
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS import_previews(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),expires REAL NOT NULL,payload TEXT NOT NULL);`,
+  );
   db.prepare("INSERT OR IGNORE INTO settings VALUES(1,?)").run(
     JSON.stringify(defaults),
   );
