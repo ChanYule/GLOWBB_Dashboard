@@ -22,6 +22,7 @@ import {
   Target,
   Upload,
   Users,
+  RefreshCw,
   X,
 } from "lucide-react";
 import type {
@@ -31,13 +32,22 @@ import type {
   Recommendation,
   Settings,
   Stats,
-  Trend,
   User,
   Count,
   Preview,
   Decision,
 } from "./types";
 import "./styles.css";
+import "./redesign.css";
+import {
+  KpiDeck,
+  TrendChart,
+  InsightCards,
+  Portfolio,
+  DemographicBars,
+  TimingMatrix,
+  ActiveFilters,
+} from "./analytics-ui";
 const sgToday = () =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Singapore",
@@ -159,10 +169,12 @@ function Bars({
   items,
   unit = "seniors",
   color = "teal",
+  onSelect,
 }: {
   items: Count[];
   unit?: string;
   color?: string;
+  onSelect?: (label: string) => void;
 }) {
   const max = Math.max(...items.map((x) => x.value), 1);
   return items.length ? (
@@ -170,7 +182,14 @@ function Bars({
       {items.map((x, i) => (
         <div className="bar-row" key={x.label}>
           <div className="bar-caption">
-            <span>{x.label}</span>
+            {onSelect ? (
+              <button className="domain-link" onClick={() => onSelect(x.label)}>
+                {x.label}
+                <ArrowRight size={13} />
+              </button>
+            ) : (
+              <span>{x.label}</span>
+            )}
             <strong>
               {number(x.value)} <small>{unit}</small>
             </strong>
@@ -189,110 +208,7 @@ function Bars({
     <div className="chart-empty">No attendance matches these filters.</div>
   );
 }
-function LineChart({
-  rows,
-  metric = "unique",
-}: {
-  rows: Trend[];
-  metric?: "unique" | "male" | "minority" | "attendance";
-}) {
-  const [active, setActive] = useState<Trend | null>(null);
-  const max = Math.max(...rows.map((r) => r[metric]), 1),
-    w = 680,
-    h = 210,
-    pad = 35;
-  const x = (i: number) =>
-      pad + (i * (w - pad * 2)) / Math.max(rows.length - 1, 1),
-    y = (v: number) => h - pad - (v / max) * (h - pad * 2);
-  return rows.length ? (
-    <div className="line-chart">
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        role="img"
-        aria-label={`${metric} participation over time. Exact figures are available in the table below.`}
-      >
-        {[0, 0.5, 1].map((v) => (
-          <g key={v}>
-            <line
-              x1={pad}
-              x2={w - pad}
-              y1={y(v * max)}
-              y2={y(v * max)}
-              stroke="#e1e9e9"
-              strokeDasharray="4 4"
-            />
-            <text x="4" y={y(v * max) + 4} className="axis">
-              {number(v * max)}
-            </text>
-          </g>
-        ))}
-        <polyline
-          points={rows.map((r, i) => `${x(i)},${y(r[metric])}`).join(" ")}
-          fill="none"
-          stroke="#21877a"
-          strokeWidth="3"
-        />
-        {rows.map((r, i) => (
-          <g key={r.label}>
-            <circle
-              cx={x(i)}
-              cy={y(r[metric])}
-              r={r.partial ? 6 : 4}
-              fill={r.partial ? "#fff" : "#21877a"}
-              stroke="#21877a"
-              strokeWidth="2"
-            />
-            <circle
-              cx={x(i)}
-              cy={y(r[metric])}
-              r="15"
-              fill="transparent"
-              tabIndex={0}
-              role="button"
-              aria-label={`${r.label}: ${r[metric]}${r.partial ? ", period in progress" : ""}`}
-              onFocus={() => setActive(r)}
-              onPointerEnter={() => setActive(r)}
-              onClick={() => setActive(r)}
-              onKeyDown={(e) => {
-                if (["Enter", " "].includes(e.key)) setActive(r);
-              }}
-            />
-            {(rows.length < 9 ||
-              i % Math.ceil(rows.length / 6) === 0 ||
-              i === rows.length - 1) && (
-              <text x={x(i)} y={h - 8} textAnchor="middle" className="axis">
-                {r.label}
-              </text>
-            )}
-          </g>
-        ))}
-      </svg>
-      <div className="chart-readout" aria-live="polite">
-        {active
-          ? `${active.label} · ${number(active[metric])} ${metric === "attendance" ? "attendance entries" : "unique seniors"}${active.partial ? " · period in progress" : ""}`
-          : "Select a point to view its count. Hollow point = period in progress."}
-      </div>
-      <details>
-        <summary>View chart figures</summary>
-        <div className="trend-table">
-          {rows.map((r) => (
-            <div key={r.label}>
-              <span>
-                {r.label}
-                {r.partial ? " · in progress" : ""}
-              </span>
-              <strong>{number(r[metric])}</strong>
-            </div>
-          ))}
-        </div>
-      </details>
-    </div>
-  ) : (
-    <div className="chart-empty">
-      Import attendance to see participation over time.
-    </div>
-  );
-}
+const LineChart = TrendChart;
 function Modal({
   title,
   children,
@@ -483,6 +399,15 @@ function App() {
               </p>
             </div>
             <div className="heading-actions">
+              <Button
+                disabled={loading}
+                onClick={() =>
+                  refresh("Dashboard refreshed from saved records.")
+                }
+              >
+                <RefreshCw size={16} />
+                Refresh
+              </Button>
               <Button onClick={() => setModal("export")}>
                 <Download size={17} />
                 Export report
@@ -496,6 +421,11 @@ function App() {
             </div>
           </div>
           <FilterBar filters={filters} setFilters={setFilters} data={data} />
+          <ActiveFilters
+            filters={filters}
+            data={data}
+            setFilters={setFilters}
+          />
           {error && (
             <div className="error" role="alert">
               {error}
@@ -506,7 +436,13 @@ function App() {
           )}
           {loading && (
             <div className="fetch-status" role="status">
-              Updating dashboard…
+              <div className="skeleton-lines" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+              <span>Updating dashboard...</span>
             </div>
           )}
           {data && (
@@ -521,7 +457,11 @@ function App() {
                   <CalendarDays size={15} />
                   {pretty(data.period.from)} — {pretty(data.period.to)}
                 </span>
-                <span>Available records · Singapore time</span>
+                <span>
+                  {data.metadata?.lastImportAt
+                    ? `Last import: ${new Date(data.metadata.lastImportAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
+                    : "Available records - Singapore time"}
+                </span>
               </div>
               {data.coverage.from === null &&
               tab !== "Planning & Recommendations" ? (
@@ -585,7 +525,11 @@ function App() {
               ) : tab === "Programme Performance" ? (
                 <Programmes data={data} onProgramme={setProgramme} />
               ) : tab === "Audience & Outreach" ? (
-                <Audience data={data} />
+                <Audience
+                  data={data}
+                  filters={filters}
+                  setFilters={setFilters}
+                />
               ) : (
                 <Planning
                   data={data}
@@ -737,7 +681,15 @@ function FilterBar({
   return (
     <div className="filter-panel">
       <div className="filters">
-        <Select label="Reporting period" value={preset} onChange={choose}>
+        <Select
+          label="Reporting period"
+          value={
+            !filters.from && filters.to === emptyFilters.to
+              ? "Available history"
+              : preset
+          }
+          onChange={choose}
+        >
           {[
             "Available history",
             "This month",
@@ -898,74 +850,7 @@ function FilterBar({
   );
 }
 function Kpis({ data }: { data: Dashboard }) {
-  const items: {
-    key: "unique" | "male" | "minority" | "attendance";
-    title: string;
-    description: string;
-    percent?: string;
-    icon: typeof Users;
-  }[] = [
-    {
-      key: "unique",
-      title: "Unique seniors reached",
-      description: `Different participants aged ${data.settings.seniorAge}+`,
-      icon: Users,
-    },
-    {
-      key: "male",
-      title: "Male seniors reached",
-      description: `Of ${data.summary.knownGender} seniors with known gender`,
-      percent: pct(data.summary.malePct),
-      icon: Users,
-    },
-    {
-      key: "minority",
-      title: "Minority seniors reached",
-      description: `Of ${data.summary.knownRace} seniors with known race`,
-      percent: pct(data.summary.minorityPct),
-      icon: HeartHandshake,
-    },
-    {
-      key: "attendance",
-      title: "Attendance entries",
-      description: "Valid entries · all participant ages",
-      icon: ClipboardList,
-    },
-  ];
-  return (
-    <div className="kpi-grid">
-      {items.map((item, i) => {
-        const prev = data.previous?.[item.key],
-          value = data.summary[item.key];
-        return (
-          <section className={`kpi-card kpi-${i}`} key={item.key}>
-            <div className="kpi-top">
-              <span>{item.title}</span>
-              <item.icon size={20} />
-            </div>
-            <div className="kpi-value">
-              {number(value)}
-              {item.percent && <span>{item.percent}</span>}
-            </div>
-            <p>{item.description}</p>
-            <div className="kpi-change">
-              {prev !== undefined ? (
-                <>
-                  <span className="change-value">
-                    {value - prev >= 0 ? "+" : ""}
-                    {number(value - prev)}
-                  </span>{" "}
-                  vs {pretty(data.previous!.from)}–{pretty(data.previous!.to)}
-                </>
-              ) : (
-                <>No comparable previous period in available records</>
-              )}
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
+  return <KpiDeck data={data} />;
 }
 function Overview({
   data,
@@ -978,67 +863,26 @@ function Overview({
   setFilters: (f: Filters) => void;
   onProgramme: (p: Programme) => void;
 }) {
-  const [group, setGroup] = useState<"unique" | "male" | "minority">("unique"),
+  const [group, setGroup] = useState<
+      | "unique"
+      | "male"
+      | "minority"
+      | "attendance"
+      | "firstObserved"
+      | "returning"
+    >("unique"),
     [rank, setRank] = useState<"unique" | "male" | "minority">("unique");
   const top = [...data.programmes]
       .sort((a, b) => b[rank] - a[rank])
       .slice(0, 5),
     s = data.summary;
-  const maleTop = [...data.programmes].sort((a, b) => b.male - a.male)[0],
-    minorityTop = [...data.programmes].sort(
-      (a, b) => b.minority - a.minority,
-    )[0];
-  const insights = [
-    data.programmes[0] && {
-      title: "Broadest programme reach",
-      p: data.programmes[0],
-      text: `${data.programmes[0].name} reached ${data.programmes[0].unique} different seniors across ${data.programmes[0].sessions} sessions.`,
-      action: "Review interest, capacity and resources before another cycle.",
-    },
-    maleTop?.male > 0 && {
-      title: "Connecting with male seniors",
-      p: maleTop,
-      text: `${maleTop.name} reached ${maleTop.male} male seniors (${pct(maleTop.malePct)} of known-gender senior participants).`,
-      action: "Ask participants which parts of the format they value.",
-    },
-    minorityTop?.minority > 0 && {
-      title: "Minority participation pattern",
-      p: minorityTop,
-      text: `${minorityTop.name} reached ${minorityTop.minority} minority seniors across ${minorityTop.sessions} sessions.`,
-      action:
-        minorityTop.minority < 5
-          ? "Treat this small sample cautiously; gather more evidence."
-          : "Discuss language preferences and interest before future outreach.",
-    },
-    data.programmes[0] && {
-      title: "Returning engagement",
-      p: data.programmes[0],
-      text: `${s.repeat} of ${s.unique} seniors attended two or more distinct sessions in this view. Senior attendance frequency was ${number(s.frequency)} entries per person.`,
-      action:
-        "Ask occasional attendees what would support their return and compare recurring programme formats.",
-    },
-    data.programmes[0] && {
-      title: "Demographic coverage matters",
-      p: data.programmes[0],
-      text: `${s.unknownRace} seniors have missing or UNKNOWN race; ${s.unknownGender} have unknown or other recorded gender. These people remain in overall reach.`,
-      action:
-        "Check missing information through your approved member records process before interpreting participation shares.",
-    },
-  ]
-    .filter(Boolean)
-    .slice(0, 4) as {
-    title: string;
-    p: Programme;
-    text: string;
-    action: string;
-  }[];
   return (
     <>
       <Kpis data={data} />
       <div className="overview-grid">
         <Panel
           title="Outreach over time"
-          subtitle="Different seniors in each period · counts are not additive"
+          subtitle="Attendance includes all ages; reach and engagement show unique seniors in each period"
           action={
             <span className="badge soft">
               <span className="green-dot" />
@@ -1048,7 +892,16 @@ function Overview({
         >
           <div className="chart-controls">
             <div className="segmented">
-              {(["unique", "male", "minority"] as const).map((g) => (
+              {(
+                [
+                  "unique",
+                  "attendance",
+                  "firstObserved",
+                  "returning",
+                  "male",
+                  "minority",
+                ] as const
+              ).map((g) => (
                 <button
                   aria-pressed={group === g}
                   className={group === g ? "active" : ""}
@@ -1059,7 +912,13 @@ function Overview({
                     ? "All seniors"
                     : g === "male"
                       ? "Male seniors"
-                      : "Minority seniors"}
+                      : g === "minority"
+                        ? "Minority seniors"
+                        : g === "attendance"
+                          ? "Attendance"
+                          : g === "firstObserved"
+                            ? "First observed"
+                            : "Returning"}
                 </button>
               ))}
             </div>
@@ -1070,6 +929,7 @@ function Overview({
                 setFilters({ ...filters, interval: e.target.value })
               }
             >
+              <option value="day">Daily</option>
               <option value="month">Monthly</option>
               <option value="week">Weekly</option>
               <option value="quarter">Quarterly</option>
@@ -1092,7 +952,13 @@ function Overview({
             </select>
           }
         >
-          <Bars items={top.map((p) => ({ label: p.name, value: p[rank] }))} />
+          <Bars
+            items={top.map((p) => ({ label: p.name, value: p[rank] }))}
+            onSelect={(name) => {
+              const p = top.find((p) => p.name === name);
+              if (p) onProgramme(p);
+            }}
+          />
           <div className="panel-link">
             <button
               className="text-button"
@@ -1146,6 +1012,14 @@ function Overview({
               <b>{number(s.frequency)}</b>
               <span>senior attendances per senior</span>
             </div>
+            <div>
+              <b>{pct(s.repeatRate)}</b>
+              <span>of seniors attended 2+ sessions</span>
+            </div>
+            <div>
+              <b>{number(s.multiProgramme)}</b>
+              <span>attended 2+ programmes</span>
+            </div>
           </div>
           <Note>
             First observed does not mean new to the centre. Repeat engagement
@@ -1157,7 +1031,7 @@ function Overview({
           subtitle="Unique senior reach and attendance entries across all ages"
         >
           <div className="domain-list">
-            {data.domains
+            {[...data.domains]
               .sort((a, b) => b.unique - a.unique)
               .map((d) => (
                 <div key={d.label}>
@@ -1182,37 +1056,11 @@ function Overview({
           <Note>A senior may attend programmes in several domains.</Note>
         </Panel>
       </div>
-      <section className="insights-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">FROM NUMBERS TO NEXT STEPS</span>
-            <h2>What the Data Is Telling Us</h2>
-          </div>
-          <span className="badge soft">
-            Transparent, attendance-led findings
-          </span>
-        </div>
-        <div className="insight-grid">
-          {insights.map((insight, i) => (
-            <article className="insight-card" key={insight.title}>
-              <span className="insight-number">0{i + 1}</span>
-              <h3>{insight.title}</h3>
-              <p>{insight.text}</p>
-              <div className="suggestion">
-                <strong>Suggested next step</strong>
-                <p>{insight.action}</p>
-              </div>
-              <button
-                className="text-button"
-                onClick={() => onProgramme(insight.p)}
-              >
-                View programme
-                <ArrowRight size={15} />
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+      <Portfolio
+        data={data}
+        onDomain={(domain) => setFilters({ ...filters, domain })}
+      />
+      <InsightCards data={data} onProgramme={onProgramme} />
       <Note>
         Minority definitions: {data.settings.minority.join(", ")}. Unknown race:{" "}
         {s.unknownRace}; unknown or other recorded gender: {s.unknownGender}.
@@ -1233,7 +1081,15 @@ function Programmes({
       useState<
         keyof Pick<
           Stats,
-          "unique" | "male" | "minority" | "sessions" | "repeat" | "average"
+          | "unique"
+          | "male"
+          | "minority"
+          | "sessions"
+          | "repeat"
+          | "average"
+          | "attendance"
+          | "firstObserved"
+          | "returning"
         >
       >("unique");
   const list = data.programmes
@@ -1266,6 +1122,9 @@ function Programmes({
             ["sessions", "Sessions"],
             ["repeat", "Repeat participants"],
             ["average", "Average attendance"],
+            ["attendance", "Attendance entries"],
+            ["firstObserved", "First observed seniors"],
+            ["returning", "Seniors recorded before period"],
           ].map(([v, l]) => (
             <option key={v} value={v}>
               {l}
@@ -1278,6 +1137,9 @@ function Programmes({
           <span>Programme / AAP domain</span>
           <span>Sessions</span>
           <span>Unique seniors</span>
+          <span>Attendance</span>
+          <span>Avg / session</span>
+          <span>Repeat rate</span>
           <span>Male reach</span>
           <span>Minority reach</span>
           <span />
@@ -1300,6 +1162,13 @@ function Programmes({
             <span data-label="Sessions">{p.sessions}</span>
             <span data-label="Unique seniors">
               <b>{p.unique}</b>
+              <small>{p.firstObserved} first observed</small>
+            </span>
+            <span data-label="Attendance">{number(p.attendance)}</span>
+            <span data-label="Avg / session">{number(p.average)}</span>
+            <span data-label="Repeat rate">
+              {pct(p.repeatRate)}
+              <small>{p.repeat} seniors in 2+ sessions</small>
             </span>
             <span data-label="Male reach">
               {p.male}
@@ -1324,9 +1193,17 @@ function Programmes({
     </Panel>
   );
 }
-function Audience({ data }: { data: Dashboard }) {
+function Audience({
+  data,
+  filters,
+  setFilters,
+}: {
+  data: Dashboard;
+  filters?: Filters;
+  setFilters?: (f: Filters) => void;
+}) {
   const [metric, setMetric] = useState<"male" | "minority">("male");
-  const max = Math.max(...data.timing.map((t) => t.unique), 1);
+
   return (
     <>
       <div className="callout">
@@ -1347,7 +1224,15 @@ function Audience({ data }: { data: Dashboard }) {
           title="Gender outreach"
           subtitle={`${data.summary.knownGender} seniors with known male/female gender`}
         >
-          <Bars items={data.gender} />
+          <DemographicBars
+            items={data.gender}
+            denominator={data.summary.unique}
+            onSelect={
+              filters && setFilters
+                ? (gender) => setFilters({ ...filters, gender })
+                : undefined
+            }
+          />
           <Note>
             Unknown and other recorded values are shown separately and excluded
             from the male percentage denominator.
@@ -1357,7 +1242,15 @@ function Audience({ data }: { data: Dashboard }) {
           title="Recorded race & minority outreach"
           subtitle={`Configured minority groups: ${data.settings.minority.join(", ")}`}
         >
-          <Bars items={data.race} />
+          <DemographicBars
+            items={data.race}
+            denominator={data.summary.unique}
+            onSelect={
+              filters && setFilters
+                ? (race) => setFilters({ ...filters, race })
+                : undefined
+            }
+          />
           <Note>
             Staff-only detail. Counts below five are small samples. All
             demographic breakdowns are omitted from shared reports.
@@ -1367,7 +1260,21 @@ function Audience({ data }: { data: Dashboard }) {
           title="Senior age groups"
           subtitle={`Age eligibility: ${data.settings.seniorAge}+`}
         >
-          <Bars items={data.ages} />
+          <DemographicBars
+            items={data.ages}
+            denominator={data.summary.unique}
+            onSelect={
+              filters && setFilters
+                ? (label) =>
+                    setFilters({
+                      ...filters,
+                      ageBand: label
+                        .replace(/\u2013/g, "-")
+                        .replace("+", "-120"),
+                    })
+                : undefined
+            }
+          />
           <Note>
             Use More filters ? Age to view attendees below the senior threshold;
             these attendees count in attendance, not senior reach.
@@ -1421,36 +1328,7 @@ function Audience({ data }: { data: Dashboard }) {
           title="Weekday & time of day"
           subtitle="Morning before 12:00 · afternoon 12:00–17:59 · evening from 18:00"
         >
-          {data.summary.sessions >= data.settings.minSessions ? (
-            <div className="timing-grid">
-              {data.timing.map((t) => (
-                <div
-                  className="timing-cell"
-                  key={t.label}
-                  style={{
-                    background: `rgba(33,135,122,${0.05 + (t.unique / max) * 0.13})`,
-                  }}
-                >
-                  <b>{t.label}</b>
-                  <strong>{t.unique} seniors</strong>
-                  <small>
-                    {t.sessions} sessions · {t.male} male · {t.minority}{" "}
-                    minority
-                  </small>
-                  <small>
-                    {t.sessions < data.settings.minSessions
-                      ? "Limited session evidence"
-                      : "Observed participation"}
-                  </small>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Note>
-              At least {data.settings.minSessions} recorded sessions are needed
-              for a timing comparison.
-            </Note>
-          )}
+          <TimingMatrix data={data} />
           <Note>
             Timing coincides with attendance; programme type and delivery
             frequency also differ. Counts are not additive across time slots.
@@ -1474,6 +1352,46 @@ function Audience({ data }: { data: Dashboard }) {
           <Note>
             Optional fields are reserved in the data model. No assumptions are
             made about isolation, frailty or language from race, age or CFS.
+          </Note>
+        </Panel>
+        <Panel
+          title="Session duration & attendance"
+          subtitle="Observed all-age attendance per session; duration is not a proven cause"
+        >
+          <div className="table-scroll">
+            <table>
+              <caption className="sr-only">
+                Recorded attendance by session duration
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Sessions</th>
+                  <th scope="col">Avg attendance</th>
+                  <th scope="col">Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.duration.map((d) => (
+                  <tr key={d.label}>
+                    <th scope="row">{d.label}</th>
+                    <td>{number(d.sessions)}</td>
+                    <td>{number(d.average)}</td>
+                    <td>
+                      {d.sessions >= data.settings.minSessions &&
+                      d.unique >= data.settings.minParticipants
+                        ? "Sufficient observations"
+                        : "Limited observations"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Note>
+            These are descriptive averages. Programme type, intended audience
+            and delivery frequency differ; capacity and cancellations are not
+            recorded.
           </Note>
         </Panel>
       </div>
@@ -1846,11 +1764,13 @@ function ProgrammeDialog({
           ["Unique seniors", p.unique],
           ["Male seniors", `${p.male} · ${pct(p.malePct)}`],
           ["Minority seniors", `${p.minority} · ${pct(p.minorityPct)}`],
-          ["Delivered sessions", p.sessions],
+          ["Recorded sessions", p.sessions],
           ["Attendance · all ages", p.attendance],
           ["Average attendance / session", number(p.average)],
           ["Repeat seniors · 2+ sessions", p.repeat],
           ["First observed in period", p.firstObserved],
+          ["Recorded before period", p.returning],
+          ["Repeat participation rate", pct(p.repeatRate)],
         ].map(([k, v]) => (
           <div key={k}>
             <span>{k}</span>
@@ -2178,7 +2098,7 @@ function ImportDialog({
           </details>
           <Note>
             Attendance is added only after you review and confirm. A temporary
-            preview is stored for 20 minutes. Raw Member IDs are hashed for
+            preview expires after 20 minutes. Raw Member IDs are hashed for
             matching and are not retained; the file itself is not stored.
           </Note>
           <Button primary type="submit" disabled={busy}>

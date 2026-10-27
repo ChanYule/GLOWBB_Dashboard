@@ -4,6 +4,8 @@ A local full-stack staff application built in the supplied empty repository. No 
 
 For the existing Vercel deployment, follow [Vercel + Supabase setup](docs/HOSTING.md). The hosted API uses Supabase PostgreSQL when `DATABASE_URL` is set; local development continues to support SQLite. A Vite static build alone does not deploy a database.
 
+See the [dashboard redesign and analytics handoff](docs/REDESIGN.md) for metric definitions, chart purposes, automated insight rules, validation and remaining browser checks. An isolated synthetic preview is available with `node scripts/preview-redesign.mjs` after building; it never opens the real database.
+
 ## Run on Windows
 
 Requires Node.js 24.14 or later (uses the built-in SQLite API) and npm.

@@ -1,0 +1,64 @@
+# Dashboard redesign and analytics handoff
+
+## Audit and design decisions
+
+The existing application uses React 19/TypeScript, Vite, Express, SQLite locally and PostgreSQL on Supabase when configured. Charts are SVG/HTML; there was no chart-library dependency to preserve. The four views already provide overview, programme performance, audience/outreach and planning. Imports, settings, targets, saved planning decisions, CSV/print reports, same-origin mutation checks, privacy restrictions and the Vercel API entry remain in place. The application has no sign-in flow; existing staff-role checks are retained rather than represented as authentication.
+
+The source fields support participant pseudonyms, recorded age/gender/race, client/boundary status, programme/domain, session date/start/end and deduplicated attendance. They do not supply cancellation status, a complete scheduled-session calendar, capacity, costs, feedback, registrations, reliable venue data or a reference population. Attendance is not a completion rate or an outcome measure. No database fields were renamed, no schema migration is required and no existing records were rewritten.
+
+The design keeps the four existing navigation destinations. An indigo sidebar, off-white canvas, white surfaces, coloured metric accents, clearer typography, consistent controls and accessible disclosures replace the predominantly green presentation. Teal denotes attendance, indigo senior reach, cyan male outreach, purple minority outreach/engagement, amber attention and coral errors. Colour is accompanied by labels, icons and actual values.
+
+Layout: reporting header and refresh; shared date/category/audience filters and removable active-filter chips; four KPI columns on desktop, two on smaller screens; complementary trend/ranking and engagement/domain panels; a portfolio table; evidence-based insights. Programme rankings and demographic categories provide direct drill-down. No extra navigation pages or external analytics services were added.
+
+## Metrics and charts
+
+| Component                              | Question answered                                            | Calculation / limits                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eight KPI cards                        | How much activity and reach are recorded?                    | Unique seniors, all-age unique participants, all-age attendance, male seniors, minority seniors, active programmes, recorded sessions and attendance per session. Disclosures explain definitions. Comparisons require historical coverage for an equal-duration previous period. Relative change is omitted when the previous value is zero. |
+| Trend explorer                         | When did participation change?                               | Daily, weekly, monthly or quarterly views of senior reach, male/minority reach, attendance, first-observed seniors or previously recorded seniors. Each time bucket deduplicates people independently; people are not additive across periods. Missing periods show zero in available records, not confirmed non-delivery.                    |
+| First-observed / returning composition | Is this view reaching people previously seen in the records? | First date is computed across all available delivered-attendance history before applying filters. First-observed trend counts use each bucket's dates, clipped to the reporting range. Returning means first observed before that bucket; it does not mean repeat attendance inside it.                                                       |
+| Engagement summaries                   | How often do seniors return within this view?                | Repeat = at least two distinct sessions; repeat rate = repeat seniors / unique seniors. Frequency = senior attendance / unique seniors. Multi-programme and multi-domain counts deduplicate each senior.                                                                                                                                      |
+| Programme ranking and expanded table   | Which programmes reach whom, at what delivery frequency?     | Ranked senior reach, attendance, average attendance, repeat rate, first-observed participants and known-demographic shares. All programme names remain actionable; details include timing, attendance history and evidence limitations. Low reach alone is not failure.                                                                       |
+| Domain portfolio table                 | Where is programme delivery concentrated?                    | Programmes, sessions, senior reach and demographic counts per domain. Attendance share uses all-age attendance / total selected attendance. Domain reach overlaps and must not be summed. Selecting a domain applies the shared filter.                                                                                                       |
+| Demographic bars                       | Who is represented in the selected senior audience?          | Count/percentage toggle and gender/race/age drill-down. Composition percentages use all selected seniors, including missing/unknown values. This is explicitly distinct from KPI male/minority percentages, which use known-demographic denominators.                                                                                         |
+| Weekday/time heatmap                   | Which observed slots merit a closer look?                    | Average all-age attendance per session, not raw attendance volume. Two cells must each meet configured minimum sessions and unique-senior thresholds before a heatmap appears. Insufficient cells remain labelled Limited and unranked. No causal claim is made.                                                                              |
+| Duration comparison table              | Does recorded attendance vary with session duration?         | Under 45, 45–89 and 90+ minutes from parsed start/end times. Displays session counts, averages and evidence labels. Format, audience and capacity differences remain unresolved.                                                                                                                                                              |
+
+SVG trend charts have keyboard-focusable points, a readable exact-value table, hover/focus readouts, a mobile period selector, sparse x-axis labels and semantic legends. Daily/detail views longer than 180 buckets ask for a shorter date range or coarser interval rather than drawing unreadable axes. Figure tables are paginated after 30 periods. Single-period histories show the actual count and a clear insufficient-history state instead of a misleading line.
+
+## Automated observation rules
+
+All observations run locally on the server from the same filtered records; there is no AI API or paid service.
+
+- Missing/unknown senior demographics always produce a data-quality observation when present.
+- Below the configured session and unique-senior thresholds, only descriptive quality/sample warnings appear; strong trend or opportunity claims are withheld.
+- A period comparison requires adequate samples in both periods and coverage of the equal-duration preceding period. Increased, decreased and unchanged reach receive different wording.
+- Broadest programme reach considers only programmes meeting the evidence threshold, and invites a resource/interest review rather than automatic expansion.
+- First-observed programme opportunities require adequate programme evidence and at least the configured minimum first-observed seniors. This never establishes a new centre client.
+- Decline observations reuse the planning rule: greater than 25% senior-reach decline across two adjacent, fully selected observed calendar months, each meeting the session threshold. A gap between observed months no longer triggers an adjacent-month flag. Complete centre history remains unverified.
+- Timing observations require at least two adequately observed time slots, compare attendance per session and explicitly acknowledge differences in programme mix.
+- Multi-domain engagement is described as overlap, not summed reach or proof of impact.
+
+Insights include a category/icon, supporting statistic, explanation, next step and programme link where a specific programme is involved. Existing targets retain their own reporting dates and programme scope; global dashboard filters do not redefine those goals.
+
+## Performance and preservation
+
+Programme grouping now reuses grouped attendance instead of rescanning all filtered rows for every programme. Previous-period and target calculations use a summary-only analytics path, avoiding unnecessary charts/recommendations. Last-import metadata is fetched with one aggregate-record lookup per dashboard response. The existing stale-request guard prevents older filter responses replacing newer ones. No extra client fetch is needed for the new charts, and no charting dependency was added.
+
+The redesign preserves SQLite and Supabase storage, atomic imports and duplicate/conflict checks, previews and cancellation, settings/definitions, all reporting filters, targets and saved decisions, programme details, same-origin checks, role-dependent controls, aggregate exports and demographic/notes restrictions in shared reports. Source workbooks and raw Member IDs remain unretained.
+
+`src/analytics-ui.tsx` contains reusable analytical components. `src/redesign.css` contains design tokens, component treatments and responsive overrides; existing workflow/form styles remain in `src/styles.css`.
+
+## Verification and remaining checks
+
+The full regression run passed all 48 tests, including six new calculation tests and four new interaction/empty-state/accessibility tests. A subsequent age-band drill-down fix added another regression test; the final focused UI run passed all 12 UI tests. Coverage includes existing imports, deduplication, source conflicts, SQLite/Supabase persistence, transaction rollback, targets, saved decisions, filters, report privacy, hosting errors and certificate trust. New interaction tests check daily chart selection, domain/demographic/age drill-down, percentage composition including unknown values, sparse-chart/heatmap states and accessible KPI disclosures. There were no assertion failures. Final TypeScript, ESLint, production build and whitespace checks passed. JavaScript is 90.58 KB compressed (298.02 KB uncompressed); CSS is 10.85 KB compressed. No new library dependency was introduced.
+
+The isolated preview responded HTTP 200 and returned the new duration/insight fields and last-import timestamp. Its synthetic fixture had six active programmes in the selected check. Those are QA records, not production statistics. The preview is running at `http://127.0.0.1:3100`; the production app and stored data were not modified.
+
+A synthetic in-memory calculation benchmark with 50,000 attendance records, 1,000 participants, 400 sessions and 20 programmes completed a filtered report in 146 ms in this environment (11,125 matching attendance records). This is a local calculation measurement, not a hosted latency or concurrent-load guarantee. The synthetic benchmark never touched stored attendance.
+
+Browser visual acceptance at 375, 768, 1024 and 1440 px remains outstanding: the session reported no available browser and opening the in-app browser failed. Responsive breakpoints and interactions can be inspected in source and tests, but they do not substitute for actual layout/screenshot or browser-console verification.
+
+For a reproducible, isolated browser preview, run `npm.cmd run build`, then `node scripts/preview-redesign.mjs`, and visit `http://127.0.0.1:3100`. It generates explicitly labelled synthetic QA records in an in-memory SQLite database and never opens the real local or Supabase database. Stop that process when finished. Production has no demo-data path.
+
+Before deployment, review the updated source. Deployment and live Supabase checks were not performed during this redesign. Organisational access, retention and backup requirements remain outside the supplied data. The absence of per-person authentication is unchanged.

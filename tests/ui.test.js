@@ -45,6 +45,10 @@ const { render, screen, fireEvent, cleanup, waitFor } =
   await import("@testing-library/react");
 const { Overview, Programmes, Audience, Planning, FilterBar, App } =
   await tsImport("../src/main.tsx", import.meta.url);
+const { DemographicBars, TrendChart, TimingMatrix, KpiDeck } = await tsImport(
+  "../src/analytics-ui.tsx",
+  import.meta.url,
+);
 const db = openDb(":memory:");
 db.prepare("INSERT INTO users VALUES(1,?,?,?)").run(
   "admin",
@@ -276,4 +280,94 @@ test("application displays a useful hosting error and retry instead of a raw JSO
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("demographic shares include unknown people and drill-down keeps the chosen category", () => {
+  let chosen;
+  render(
+    React.createElement(DemographicBars, {
+      items: [
+        { label: "MALE", value: 1 },
+        { label: "UNKNOWN", value: 1 },
+      ],
+      denominator: 2,
+      onSelect: (label) => {
+        chosen = label;
+      },
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show percentages" }));
+  assert.equal(
+    screen
+      .getByRole("button", { name: "Show counts" })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  assert.match(
+    screen.getByText(/Percentages use all/).textContent,
+    /including missing\/unknown/,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Filter UNKNOWN" }));
+  assert.equal(chosen, "UNKNOWN");
+});
+test("daily trends and domain portfolio drill-down update the global filters", () => {
+  let next;
+  render(
+    React.createElement(Overview, {
+      data: dashboard(),
+      filters,
+      setFilters: (value) => {
+        next = value;
+      },
+      onProgramme: () => {},
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("Trend interval"), {
+    target: { value: "day" },
+  });
+  assert.equal(next.interval, "day");
+  fireEvent.click(screen.getByRole("button", { name: "Physical" }));
+  assert.equal(next.domain, "Physical");
+  fireEvent.click(
+    screen.getByRole("button", { name: "First observed", exact: true }),
+  );
+  assert.ok(
+    screen.getByRole("img", { name: /firstObserved participation over time/ }),
+  );
+});
+test("charts and timing comparisons show explanations instead of single-point trends or sparse heatmaps", () => {
+  const data = dashboard();
+  render(React.createElement(TrendChart, { rows: data.trends.slice(0, 1) }));
+  assert.ok(
+    screen.getByText("Not enough historical data to show a meaningful trend."),
+  );
+  assert.equal(screen.queryByRole("img"), null);
+  cleanup();
+  render(React.createElement(TimingMatrix, { data }));
+  assert.ok(screen.getByText("Not enough comparable time slots yet."));
+  assert.equal(screen.queryByRole("table"), null);
+});
+test("KPI definitions are reachable by keyboard-native disclosures", () => {
+  render(React.createElement(KpiDeck, { data: dashboard() }));
+  const explanation = screen.getByLabelText(
+    "How unique seniors reached is calculated",
+  );
+  fireEvent.click(explanation);
+  assert.ok(explanation.parentElement.hasAttribute("open"));
+  assert.ok(screen.getByText(/Distinct participants aged 60/));
+});
+
+test("age-band drill-down sends the numeric range expected by the shared API filter", () => {
+  let next;
+  render(
+    React.createElement(Audience, {
+      data: dashboard(),
+      filters,
+      setFilters: (value) => {
+        next = value;
+      },
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Filter 60/ }));
+  assert.equal(next.ageBand, "60-69");
 });

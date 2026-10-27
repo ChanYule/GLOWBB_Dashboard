@@ -280,11 +280,120 @@ export function inspectImport(parsed, existing) {
   };
 }
 const distinct = (arr, key) => new Set(arr.map(key)).size;
+function buildInsights({
+  summary: s,
+  previous,
+  programmes,
+  timing,
+  recommendations,
+  settings,
+}) {
+  const insights = [];
+  const sufficient = (x) =>
+    x.sessions >= settings.minSessions && x.unique >= settings.minParticipants;
+  const add = (category, title, statistic, explanation, action, programmeId) =>
+    insights.push({
+      category,
+      title,
+      statistic,
+      explanation,
+      action,
+      ...(programmeId ? { programmeId } : {}),
+    });
+  if (!s.attendance) return [];
+  if (s.unknownGender || s.unknownRace)
+    add(
+      "quality",
+      "Keep demographic gaps in view",
+      `${s.unknownGender} unknown gender · ${s.unknownRace} missing or UNKNOWN race`,
+      "These seniors remain in overall reach. Known-demographic denominators are used for outreach percentages.",
+      "Reconcile missing details through the approved member-record process.",
+    );
+  if (!sufficient(s)) {
+    add(
+      "attention",
+      "Build a clearer picture",
+      `${s.sessions} sessions · ${s.unique} unique seniors`,
+      `Stronger observations require at least ${settings.minSessions} sessions and ${settings.minParticipants} seniors. Small counts describe the records, not programme success.`,
+      "Gather more attendance and participant feedback before changing delivery.",
+    );
+    return insights;
+  }
+  if (previous && sufficient(previous) && previous.unique > 0) {
+    const delta = s.unique - previous.unique;
+    add(
+      delta === 0 ? "pattern" : delta > 0 ? "positive" : "attention",
+      delta === 0
+        ? "Senior reach held steady"
+        : delta > 0
+          ? "Senior reach increased"
+          : "Senior reach decreased",
+      `${delta >= 0 ? "+" : ""}${delta} seniors (${Math.round((delta / previous.unique) * 1000) / 10}%)`,
+      `Compared with the preceding ${previous.from} to ${previous.to} period of equal elapsed days. Recorded history may still be incomplete.`,
+      "Check programme frequency and participant feedback alongside this change.",
+    );
+  }
+  const top = programmes.find(sufficient);
+  if (top)
+    add(
+      "opportunity",
+      "Broadest observed programme reach",
+      `${top.unique} seniors · ${top.sessions} sessions`,
+      `${top.name} has the largest senior reach among programmes meeting the evidence threshold. Capacity and intended audience are not recorded.`,
+      "Review interest and resources before considering another cycle.",
+      top.id,
+    );
+  const newcomer = programmes
+    .filter((p) => sufficient(p) && p.firstObserved >= settings.minParticipants)
+    .sort((a, b) => b.firstObserved / b.unique - a.firstObserved / a.unique)[0];
+  if (newcomer)
+    add(
+      "pattern",
+      "A route to first-observed participants",
+      `${newcomer.firstObserved} of ${newcomer.unique} seniors`,
+      `${newcomer.name} includes participants first recorded anywhere in the available dataset during this period. This does not establish new centre clients.`,
+      "Ask how participants heard about the programme before extending outreach.",
+      newcomer.id,
+    );
+  const declining = recommendations.find((r) => r.category === "Improve");
+  if (declining)
+    add(
+      "attention",
+      "A change worth discussing",
+      declining.figures,
+      `${declining.programme}: ${declining.reason}`,
+      declining.action,
+      declining.id,
+    );
+  const eligibleTiming = timing
+    .filter(sufficient)
+    .sort((a, b) => b.average - a.average);
+  if (eligibleTiming.length >= 2) {
+    const best = eligibleTiming[0];
+    add(
+      "pattern",
+      "Timing to explore, not a cause",
+      `${Math.round(best.average * 10) / 10} attendances per session`,
+      `${best.label} has the highest average among time slots with sufficient observations (${best.sessions} sessions). Programme mix also differs.`,
+      "Compare similar formats and ask participants about access before changing schedules.",
+    );
+  }
+  if (s.multiDomain)
+    add(
+      "pattern",
+      "Engagement spans programme types",
+      `${s.multiDomain} of ${s.unique} seniors`,
+      "These seniors attended programmes in two or more AAP domains in the selected view. Domain reach is overlapping and must not be summed.",
+      "Discuss which combinations participants value when planning the portfolio.",
+    );
+  return insights.slice(0, 6);
+}
 export function analytics(
   data,
   settings = defaults,
   filters = {},
   now = todaySG(),
+  summaryOnly = false,
 ) {
   const pmap = new Map(data.participants.map((p) => [p.id, p]));
   const pgmap = new Map(data.programmes.map((p) => [p.id, p]));
@@ -324,7 +433,7 @@ export function analytics(
         (filters.target === "male" && isSenior(a.p) && a.p.gender === "MALE") ||
         (filters.target === "minority" && isSenior(a.p) && isMinority(a.p))),
   );
-  function stats(rows) {
+  function stats(rows, scopeFrom = filters.from, scopeTo = filters.to) {
     const seniors = rows.filter((a) => isSenior(a.p)),
       people = [...new Map(seniors.map((a) => [a.p.id, a.p])).values()];
     const counts = new Map();
@@ -340,6 +449,21 @@ export function analytics(
       knownRace = people.filter(
         (p) => !["UNKNOWN", "MISSING"].includes(p.race),
       ).length;
+    const firstObserved = people.filter((p) => {
+      const d = first.get(p.id);
+      return (!scopeFrom || d >= scopeFrom) && (!scopeTo || d <= scopeTo);
+    }).length;
+    const participantProgrammes = new Map(),
+      participantDomains = new Map();
+    for (const a of seniors) {
+      if (!participantProgrammes.has(a.p.id))
+        participantProgrammes.set(a.p.id, new Set());
+      if (!participantDomains.has(a.p.id))
+        participantDomains.set(a.p.id, new Set());
+      participantProgrammes.get(a.p.id).add(a.pg.id);
+      participantDomains.get(a.p.id).add(a.pg.domain);
+    }
+    const repeat = [...counts.values()].filter((s) => s.size > 1).length;
     return {
       unique: people.length,
       male,
@@ -355,14 +479,16 @@ export function analytics(
       attendance: rows.length,
       seniorAttendance: seniors.length,
       sessions: distinct(rows, (a) => a.s.id),
-      repeat: [...counts.values()].filter((s) => s.size > 1).length,
-      firstObserved: people.filter((p) => {
-        const d = first.get(p.id);
-        return (
-          (!filters.from || d >= filters.from) &&
-          (!filters.to || d <= filters.to)
-        );
-      }).length,
+      repeat,
+      firstObserved,
+      returning: people.length - firstObserved,
+      repeatRate: people.length ? (repeat / people.length) * 100 : null,
+      multiProgramme: [...participantProgrammes.values()].filter(
+        (s) => s.size > 1,
+      ).length,
+      multiDomain: [...participantDomains.values()].filter((s) => s.size > 1)
+        .length,
+      programmes: distinct(rows, (a) => a.pg.id),
       frequency: people.length ? seniors.length / people.length : 0,
       average: distinct(rows, (a) => a.s.id)
         ? rows.length / distinct(rows, (a) => a.s.id)
@@ -372,17 +498,45 @@ export function analytics(
   }
   const summary = stats(base),
     seniors = base.filter((a) => isSenior(a.p));
-  const group = (rows, key) => {
+  if (summaryOnly) return { summary };
+  const groupedRows = (rows, key) => {
     const map = new Map();
     for (const a of rows) {
       const k = key(a);
       if (!map.has(k)) map.set(k, []);
       map.get(k).push(a);
     }
-    return [...map].map(([label, r]) => ({ label, ...stats(r) }));
+    return map;
   };
-  const period = filters.interval || "month";
+  const group = (rows, key, unit) =>
+    [...groupedRows(rows, key)].map(([label, r]) => {
+      const bounds = unit
+        ? periodBounds(label, unit)
+        : [filters.from, filters.to];
+      return { label, ...stats(r, ...bounds) };
+    });
+  const period = ["day", "week", "month", "quarter"].includes(filters.interval)
+    ? filters.interval
+    : "month";
+  function periodBounds(label, unit) {
+    const from =
+      unit === "month"
+        ? label + "-01"
+        : unit === "quarter"
+          ? `${label.slice(0, 4)}-${String((Number(label.at(-1)) - 1) * 3 + 1).padStart(2, "0")}-01`
+          : label;
+    const next = new Date(from + "T00:00:00Z");
+    if (unit === "month" || unit === "quarter")
+      next.setUTCMonth(next.getUTCMonth() + (unit === "quarter" ? 3 : 1));
+    else next.setUTCDate(next.getUTCDate() + (unit === "week" ? 7 : 1));
+    const to = new Date(+next - 86400000).toISOString().slice(0, 10);
+    return [
+      filters.from && filters.from > from ? filters.from : from,
+      filters.to && filters.to < to ? filters.to : to,
+    ];
+  }
   const bucket = (date) => {
+    if (period === "day") return date;
     if (period === "quarter")
       return date.slice(0, 4) + "-Q" + Math.ceil(Number(date.slice(5, 7)) / 3);
     if (period === "week") {
@@ -392,7 +546,7 @@ export function analytics(
     }
     return date.slice(0, 7);
   };
-  let trends = group(base, (a) => bucket(a.s.date)).sort((a, b) =>
+  let trends = group(base, (a) => bucket(a.s.date), period).sort((a, b) =>
     a.label.localeCompare(b.label),
   );
   const start = filters.from || all.map((a) => a.s.date).sort()[0],
@@ -412,11 +566,11 @@ export function analytics(
     trends.sort((a, b) => a.label.localeCompare(b.label));
   }
   trends = trends.map((t) => ({ ...t, partial: t.label === bucket(now) }));
-  const programmes = group(base, (a) => a.pg.id)
-    .map((g) => {
-      const r = base.filter((a) => a.pg.id === g.label),
+  const programmes = [...groupedRows(base, (a) => a.pg.id)]
+    .map(([label, r]) => {
+      const g = { label, ...stats(r) },
         pg = pgmap.get(g.label),
-        trend = group(r, (a) => a.s.date.slice(0, 7)).sort((a, b) =>
+        trend = group(r, (a) => a.s.date.slice(0, 7), "month").sort((a, b) =>
           a.label.localeCompare(b.label),
         );
       const sessionList = [
@@ -509,6 +663,11 @@ export function analytics(
     const recent = full.slice(-2);
     const decline =
       recent.length === 2 &&
+      Number(recent[1].label.slice(0, 4)) * 12 +
+        Number(recent[1].label.slice(5, 7)) -
+        (Number(recent[0].label.slice(0, 4)) * 12 +
+          Number(recent[0].label.slice(5, 7))) ===
+        1 &&
       recent.every((t) => t.sessions >= settings.minSessions) &&
       recent[1].unique < recent[0].unique * 0.75;
     const category =
@@ -560,6 +719,7 @@ export function analytics(
         settings,
         { ...filters, from: prevFrom, to: prevTo, _noPrevious: true },
         now,
+        true,
       );
       previous = { ...prior.summary, from: prevFrom, to: prevTo };
     }
@@ -595,6 +755,21 @@ export function analytics(
     ),
     frequency,
     timing,
+    duration: group(base, (a) =>
+      a.s.end - a.s.start < 45
+        ? "Under 45 min"
+        : a.s.end - a.s.start < 90
+          ? "45–89 min"
+          : "90+ min",
+    ),
+    insights: buildInsights({
+      summary,
+      previous,
+      programmes,
+      timing,
+      recommendations,
+      settings,
+    }),
     recommendations,
     period: {
       from: filters.from || all.map((a) => a.s.date).sort()[0] || "",

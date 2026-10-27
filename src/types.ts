@@ -25,6 +25,11 @@ export type Stats = {
   frequency: number;
   average: number;
   allAges: number;
+  returning: number;
+  repeatRate: number | null;
+  multiProgramme: number;
+  multiDomain: number;
+  programmes: number;
 };
 export type Trend = Stats & { label: string; partial?: boolean };
 export type Programme = Stats & {
@@ -98,6 +103,9 @@ export type Dashboard = {
   boundary: Count[];
   frequency: Count[];
   timing: Trend[];
+  duration: Trend[];
+  insights: Insight[];
+  metadata?: { lastImportAt: string | null; generatedAt: string };
   recommendations: Recommendation[];
   period: { from: string; to: string; now: string };
   coverage: { from: string | null; to: string | null };
@@ -112,6 +120,14 @@ export type Dashboard = {
   decisions: Decision[];
 };
 export type Count = { label: string; value: number };
+export type Insight = {
+  category: "positive" | "attention" | "opportunity" | "pattern" | "quality";
+  title: string;
+  statistic: string;
+  explanation: string;
+  action: string;
+  programmeId?: string;
+};
 export type Preview = {
   id: string;
   rawRows: number;

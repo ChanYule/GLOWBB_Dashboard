@@ -105,11 +105,17 @@ export function createApp(db = openDb(), { production = false } = {}) {
       report = analytics(data, settings, f);
     const targets = (await db.prepare("SELECT * FROM targets").all()).map(
       (t) => {
-        const scoped = analytics(data, settings, {
-          from: t.start,
-          to: t.end,
-          programme: t.programme_id || "",
-        });
+        const scoped = analytics(
+          data,
+          settings,
+          {
+            from: t.start,
+            to: t.end,
+            programme: t.programme_id || "",
+          },
+          undefined,
+          true,
+        );
         const value = scoped.summary[t.metric];
         const remaining = Math.max(
           0,
@@ -128,6 +134,15 @@ export function createApp(db = openDb(), { production = false } = {}) {
     );
     return {
       ...report,
+      metadata: {
+        lastImportAt:
+          (
+            await db
+              .prepare("SELECT created FROM imports ORDER BY id DESC LIMIT 1")
+              .get()
+          )?.created || null,
+        generatedAt: new Date().toISOString(),
+      },
       settings,
       targets,
       decisions: await db
