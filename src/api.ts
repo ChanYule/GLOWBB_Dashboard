@@ -20,6 +20,10 @@
       "Unable to connect to the dashboard data service. Check your connection and try again.",
     );
   }
+  if (res.status === 413)
+    throw Error(
+      "This upload is too large. Choose a file smaller than 4 MB and try again.",
+    );
   if (
     !res.headers
       .get("content-type")

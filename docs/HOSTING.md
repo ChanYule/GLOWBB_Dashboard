@@ -1,10 +1,10 @@
 ﻿# Deploy with Vercel and Supabase
 
-Keep the existing Vercel project (`https://glowbbdashboard.vercel.app`). Vercel hosts the Vite frontend and the Express API through `api/[...path].js`. Supabase PostgreSQL stores attendance, settings, targets, decisions, audit history and import previews. No Render service or persistent disk is needed for this setup.
+Keep the existing Vercel project (`https://glowbbdashboard.vercel.app`). Vercel hosts the Vite frontend and the Express API through `api/index.js`. An explicit rewrite sends every `/api/...` request, including nested import and report paths, to that entry point while preserving the request path for Express. Supabase PostgreSQL stores attendance, settings, targets, decisions, audit history and import previews. No Render service or persistent disk is needed for this setup.
 
 **Already configured Supabase and seeing `SELF_SIGNED_CERT_IN_CHAIN`?** Deploy the latest source from this repository. Supabase's public CA certificate is now bundled and loaded automatically. You do not need to download a certificate or add `DATABASE_CA_CERT`. Keep the existing `DATABASE_URL` and `APP_ORIGIN` values.
 
-The code is prepared locally. No Supabase project has been created, no environment variables have been set in Vercel, and no deployment has been performed.
+The existing live Supabase connection was verified on 27 October 2026: `/api/ready` returned `ready: true` and `schemaVersion: 1`. This task has not changed cloud settings or deployed the local routing fix.
 
 ## 1. Create the Supabase project
 
@@ -42,13 +42,13 @@ For a custom PostgreSQL provider, the optional `DATABASE_CA_CERT` variable can s
 
 Deploy this repository's updated source to the existing Vercel project. Its configuration already specifies:
 
-| Setting          | Value              |
-| ---------------- | ------------------ |
-| Framework        | Vite               |
-| Build command    | `npm run build`    |
-| Output directory | `dist`             |
-| Node.js          | 24.x               |
-| API entry point  | `api/[...path].js` |
+| Setting          | Value           |
+| ---------------- | --------------- |
+| Framework        | Vite            |
+| Build command    | `npm run build` |
+| Output directory | `dist`          |
+| Node.js          | 24.x            |
+| API entry point  | `api/index.js`  |
 
 For a Git-connected project, push the reviewed changes to its configured production branch. Redeploy after changing environment variables; changing them alone does not update an existing deployment.
 
@@ -89,6 +89,7 @@ If local data is imported before switching, back up SQLite and plan a separate t
 ## Troubleshooting
 
 - **503 mentioning `DATABASE_URL`:** set the variable in the correct Vercel environment and redeploy.
+- **Import says the data service is not deployed, but the dashboard loads:** check that the latest source includes `api/index.js` and the `/api/:path*` rewrite in `vercel.json`, then deploy it. Single-segment API routes working does not prove nested import/export routes are connected. No new Supabase configuration is needed for this routing fix.
 - **`SELF_SIGNED_CERT_IN_CHAIN`:** deploy the latest source, which includes Supabase's public root certificate automatically. Standard Supabase connections need no certificate variable. If the error remains, check the actual database hostname and whether the provider has rotated its CA.
 - **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data.
 - **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.

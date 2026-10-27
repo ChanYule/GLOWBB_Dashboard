@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { tsImport } from "tsx/esm/api";
-import { createProxy } from "../api/[...path].js";
+import { createProxy } from "../api/index.js";
 const { api } = await tsImport("../src/api.ts", import.meta.url);
 async function withProxy(options, check) {
   const server = createServer(createProxy(options));
@@ -219,5 +219,17 @@ test("client preserves API errors and handles lost connections", async () => {
   await withFetch(
     async () => Response.json({ summary: { unique: 0 } }),
     async () => assert.equal((await api("/api/dashboard")).summary.unique, 0),
+  );
+});
+
+test("hosted upload size errors remain useful when Vercel returns plain text", async () => {
+  await withFetch(
+    async () =>
+      new Response("FUNCTION_PAYLOAD_TOO_LARGE", {
+        status: 413,
+        headers: { "content-type": "text/plain" },
+      }),
+    async () =>
+      assert.rejects(api("/api/import/preview"), /file smaller than 4 MB/),
   );
 });

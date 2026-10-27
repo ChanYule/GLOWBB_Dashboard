@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { PGlite } from "@electric-sql/pglite";
 import { openPostgres } from "../server/postgres.js";
 import { createApp } from "../server/app.js";
-import { createHostedHandler } from "../api/[...path].js";
+import { createHostedHandler } from "../api/index.js";
 import { HEADERS, defaults } from "../server/domain.js";
 
 async function database() {
@@ -98,8 +98,18 @@ async function json(response, expected = 200) {
 
 test("Supabase SQL and API: previews survive instances; imports, planning and exports persist", async () => {
   const db = await database();
-  const first = await serve(createApp(db));
-  const second = await serve(createApp(db));
+  const first = await serve(
+    createHostedHandler({
+      databaseUrl: "test",
+      loadApp: async () => createApp(db),
+    }),
+  );
+  const second = await serve(
+    createHostedHandler({
+      databaseUrl: "test",
+      loadApp: async () => createApp(db),
+    }),
+  );
   try {
     assert.equal((await json(await first.request("/api/ready"))).ready, true);
     await json(

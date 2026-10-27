@@ -2067,6 +2067,11 @@ function ImportDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const maxFileMb = ["localhost", "127.0.0.1", "[::1]"].includes(
+    window.location.hostname,
+  )
+    ? 8
+    : 4;
   const [preview, setPreview] = useState<Preview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -2076,10 +2081,20 @@ function ImportDialog({
     setBusy(true);
     setError("");
     try {
+      const form = new FormData(e.currentTarget);
+      const file = form.get("file");
+      if (
+        file &&
+        typeof file !== "string" &&
+        file.size >= maxFileMb * 1024 * 1024
+      )
+        throw Error(
+          `Choose a file smaller than ${maxFileMb} MB. Split larger attendance exports into smaller files.`,
+        );
       setPreview(
         await api<Preview>("/api/import/preview", {
           method: "POST",
-          body: new FormData(e.currentTarget),
+          body: form,
         }),
       );
     } catch (e) {
@@ -2137,7 +2152,10 @@ function ImportDialog({
           <div className="upload-area">
             <Upload size={32} />
             <h3>Bring your attendance records together</h3>
-            <p>Excel (.xlsx) or UTF-8 CSV · maximum 8 MB and 50,000 rows</p>
+            <p>
+              Excel (.xlsx) or UTF-8 CSV · under {maxFileMb} MB and up to 50,000
+              rows
+            </p>
             <input
               type="file"
               name="file"
@@ -2159,9 +2177,9 @@ function ImportDialog({
             </p>
           </details>
           <Note>
-            Nothing is saved until you review and confirm. Raw Member IDs are
-            hashed for stable matching and are not retained; the file itself is
-            not stored.
+            Attendance is added only after you review and confirm. A temporary
+            preview is stored for 20 minutes. Raw Member IDs are hashed for
+            matching and are not retained; the file itself is not stored.
           </Note>
           <Button primary type="submit" disabled={busy}>
             {busy ? "Validating file…" : "Preview import"}

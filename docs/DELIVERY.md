@@ -53,3 +53,11 @@ The API now runs the Express application directly on Vercel when `DATABASE_URL` 
 Validation: all 35 tests passed, including three new tests using an embedded PostgreSQL engine for repeatable schema migration, API operations, confirmation across app instances, duplicate imports, planning persistence, exports, expiration and rollback after a forced database failure. ESLint, TypeScript and the Vite production build passed. The build needed the existing approved unsandboxed command because the sandbox blocked a Vite helper process. Dependency installation reported zero vulnerabilities. `git diff --check` passed.
 
 The local database was inspected read-only and contained zero participants, attendance entries, targets and planning decisions. It was not moved or overwritten. Supabase creation, applying the migration, Vercel environment configuration, deployment and live verification remain pending. See [HOSTING.md](HOSTING.md) for those steps and the existing unauthenticated-access limitation.
+
+## Nested API routing repair — 27 October 2026
+
+Read-only checks against production confirmed `/api/ready` returns HTTP 200 with `ready: true` and schema version 1, while `/api/import/preview` returns Vercel's plain-text HTTP 404 before Express. The Supabase connection is working; nested API routing was missing.
+
+Replaced `api/[...path].js` with a static `api/index.js` entry and explicitly rewrote `/api/:path*` to that function. The hosted application regression test now goes through the hosted handler for import preview/confirmation, planning and exports. Updated the dialog to show and check the 4 MB hosted file limit (8 MB on loopback), explain temporary preview storage, and handle platform HTTP 413 responses clearly.
+
+All 38 tests, lint, typecheck, production build and `git diff --check` passed. Tests and build needed approved unsandboxed runs because the sandbox prevented esbuild/Vite helper processes from starting. No cloud configuration, attendance records or deployment were changed. Deploy the updated source, including the new API entry file, then verify a small test import in production.
