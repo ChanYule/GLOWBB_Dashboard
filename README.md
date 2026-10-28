@@ -6,6 +6,8 @@ For the existing Vercel deployment, follow [Vercel + Supabase setup](docs/HOSTIN
 
 See the [dashboard redesign and analytics handoff](docs/REDESIGN.md) for metric definitions, chart purposes, automated insight rules, validation and remaining browser checks. An isolated synthetic preview is available with `node scripts/preview-redesign.mjs` after building; it never opens the real database.
 
+The integrated **Operations & Screening** view adds all-age participation, IB clients/OB non-clients, configurable inactivity, reported monthly SPPB/Tanita totals, staff targets and aggregate CSV reporting. See [operations definitions and import instructions](docs/OPERATIONS.md). Assessment unique-person/eligibility metrics remain unavailable when only monthly totals exist.
+
 ## Run on Windows
 
 Requires Node.js 24.14 or later (uses the built-in SQLite API) and npm.

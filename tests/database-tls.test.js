@@ -35,9 +35,15 @@ test("Supabase connections trust the bundled public CA without certificate envir
   const config = JSON.parse(
     readFileSync(new URL("../vercel.json", import.meta.url), "utf8"),
   );
-  assert.equal(
-    config.functions["api/**/*.js"].includeFiles,
-    "server/supabase-ca.crt",
+  assert.ok(
+    config.functions["api/**/*.js"].includeFiles.includes(
+      "server/supabase-ca.crt",
+    ),
+  );
+  assert.ok(
+    config.functions["api/**/*.js"].includeFiles.includes(
+      "supabase/migrations/002_operations.sql",
+    ),
   );
 });
 

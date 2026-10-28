@@ -55,6 +55,7 @@ button {
   touch-action: manipulation;
 }
 .sidebar {
+  overflow-y: auto;
   width: 230px;
   padding: 32px 15px 0;
   background: #1c2346;
@@ -384,6 +385,15 @@ select {
 .axis {
   fill: #74819a;
   font-size: 11px;
+}
+.point-label {
+  font-size: 13px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 .chart-readout {
   border: 0;
@@ -1049,6 +1059,9 @@ dialog::backdrop {
   }
 }
 @media (max-width: 1200px) {
+  .point-label {
+    font-size: 18px;
+  }
   .modern-chart .axis {
     font-size: 16px;
   }
@@ -1108,6 +1121,12 @@ dialog::backdrop {
   }
 }
 @media (max-width: 650px) {
+  .sidebar nav .nav-item:last-child {
+    grid-column: 1 / -1;
+  }
+  .point-label {
+    font-size: 24px;
+  }
   .modern-chart .axis {
     font-size: 24px;
   }

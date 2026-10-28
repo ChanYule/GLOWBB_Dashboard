@@ -158,7 +158,7 @@ export function parseRows(matrix) {
     blank,
   };
 }
-export async function readFile(buffer, name) {
+export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
   if (/\.csv$/i.test(name)) {
     let matrix;
     try {
@@ -178,7 +178,8 @@ export async function readFile(buffer, name) {
         "CSV could not be read. Check UTF-8 encoding, quoted fields and consistent column counts.",
       );
     }
-    return parseRows(matrix);
+    if (matrix.length > 50001) throw Error("Maximum 50,000 rows per upload.");
+    return matrix;
   }
   if (!/\.xlsx$/i.test(name))
     throw Error("Upload an .xlsx workbook or UTF-8 .csv file.");
@@ -195,7 +196,9 @@ export async function readFile(buffer, name) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const sheets = wb.worksheets.filter((s) =>
-    HEADERS.every((h) => s.getRow(1).values.slice(1).map(str).includes(h)),
+    requiredHeaders.every((h) =>
+      s.getRow(1).values.slice(1).map(str).includes(h),
+    ),
   );
   if (sheets.length !== 1)
     throw Error(
@@ -209,7 +212,7 @@ export async function readFile(buffer, name) {
   s.eachRow({ includeEmpty: true }, (r) =>
     matrix.push(
       Array.from(
-        { length: Math.max(HEADERS.length, s.columnCount) },
+        { length: Math.max(requiredHeaders.length, s.columnCount) },
         (_, i) => {
           const c = r.getCell(i + 1);
           if (c.type === ExcelJS.ValueType.Formula)
@@ -219,7 +222,10 @@ export async function readFile(buffer, name) {
       ),
     ),
   );
-  return parseRows(matrix);
+  return matrix;
+}
+export async function readFile(buffer, name) {
+  return parseRows(await readMatrix(buffer, name));
 }
 export function inspectImport(parsed, existing) {
   const participants = new Map(existing.participants.map((p) => [p.id, p])),

@@ -264,6 +264,47 @@ export function TrendChart({
   const points = rows.map((r, i) => `${x(i)},${y(r[metric])}`).join(" ");
   const active =
     activeIndex === null ? null : rows[Math.min(activeIndex, rows.length - 1)];
+  // Keep the selected value and useful landmarks visible without overlapping
+  // neighbouring labels, including at the larger mobile label size.
+  const labelled = new Set<number>();
+  const boxes: { left: number; right: number; top: number; bottom: number }[] =
+    [];
+  const values = rows.map((r) => r[metric]);
+  const candidates = [
+    ...new Set([
+      ...(activeIndex === null ? [] : [Math.min(activeIndex, rows.length - 1)]),
+      0,
+      rows.length - 1,
+      values.indexOf(Math.max(...values)),
+      values.indexOf(Math.min(...values)),
+      ...Array.from({ length: 8 }, (_, i) => Math.round(i * (rows.length - 1) / 7)),
+      ...rows.map((_, i) => i),
+    ]),
+  ];
+  for (const i of candidates) {
+    if (labelled.size >= 8) break;
+    const width = fmt(rows[i][metric]).length * 14 + 12;
+    const leftEdge =
+      i === 0 ? x(i) : i === rows.length - 1 ? x(i) - width : x(i) - width / 2;
+    const box = {
+      left: leftEdge,
+      right: leftEdge + width,
+      top: y(rows[i][metric]) - 38,
+      bottom: y(rows[i][metric]) - 8,
+    };
+    if (
+      boxes.some(
+        (other) =>
+          box.left < other.right &&
+          box.right > other.left &&
+          box.top < other.bottom &&
+          box.bottom > other.top,
+      )
+    )
+      continue;
+    boxes.push(box);
+    labelled.add(i);
+  }
   const tablePage = Math.min(
     page,
     Math.max(0, Math.ceil(rows.length / 30) - 1),
@@ -320,6 +361,20 @@ export function TrendChart({
         />
         {rows.map((r, i) => (
           <g key={r.label}>
+            {labelled.has(i) && (
+              <text
+                x={x(i)}
+                y={y(r[metric]) - 13}
+                textAnchor={
+                  i === 0 ? "start" : i === rows.length - 1 ? "end" : "middle"
+                }
+                className="point-label"
+                fill={color}
+                aria-hidden="true"
+              >
+                {fmt(r[metric])}
+              </text>
+            )}
             <circle
               cx={x(i)}
               cy={y(r[metric])}

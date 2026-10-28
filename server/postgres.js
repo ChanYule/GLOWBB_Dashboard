@@ -5,7 +5,7 @@ import { inspectImport } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
-  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews)\b/g;
+  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
@@ -121,6 +121,11 @@ export function openPostgres(connectionString, { pool } = {}) {
           .get(id, user);
         if (!p || p.expires < Date.now()) throw expiredPreview();
         const parsed = JSON.parse(p.payload);
+        if (parsed.kind)
+          throw Object.assign(
+            Error("This preview is for a different import."),
+            { status: 400 },
+          );
         const inspection = inspectImport(parsed, await readData(tx));
         const summary = await saveImport(tx, parsed, inspection, user);
         await tx.prepare("DELETE FROM import_previews WHERE id=?").run(id);

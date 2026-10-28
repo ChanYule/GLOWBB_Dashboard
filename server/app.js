@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, inspectImport, analytics } from "./domain.js";
 import { openDb, readData, getSettings, audit } from "./db.js";
 import { sqlitePreviews } from "./previews.js";
+import { mountOperations } from "./operations-routes.js";
 const error = (status, message) => Object.assign(Error(message), { status });
 const date = (x) =>
   typeof x === "string" &&
@@ -161,6 +162,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
       fields: 0,
     },
   }).single("file");
+  mountOperations(app, { db, storage, previews, upload, filters });
   app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
     let parsed;

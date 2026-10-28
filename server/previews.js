@@ -39,6 +39,10 @@ export function sqlitePreviews(db) {
         .get(id, user);
       if (!p || p.expires < Date.now()) throw expiredPreview();
       const parsed = JSON.parse(p.payload);
+      if (parsed.kind)
+        throw Object.assign(Error("This preview is for a different import."), {
+          status: 400,
+        });
       const result = saveImport(
         db,
         parsed,

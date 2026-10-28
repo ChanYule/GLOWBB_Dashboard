@@ -18,6 +18,13 @@ async function database() {
   await engine.exec(migration);
   await engine.exec(migration); // Reapplying must preserve existing data.
   const query = async (sql, values) => {
+    if (!values && sql.trim().startsWith("BEGIN;")) {
+      const results = await engine.exec(sql);
+      return {
+        rows: results.at(-1)?.rows || [],
+        rowCount: results.at(-1)?.affectedRows,
+      };
+    }
     const r = await engine.query(sql, values);
     return { rows: r.rows, rowCount: r.affectedRows };
   };
@@ -298,5 +305,163 @@ test("hosted handler fails clearly without DATABASE_URL and caches app initializ
     assert.equal(loads, 1);
   } finally {
     await ready.close();
+  }
+});
+
+test("Supabase operational migration, aggregate revisions, targets and preview confirmations remain atomic", async () => {
+  const db = await database(),
+    app = await serve(createApp(db));
+  try {
+    await json(
+      await app.request("/api/operations?from=2026-05-01&to=2026-06-30"),
+    );
+    const entry = {
+      month: "2026-05",
+      sppb: "20",
+      tanita: "10",
+      reportedAsOf: "2026-06-01",
+      final: true,
+    };
+    assert.equal(
+      (
+        await json(
+          await app.request("/api/operations/assessments", "POST", entry),
+        )
+      ).saved,
+      2,
+    );
+    assert.equal(
+      (
+        await json(
+          await app.request("/api/operations/assessments", "POST", entry),
+        )
+      ).duplicates,
+      2,
+    );
+    await json(
+      await app.request("/api/operations/assessments", "POST", {
+        ...entry,
+        sppb: "21",
+      }),
+      400,
+    );
+    await json(
+      await app.request("/api/operations/assessments", "POST", {
+        ...entry,
+        sppb: "21",
+        revise: true,
+      }),
+    );
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([
+        "Month,SPPB,Tanita,Reported As Of,Final\r\n2026-06,30,20,2026-07-01,YES",
+      ]),
+      "monthly.csv",
+    );
+    const preview = await json(
+      await app.request("/api/operations/assessments/preview", "POST", form),
+    );
+    await json(
+      await app.request("/api/import/confirm", "POST", { id: preview.id }),
+      400,
+    );
+    await db.query(
+      "ALTER TABLE glowbb.assessment_monthly ADD CONSTRAINT test_rollback CHECK (total < 25)",
+    );
+    await json(
+      await app.request("/api/operations/assessments/confirm", "POST", {
+        id: preview.id,
+      }),
+      503,
+    );
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT count(*)::integer AS n FROM assessment_monthly")
+          .get()
+      ).n,
+      3,
+    );
+    await db.query(
+      "ALTER TABLE glowbb.assessment_monthly DROP CONSTRAINT test_rollback",
+    );
+    await json(
+      await app.request("/api/operations/assessments/confirm", "POST", {
+        id: preview.id,
+      }),
+    );
+    await json(
+      await app.request("/api/operations/targets", "POST", {
+        month: "2026-06",
+        metric: "sppb",
+        value: 40,
+      }),
+    );
+    await json(
+      await app.request("/api/operations/settings", "PUT", {
+        inactivityDays: 60,
+      }),
+    );
+    const report = await json(
+      await app.request("/api/operations?from=2026-05-01&to=2026-06-30"),
+    );
+    assert.equal(report.summary.sppb, 51);
+    assert.equal(report.targets[0].actual, 30);
+    assert.equal(report.settings.inactivityDays, 60);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT count(*)::integer AS n FROM participants")
+          .get()
+      ).n,
+      0,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT has_schema_privilege('anon','glowbb','USAGE') AS access",
+        )
+      ).rows[0].access,
+      false,
+    );
+  } finally {
+    await app.close();
+    await db.close();
+  }
+});
+
+test("failed operational setup rolls back and can retry without poisoning the database connection", async () => {
+  const db = await database(),
+    app = await serve(createApp(db));
+  try {
+    await db.query(
+      "CREATE TABLE glowbb.assessment_monthly(id integer PRIMARY KEY)",
+    );
+    await json(await app.request("/api/operations"), 503);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT MAX(version) AS version FROM schema_version")
+          .get()
+      ).version,
+      1,
+    );
+    // This is a deliberately incompatible table in the isolated test engine.
+    await db.query("DROP TABLE glowbb.assessment_monthly");
+    const result = await json(await app.request("/api/operations"));
+    assert.equal(result.summary.unique, 0);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT MAX(version) AS version FROM schema_version")
+          .get()
+      ).version,
+      2,
+    );
+  } finally {
+    await app.close();
+    await db.close();
   }
 });

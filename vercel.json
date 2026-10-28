@@ -7,7 +7,7 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60,
-      "includeFiles": "server/supabase-ca.crt"
+      "includeFiles": "{server/supabase-ca.crt,supabase/migrations/002_operations.sql}"
     }
   }
 }

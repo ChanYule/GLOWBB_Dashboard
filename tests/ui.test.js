@@ -12,6 +12,7 @@ import {
   inspectImport,
 } from "../server/domain.js";
 import { openDb, readData, saveImport, passwordHash } from "../server/db.js";
+import { operationsReport } from "../server/operations.js";
 registerHooks({
   load(url, context, next) {
     if (new URL(url).pathname.endsWith(".css"))
@@ -47,6 +48,10 @@ const { Overview, Programmes, Audience, Planning, FilterBar, App } =
   await tsImport("../src/main.tsx", import.meta.url);
 const { DemographicBars, TrendChart, TimingMatrix, KpiDeck } = await tsImport(
   "../src/analytics-ui.tsx",
+  import.meta.url,
+);
+const { OperationsPage } = await tsImport(
+  "../src/operations-ui.tsx",
   import.meta.url,
 );
 const db = openDb(":memory:");
@@ -370,4 +375,159 @@ test("age-band drill-down sends the numeric range expected by the shared API fil
   );
   fireEvent.click(screen.getByRole("button", { name: /^Filter 60/ }));
   assert.equal(next.ageBand, "60-69");
+});
+
+function operationFixture() {
+  return {
+    ...operationsReport(
+      readData(db),
+      defaults,
+      filters,
+      [],
+      { inactivityDays: null },
+      "month",
+      "2026-10-26",
+    ),
+    targets: [],
+  };
+}
+test("operations screening uses reported totals and clearly leaves person-level metrics unavailable", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(operationFixture());
+  try {
+    render(
+      React.createElement(OperationsPage, {
+        filters,
+        data: dashboard(),
+        user: { username: "staff", role: "admin" },
+        onProgramme: () => {},
+      }),
+    );
+    await waitFor(() => assert.ok(screen.getByText(/IB = clients/)));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Health Screening Overview",
+        exact: true,
+      }),
+    );
+    assert.ok(screen.getByText("SPPB Assessment"));
+    assert.ok(screen.getByText("Tanita Assessment"));
+    assert.equal(screen.getAllByText("Unique people assessed").length, 2);
+    assert.ok(screen.getByText(/No assessment totals have been recorded/));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record monthly totals" }),
+    );
+    assert.ok(screen.getByLabelText("SPPB completed assessments"));
+    assert.ok(screen.getByLabelText("Reported as of"));
+    assert.ok(screen.getByText(/Leave unavailable values blank/));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test("operational report intervals refetch the shared filtered dataset and viewer controls stay read-only", async () => {
+  const original = globalThis.fetch,
+    requested = [];
+  globalThis.fetch = async (url) => {
+    requested.push(String(url));
+    return Response.json(operationFixture());
+  };
+  try {
+    render(
+      React.createElement(OperationsPage, {
+        filters: { ...filters, client: "true" },
+        data: dashboard(),
+        user: { username: "viewer", role: "viewer" },
+        onProgramme: () => {},
+      }),
+    );
+    await waitFor(() => assert.ok(screen.getByText(/IB = clients/)));
+    assert.equal(
+      screen.queryByRole("button", { name: "Set operational target" }),
+      null,
+    );
+    assert.equal(
+      screen.queryByRole("button", { name: "Configure inactivity definition" }),
+      null,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Operational report", exact: true }),
+    );
+    fireEvent.change(screen.getByLabelText("Report interval"), {
+      target: { value: "week" },
+    });
+    await waitFor(() =>
+      assert.ok(
+        requested.some(
+          (url) => url.includes("grain=week") && url.includes("client=true"),
+        ),
+      ),
+    );
+    assert.ok(screen.getByText(/Reset audience filters to export/));
+    assert.equal(
+      screen.queryByRole("link", { name: "Export aggregate CSV" }),
+      null,
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Health Screening Overview",
+        exact: true,
+      }),
+    );
+    assert.equal(
+      screen.queryByRole("button", { name: "Record monthly totals" }),
+      null,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("the integrated operations tab remains reachable when attendance is empty", async () => {
+  const original = globalThis.fetch;
+  const empty = {
+    participants: [],
+    programmes: [],
+    sessions: [],
+    attendance: [],
+  };
+  const core = {
+    ...analytics(empty, defaults, {}, "2026-10-26"),
+    settings: defaults,
+    targets: [],
+    decisions: [],
+  };
+  const report = {
+    ...operationsReport(
+      empty,
+      defaults,
+      {},
+      [],
+      { inactivityDays: null },
+      "month",
+      "2026-10-26",
+    ),
+    targets: [],
+  };
+  globalThis.fetch = async (url) =>
+    Response.json(String(url).startsWith("/api/operations?") ? report : core);
+  try {
+    render(React.createElement(App));
+    await waitFor(() =>
+      assert.ok(screen.getByText("Make every connection count.")),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Operations & Screening" }),
+    );
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("button", {
+          name: "Health Screening Overview",
+          exact: true,
+        }),
+      ),
+    );
+    assert.equal(screen.queryByText("Make every connection count."), null);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

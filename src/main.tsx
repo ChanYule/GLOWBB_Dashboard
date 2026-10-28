@@ -1,7 +1,8 @@
 import { api } from "./api";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
+  Activity,
   ArrowDownToLine,
   ArrowRight,
   BarChart3,
@@ -39,6 +40,11 @@ import type {
 } from "./types";
 import "./styles.css";
 import "./redesign.css";
+const OperationsPage = lazy(() =>
+  import("./operations-ui").then((module) => ({
+    default: module.OperationsPage,
+  })),
+);
 import {
   KpiDeck,
   TrendChart,
@@ -308,6 +314,7 @@ function App() {
     { name: "Programme Performance", icon: BarChart3 },
     { name: "Audience & Outreach", icon: Users },
     { name: "Planning & Recommendations", icon: ClipboardList },
+    { name: "Operations & Screening", icon: Activity },
   ];
   const title =
     tab === "Overview"
@@ -316,7 +323,9 @@ function App() {
         ? "Programme performance"
         : tab === "Audience & Outreach"
           ? "Audience & outreach gaps"
-          : "Programme planning recommendations";
+          : tab === "Operations & Screening"
+            ? "Operations & health screening"
+            : "Programme planning recommendations";
   const sensitive =
     ["gender", "race", "ageBand", "client", "boundary"].some(
       (k) => filters[k as keyof Filters],
@@ -395,7 +404,9 @@ function App() {
                     ? "Compare reach and engagement with the right context."
                     : tab === "Audience & Outreach"
                       ? "Explore participation patterns and opportunities to connect."
-                      : "Turn observed participation into thoughtful plans for the next 3–6 months."}
+                      : tab === "Operations & Screening"
+                        ? "Monitor participation, client outreach and reported monthly assessments."
+                        : "Turn observed participation into thoughtful plans for the next 3–6 months."}
               </p>
             </div>
             <div className="heading-actions">
@@ -464,7 +475,10 @@ function App() {
                 </span>
               </div>
               {data.coverage.from === null &&
-              tab !== "Planning & Recommendations" ? (
+              ![
+                "Planning & Recommendations",
+                "Operations & Screening",
+              ].includes(tab) ? (
                 <div className="welcome panel">
                   <div className="icon-tile">
                     <ChartNoAxesCombined size={30} />
@@ -506,7 +520,10 @@ function App() {
                   </Note>
                 </div>
               ) : data.summary.attendance === 0 &&
-                tab !== "Planning & Recommendations" ? (
+                ![
+                  "Planning & Recommendations",
+                  "Operations & Screening",
+                ].includes(tab) ? (
                 <div className="panel empty">
                   <Search size={28} />
                   <h2>No attendance matches this view</h2>
@@ -515,6 +532,17 @@ function App() {
                     Reset filters
                   </Button>
                 </div>
+              ) : tab === "Operations & Screening" ? (
+                <Suspense
+                  fallback={<p role="status">Loading operational tools…</p>}
+                >
+                  <OperationsPage
+                    filters={filters}
+                    data={data}
+                    user={user}
+                    onProgramme={setProgramme}
+                  />
+                </Suspense>
               ) : tab === "Overview" ? (
                 <Overview
                   data={data}

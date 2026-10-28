@@ -6,6 +6,8 @@ Keep the existing Vercel project (`https://glowbbdashboard.vercel.app`). Vercel 
 
 The existing live Supabase connection was verified on 27 October 2026: `/api/ready` returned `ready: true` and `schemaVersion: 1`. This task has not changed cloud settings or deployed the local routing fix.
 
+The **Operations & Screening** addition applies additive schema version 2 on first access using the existing database account. No new environment variables or attendance reimport are needed. After that migration, readiness reports `schemaVersion: 2`. See [operational reporting setup and definitions](OPERATIONS.md); if using a restricted database role, an authorised administrator can apply `002_operations.sql` once.
+
 ## 1. Create the Supabase project
 
 1. Open the [Supabase dashboard](https://supabase.com/dashboard) and create a project in your organisation.
@@ -58,7 +60,7 @@ Use a separate Supabase project and the exact preview origin for preview deploym
 
 ## 4. Verify the deployment
 
-1. Open `https://glowbbdashboard.vercel.app/api/ready`. Expect JSON containing `ready: true` and `schemaVersion: 1`.
+1. Open `https://glowbbdashboard.vercel.app/api/ready`. Expect JSON containing `ready: true` and `schemaVersion: 1` (or `2` after operational setup).
 2. Load the dashboard; it should show empty data until attendance is imported.
 3. Import a small non-sensitive CSV using the exact headers in [`attendance-template.csv`](attendance-template.csv). Preview and confirm it.
 4. Reimport the same file. Confirmation should add zero duplicate attendance.
