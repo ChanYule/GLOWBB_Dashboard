@@ -26,6 +26,8 @@ export type OperationalRow = {
   reactivated: number | null;
   sppb: number | null;
   tanita: number | null;
+  sppbPeople?: number;
+  tanitaPeople?: number;
   final?: boolean;
   fullySelected?: boolean;
 };
@@ -48,6 +50,13 @@ export type OperationalTarget = {
   remaining: number | null;
 };
 export type OperationsReport = {
+  activityScreening: {
+    activityNames: { sppb: string; tanita: string };
+    sppb: { people: number; attendance: number };
+    tanita: { people: number; attendance: number };
+    daily: { label: string; sppbPeople: number; tanitaPeople: number }[];
+    monthly: { label: string; sppbPeople: number; tanitaPeople: number }[];
+  };
   period: { from: string; to: string; now: string };
   summary: OperationalRow;
   rows: OperationalRow[];

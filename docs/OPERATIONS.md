@@ -8,6 +8,16 @@ The user's confirmed definitions are **IB = clients** and **OB = non-clients**. 
 
 All new operational participation metrics use **all ages**. Existing senior KPI cards retain their existing age threshold and known-demographic denominators.
 
+## Screening activity participation — daily and monthly
+
+The user identified the exact attendance activity names **GLOW - SPPB Assessment** and **GLOW - Tanita Body Measurements**. Health Screening Overview now defaults to **Activity attendance**, showing distinct people from those activities without IB/OB breakdowns. Select Daily or Monthly for the chart and table.
+
+A person is counted once per activity per day and once per activity across all selected days in a month. Monthly unique people are calculated directly from participant identifiers, never by summing daily counts. The whole selected-period count deduplicates across all selected months. People of all ages, including those with missing age/client status, are included unless an active filter excludes them. Date and other active dashboard filters remain effective. Only the exact trimmed activity names match; similarly named briefings and future-dated sessions do not count.
+
+Daily rows show dates with recorded screening attendance. Monthly rows include selected months with no matching records as zero in available attendance. A person may appear in both activities; the two activity totals must not be summed to infer combined unique reach. Repeated attendance entries are shown separately from unique people. These are **recorded activity participation** counts, not clinical results or verified completion records.
+
+The existing **Reported monthly totals** view and its revision history remain separate. Manual monthly totals are never added to attendance-derived participant counts. No reimport, new setting or schema change is needed for activity tracking; deploy the updated source and use the existing attendance data.
+
 ## Statistics and definitions
 
 - Programme types conducted: distinct programme identifiers with recorded attendance. Sessions are counted separately, rather than assuming the spreadsheet's programme total means one or the other.

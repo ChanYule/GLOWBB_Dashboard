@@ -17,6 +17,14 @@ export const operationMetrics = {
   tanita: "Tanita assessments",
 };
 const dayMs = 86400000;
+export const screeningActivities = {
+  sppb: "GLOW - SPPB Assessment",
+  tanita: "GLOW - Tanita Body Measurements",
+};
+const screeningType = (name) =>
+  Object.keys(screeningActivities).find(
+    (key) => screeningActivities[key] === name?.trim(),
+  );
 const stamp = (day) => Date.parse(day + "T00:00:00Z");
 const iso = (n) => new Date(n).toISOString().slice(0, 10);
 export const validDay = (s) =>
@@ -308,6 +316,15 @@ export function operationsReport(
       (a) => a.s.date >= start && a.s.date <= end,
     );
     const persons = [...new Map(observed.map((a) => [a.p.id, a.p])).values()];
+    const screeningPeople = (type) =>
+      new Set(
+        observed
+          .filter(
+            (a) =>
+              screeningType(programmes.get(a.s.programmeId)?.name) === type,
+          )
+          .map((a) => a.p.id),
+      ).size;
     const unique = persons.length,
       ib = persons.filter((p) => p.client === true).length,
       ob = persons.filter((p) => p.client === false).length,
@@ -344,6 +361,8 @@ export function operationsReport(
       programmes: new Set(observed.map((a) => a.s.programmeId)).size,
       sessions: recordedSessions,
       attendance: observed.length,
+      sppbPeople: screeningPeople("sppb"),
+      tanitaPeople: screeningPeople("tanita"),
       unique,
       average: recordedSessions ? observed.length / recordedSessions : 0,
       ib,
@@ -570,11 +589,42 @@ export function operationsReport(
     sppb: null,
     tanita: null,
   };
+  const screeningRows = history.filter(
+    (a) =>
+      a.s.date >= from &&
+      a.s.date <= to &&
+      screeningType(programmes.get(a.s.programmeId)?.name),
+  );
+  const screeningDays = [...new Set(screeningRows.map((a) => a.s.date))].sort();
+  const dailyScreening = new Map(
+    screeningDays.map((day) => [day, { sppb: new Set(), tanita: new Set() }]),
+  );
+  const entries = { sppb: 0, tanita: 0 };
+  for (const a of screeningRows) {
+    const type = screeningType(programmes.get(a.s.programmeId)?.name);
+    dailyScreening.get(a.s.date)[type].add(a.p.id);
+    entries[type]++;
+  }
   return {
     period: { from, to, now },
     summary,
     rows,
     monthly: months,
+    activityScreening: {
+      activityNames: screeningActivities,
+      sppb: { people: summary.sppbPeople, attendance: entries.sppb },
+      tanita: { people: summary.tanitaPeople, attendance: entries.tanita },
+      daily: screeningDays.map((label) => ({
+        label,
+        sppbPeople: dailyScreening.get(label).sppb.size,
+        tanitaPeople: dailyScreening.get(label).tanita.size,
+      })),
+      monthly: months.map((m) => ({
+        label: m.label,
+        sppbPeople: m.sppbPeople,
+        tanitaPeople: m.tanitaPeople,
+      })),
+    },
     health: {
       source: "Reported monthly assessment totals",
       unsegmented,

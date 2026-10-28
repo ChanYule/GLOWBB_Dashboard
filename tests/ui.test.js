@@ -42,7 +42,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 HTMLDialogElement.prototype.showModal = function () {
   this.setAttribute("open", "");
 };
-const { render, screen, fireEvent, cleanup, waitFor } =
+const { render, screen, fireEvent, cleanup, waitFor, within } =
   await import("@testing-library/react");
 const { Overview, Programmes, Audience, Planning, FilterBar, App } =
   await tsImport("../src/main.tsx", import.meta.url);
@@ -50,7 +50,7 @@ const { DemographicBars, TrendChart, TimingMatrix, KpiDeck } = await tsImport(
   "../src/analytics-ui.tsx",
   import.meta.url,
 );
-const { OperationsPage } = await tsImport(
+const { OperationsPage, ActivityScreening } = await tsImport(
   "../src/operations-ui.tsx",
   import.meta.url,
 );
@@ -410,6 +410,12 @@ test("operations screening uses reported totals and clearly leaves person-level 
         exact: true,
       }),
     );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Reported monthly totals",
+        exact: true,
+      }),
+    );
     assert.ok(screen.getByText("SPPB Assessment"));
     assert.ok(screen.getByText("Tanita Assessment"));
     assert.equal(screen.getAllByText("Unique people assessed").length, 2);
@@ -530,4 +536,40 @@ test("the integrated operations tab remains reachable when attendance is empty",
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("screening participation switches between daily and monthly unique people without IB/OB columns", () => {
+  const report = operationFixture();
+  report.activityScreening = {
+    activityNames: {
+      sppb: "GLOW - SPPB Assessment",
+      tanita: "GLOW - Tanita Body Measurements",
+    },
+    sppb: { people: 2, attendance: 3 },
+    tanita: { people: 1, attendance: 1 },
+    daily: [
+      { label: "2026-05-01", sppbPeople: 2, tanitaPeople: 0 },
+      { label: "2026-05-02", sppbPeople: 1, tanitaPeople: 1 },
+    ],
+    monthly: [{ label: "2026-05", sppbPeople: 2, tanitaPeople: 1 }],
+  };
+  render(React.createElement(ActivityScreening, { report }));
+  const monthly = screen.getByRole("table", {
+    name: "Screening activity unique people by month",
+  });
+  assert.ok(within(monthly).getByRole("row", { name: "2026-05 2 1" }));
+  assert.equal(within(monthly).getAllByRole("columnheader").length, 3);
+  fireEvent.change(screen.getByLabelText("Screening interval"), {
+    target: { value: "day" },
+  });
+  const daily = screen.getByRole("table", {
+    name: "Screening activity unique people by day",
+  });
+  assert.ok(within(daily).getByRole("row", { name: "2026-05-01 2 0" }));
+  assert.ok(within(daily).getByRole("row", { name: "2026-05-02 1 1" }));
+  assert.ok(
+    screen.getByRole("img", {
+      name: "Daily unique SPPB and Tanita participants",
+    }),
+  );
 });

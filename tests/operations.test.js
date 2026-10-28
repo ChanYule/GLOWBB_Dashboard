@@ -111,6 +111,130 @@ test("IB and OB follow client status independently of boundary; all-age shares u
     4,
   ); // Monthly people overlap; overall stays 3.
 });
+
+function screeningData() {
+  const fixture = data();
+  fixture.programmes[0].name = "GLOW - SPPB Assessment";
+  fixture.programmes[1].name = "GLOW - Tanita Body Measurements";
+  fixture.programmes.push({
+    id: "briefing",
+    name: "GLOW - SPPB Assessment briefing",
+    domain: "Social",
+  });
+  fixture.sessions.push(
+    {
+      id: "tanitaMay",
+      programmeId: "q",
+      date: "2026-05-02",
+      start: 600,
+      end: 660,
+    },
+    {
+      id: "tanitaJune",
+      programmeId: "q",
+      date: "2026-06-01",
+      start: 600,
+      end: 660,
+    },
+    {
+      id: "briefing",
+      programmeId: "briefing",
+      date: "2026-05-02",
+      start: 660,
+      end: 720,
+    },
+    {
+      id: "future",
+      programmeId: "p",
+      date: "2026-11-01",
+      start: 600,
+      end: 660,
+    },
+  );
+  fixture.attendance.push(
+    { id: "tm1", participantId: "b", sessionId: "tanitaMay" },
+    { id: "tm2", participantId: "c", sessionId: "tanitaMay" },
+    { id: "tj1", participantId: "c", sessionId: "tanitaJune" },
+    { id: "brief", participantId: "a", sessionId: "briefing" },
+    { id: "future", participantId: "a", sessionId: "future" },
+  );
+  return fixture;
+}
+test("screening activities count unique people daily and monthly, combining clients/non-clients and missing ages", () => {
+  const r = operationsReport(
+    screeningData(),
+    defaults,
+    { from: "2026-05-01", to: "2026-06-30" },
+    [],
+    {},
+    "month",
+    now,
+  );
+  assert.equal(r.activityScreening.sppb.people, 3);
+  assert.equal(r.activityScreening.sppb.attendance, 5);
+  assert.equal(r.activityScreening.tanita.people, 2);
+  assert.equal(r.activityScreening.monthly[0].sppbPeople, 3);
+  assert.equal(r.activityScreening.monthly[1].sppbPeople, 1);
+  assert.equal(
+    r.activityScreening.daily.find((d) => d.label === "2026-05-01").sppbPeople,
+    2,
+  );
+  assert.equal(
+    r.activityScreening.daily.find((d) => d.label === "2026-05-02").sppbPeople,
+    2,
+  );
+  assert.equal(
+    r.activityScreening.daily
+      .filter((d) => d.label.startsWith("2026-05"))
+      .reduce((sum, d) => sum + d.sppbPeople, 0),
+    4,
+  ); // Daily people are not summed into monthly people.
+  assert.equal(
+    r.activityScreening.daily.find((d) => d.label === "2026-05-02")
+      .tanitaPeople,
+    2,
+  );
+  assert.equal(r.summary.sppbPeople, 3);
+  assert.equal(r.summary.sppb, null); // Reported assessment counts remain a separate source.
+});
+test("screening participant counts respect actual dates and filters without merging reported totals", () => {
+  const r = operationsReport(
+    screeningData(),
+    defaults,
+    { from: "2026-05-02", to: "2026-05-02" },
+    ledger,
+    {},
+    "day",
+    now,
+  );
+  assert.equal(r.activityScreening.sppb.people, 2);
+  assert.equal(r.activityScreening.tanita.people, 2);
+  assert.equal(r.activityScreening.daily.length, 1);
+  assert.equal(r.activityScreening.monthly[0].sppbPeople, 2);
+  const client = operationsReport(
+    screeningData(),
+    defaults,
+    { from: "2026-05-01", to: "2026-06-30", client: "true" },
+    ledger,
+    {},
+    "month",
+    now,
+  );
+  assert.equal(client.activityScreening.sppb.people, 1);
+  assert.equal(client.activityScreening.tanita.people, 0);
+  const all = operationsReport(
+    screeningData(),
+    defaults,
+    { from: "2026-05-01", to: "2026-12-31" },
+    ledger,
+    {},
+    "month",
+    now,
+  );
+  assert.equal(all.activityScreening.sppb.attendance, 5); // Future attendance and similarly named briefing are excluded.
+  assert.equal(all.activityScreening.sppb.people, 3);
+  assert.equal(all.summary.sppb, 10);
+});
 test("monthly assessment totals preserve unknown people, missing months and date granularity", () => {
   const f = { from: "2026-05-01", to: "2026-06-30" };
   const r = operationsReport(data(), defaults, f, ledger, {}, "month", now);

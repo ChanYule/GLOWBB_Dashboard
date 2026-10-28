@@ -28,8 +28,8 @@ const number = (v: number | null | undefined) =>
   v === null || v === undefined
     ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(v);
-const percent = (v: number | null) =>
-  v === null ? "Share unavailable" : `${number(v)}% of unique participants`;
+const percent = (v: number | null | undefined) =>
+  v == null ? "Share unavailable" : `${number(v)}% of unique participants`;
 const metrics: Record<string, string> = {
   unique: "Unique participants",
   male: "Male participants",
@@ -51,11 +51,13 @@ export function OperationalChart({
   rows,
   series,
   mode = "line",
+  periodLabel = "months",
 }: {
   title: string;
-  rows: OperationalRow[];
+  rows: Partial<OperationalRow>[];
   series: Series[];
   mode?: "line" | "grouped" | "stacked";
+  periodLabel?: "days" | "months";
 }) {
   const selected = rows.slice(-6),
     values = selected.flatMap((r) =>
@@ -70,7 +72,7 @@ export function OperationalChart({
         <strong>
           {values.every((v) => v === null)
             ? "No comparable records are available."
-            : "Not enough monthly history for a trend."}
+            : `Not enough ${periodLabel === "days" ? "daily" : "monthly"} history for a trend.`}
         </strong>
         <span>
           Reported zeros are shown as zero; unavailable records are not filled
@@ -229,8 +231,9 @@ export function OperationalChart({
         </svg>
       </div>
       <p className="table-note">
-        Latest six selected months. Values and percentages are available below;
-        people are deduplicated separately in each month.
+        Latest six selected {periodLabel}. Values are available below; people
+        are deduplicated separately in each{" "}
+        {periodLabel === "days" ? "day" : "month"}.
       </p>
       <details>
         <summary>View graph values</summary>
@@ -321,6 +324,143 @@ function Panel({
   );
 }
 
+export function ActivityScreening({ report }: { report: OperationsReport }) {
+  const [interval, setInterval] = useState<"day" | "month">("month"),
+    [page, setPage] = useState(0);
+  const source = report.activityScreening,
+    rows = interval === "day" ? source.daily : source.monthly;
+  const pageIndex = Math.min(
+    page,
+    Math.max(0, Math.ceil(rows.length / 25) - 1),
+  );
+  return (
+    <>
+      <div className="callout">
+        <HeartPulse size={28} />
+        <div>
+          <h2>Screening activity participation</h2>
+          <p>
+            Distinct people recorded in the two screening activities. Client and
+            non-client attendance is combined; reporting dates and active
+            filters apply.
+          </p>
+        </div>
+      </div>
+      <div className="ops-screening-cards">
+        {(["sppb", "tanita"] as const).map((type) => (
+          <section key={type} className={`panel screening-${type}`}>
+            <div className="screening-title">
+              <span className="metric-icon">
+                {type === "sppb" ? (
+                  <Activity size={23} />
+                ) : (
+                  <HeartPulse size={23} />
+                )}
+              </span>
+              <h2>
+                {type === "sppb" ? "SPPB participants" : "Tanita participants"}
+              </h2>
+            </div>
+            <strong className="screening-total">
+              {number(source[type].people)}
+            </strong>
+            <p>Unique people in the selected reporting period</p>
+            <p className="table-note">Activity: {source.activityNames[type]}</p>
+            <small className="ops-muted">
+              {number(source[type].attendance)} attendance entries. Repeat
+              visits do not increase the unique-person total.
+            </small>
+          </section>
+        ))}
+      </div>
+      <Panel
+        title="People attending screenings"
+        subtitle="Count each person once per activity per day or month; monthly people are not the sum of daily people."
+      >
+        <div className="ops-toolbar">
+          <label className="field">
+            <span>Screening interval</span>
+            <select
+              value={interval}
+              onChange={(e) => {
+                setInterval(e.target.value as "day" | "month");
+                setPage(0);
+              }}
+            >
+              <option value="day">Daily</option>
+              <option value="month">Monthly</option>
+            </select>
+          </label>
+        </div>
+        <OperationalChart
+          title={`${interval === "day" ? "Daily" : "Monthly"} unique SPPB and Tanita participants`}
+          rows={rows}
+          mode="grouped"
+          periodLabel={interval === "day" ? "days" : "months"}
+          series={[
+            { key: "sppbPeople", label: "SPPB people", color: "#8061bf" },
+            { key: "tanitaPeople", label: "Tanita people", color: "#12918b" },
+          ]}
+        />
+        <div className="table-scroll">
+          <table>
+            <caption className="sr-only">
+              Screening activity unique people by {interval}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{interval === "day" ? "Date" : "Month"}</th>
+                <th scope="col">SPPB people</th>
+                <th scope="col">Tanita people</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(pageIndex * 25, pageIndex * 25 + 25).map((r) => (
+                <tr key={r.label}>
+                  <th scope="row">{r.label}</th>
+                  <td>{r.sppbPeople}</td>
+                  <td>{r.tanitaPeople}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!rows.length && (
+          <p className="chart-empty">
+            No screening activity attendance matches this view.
+          </p>
+        )}
+        {rows.length > 25 && (
+          <div className="table-pages">
+            <button
+              disabled={!pageIndex}
+              onClick={() => setPage(pageIndex - 1)}
+            >
+              Previous
+            </button>
+            <span>
+              Page {pageIndex + 1} of {Math.ceil(rows.length / 25)}
+            </span>
+            <button
+              disabled={(pageIndex + 1) * 25 >= rows.length}
+              onClick={() => setPage(pageIndex + 1)}
+            >
+              Next
+            </button>
+          </div>
+        )}
+        <p className="table-note">
+          Daily rows list dates with recorded screening activity. Monthly rows
+          include selected months with no matching records as zero. These
+          figures track recorded participation, not clinical results or verified
+          test completion. Manually reported monthly assessment totals are
+          separate and are never added to these people counts.
+        </p>
+      </Panel>
+    </>
+  );
+}
+
 export function OperationsPage({
   filters,
   data,
@@ -334,6 +474,7 @@ export function OperationsPage({
 }) {
   const [report, setReport] = useState<OperationsReport | null>(null),
     [view, setView] = useState("summary"),
+    [screeningSource, setScreeningSource] = useState("attendance"),
     [grain, setGrain] = useState("month"),
     [revision, setRevision] = useState(0),
     [loading, setLoading] = useState(false),
@@ -465,9 +606,11 @@ export function OperationsPage({
         <div className={loading ? "updating" : ""} aria-busy={loading}>
           <p className="ops-scope">
             <ShieldCheck size={16} />
-            All ages · IB = clients · OB = non-clients · {
-              report.period.from
-            } to {report.period.to}. Unknown client status remains separate.
+            {view === "health"
+              ? "All ages · screening participants combined"
+              : "All ages · IB = clients · OB = non-clients"}{" "}
+            · {report.period.from} to {report.period.to}.
+            {view !== "health" && " Unknown client status remains separate."}
           </p>
           {view === "summary" && (
             <>
@@ -827,392 +970,436 @@ export function OperationsPage({
           )}
           {view === "health" && (
             <>
-              <div className="callout">
-                <HeartPulse size={28} />
-                <div>
-                  <h2>Health Screening Overview</h2>
-                  <p>
-                    Reported monthly assessment counts only. These values do not
-                    establish unique people, repeat assessments, scores,
-                    eligibility or people overdue for screening.
-                  </p>
-                </div>
-              </div>
-              {!report.health.unsegmented && (
-                <p className="warning">
-                  Monthly totals are not split by programme or audience. Reset
-                  programme, domain and demographic filters to view assessment
-                  totals.
-                </p>
-              )}
-              <div className="ops-screening-cards">
-                {(["sppb", "tanita"] as const).map((type) => (
-                  <section key={type} className={`panel screening-${type}`}>
-                    <div className="screening-title">
-                      <span className="metric-icon">
-                        {type === "sppb" ? (
-                          <Activity size={23} />
-                        ) : (
-                          <HeartPulse size={23} />
-                        )}
-                      </span>
-                      <div>
-                        <span className="eyebrow">REPORTED ASSESSMENTS</span>
-                        <h2>
-                          {type === "sppb"
-                            ? "SPPB Assessment"
-                            : "Tanita Assessment"}
-                        </h2>
-                      </div>
-                    </div>
-                    <strong className="screening-total">
-                      {number(report.health[type].total)}
-                    </strong>
-                    <p>
-                      Total reported across {report.health[type].reportedMonths}{" "}
-                      of {report.health.selectedMonths} selected months
-                    </p>
-                    <div className="screening-detail">
-                      <div>
-                        <span>Unique people assessed</span>
-                        <strong>Unavailable</strong>
-                      </div>
-                      <div>
-                        <span>Current month in selection</span>
-                        <strong>{number(report.health[type].thisMonth)}</strong>
-                      </div>
-                    </div>
-                    <p className="table-note">
-                      Missing monthly records and partially selected historical
-                      months are not counted as zero.
-                    </p>
-                  </section>
-                ))}
-              </div>
-              <Panel
-                title="SPPB and Tanita assessment trends"
-                subtitle="Reported monthly counts · incomplete or unavailable months remain distinct"
+              <div
+                className="segmented ops-toolbar"
+                role="group"
+                aria-label="Screening data source"
               >
-                <OperationalChart
-                  title="Monthly SPPB and Tanita assessment totals"
-                  rows={report.monthly}
-                  mode="grouped"
-                  series={[
-                    { key: "sppb", label: "SPPB", color: "#8061bf" },
-                    { key: "tanita", label: "Tanita", color: "#12918b" },
-                  ]}
-                />
-              </Panel>
-              {report.insights.some((i) => i.view === "health") && (
-                <div className="ops-insights">
-                  {report.insights
-                    .filter((i) => i.view === "health")
-                    .map((insight) => (
-                      <article className="insight-card" key={insight.title}>
-                        <h3>{insight.title}</h3>
-                        <p>{insight.detail}</p>
-                        <div className="suggestion">
-                          <p>{insight.action}</p>
-                        </div>
-                        <button
-                          className="text-button"
-                          onClick={() =>
-                            document
-                              .getElementById("assessment-ledger")
-                              ?.scrollIntoView({ block: "nearest" })
-                          }
-                        >
-                          View reporting ledger
-                          <ArrowRight size={14} />
-                        </button>
-                      </article>
-                    ))}
-                </div>
-              )}
-              {admin && (
-                <div className="ops-toolbar">
-                  <button
-                    className="button primary"
-                    onClick={() => setEntryOpen(!entryOpen)}
-                  >
-                    <Plus size={16} />
-                    Record monthly totals
-                  </button>
-                  <a
-                    className="button"
-                    href="/assessment-monthly-template.csv"
-                    download
-                  >
-                    <Download size={16} />
-                    Download monthly template
-                  </a>
-                </div>
-              )}
-              {admin && entryOpen && (
-                <Panel
-                  title="Record completed assessment totals"
-                  subtitle="Leave unavailable values blank. Enter zero only when the report confirms zero assessments."
+                <button
+                  className={screeningSource === "attendance" ? "active" : ""}
+                  aria-pressed={screeningSource === "attendance"}
+                  onClick={() => setScreeningSource("attendance")}
                 >
-                  <form
-                    className="form-stack"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const form = new FormData(e.currentTarget);
-                      if (
-                        await mutate("/api/operations/assessments", {
-                          month: form.get("month"),
-                          sppb: form.get("sppb"),
-                          tanita: form.get("tanita"),
-                          reportedAsOf: form.get("asOf"),
-                          final: form.has("final"),
-                          revise: form.has("revise"),
-                        })
-                      )
-                        setEntryOpen(false);
-                    }}
-                  >
-                    <div className="ops-form-grid">
-                      <label className="field">
-                        <span>Report month</span>
-                        <input
-                          name="month"
-                          type="month"
-                          max={now.slice(0, 7)}
-                          defaultValue={report.period.to.slice(0, 7)}
-                          required
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Reported as of</span>
-                        <input
-                          name="asOf"
-                          type="date"
-                          max={now}
-                          defaultValue={now}
-                          required
-                        />
-                      </label>
-                      <label className="field">
-                        <span>SPPB completed assessments</span>
-                        <input
-                          name="sppb"
-                          type="number"
-                          min="0"
-                          max="1000000"
-                          placeholder="Unavailable"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Tanita completed assessments</span>
-                        <input
-                          name="tanita"
-                          type="number"
-                          min="0"
-                          max="1000000"
-                          placeholder="Unavailable"
-                        />
-                      </label>
+                  Activity attendance
+                </button>
+                <button
+                  className={screeningSource === "monthly" ? "active" : ""}
+                  aria-pressed={screeningSource === "monthly"}
+                  onClick={() => setScreeningSource("monthly")}
+                >
+                  Reported monthly totals
+                </button>
+              </div>
+              {screeningSource === "attendance" ? (
+                <ActivityScreening report={report} />
+              ) : (
+                <>
+                  <div className="callout">
+                    <HeartPulse size={28} />
+                    <div>
+                      <h2>Health Screening Overview</h2>
+                      <p>
+                        Reported monthly assessment counts only. These values do
+                        not establish unique people, repeat assessments, scores,
+                        eligibility or people overdue for screening.
+                      </p>
                     </div>
-                    <label className="ops-checkbox">
-                      <input name="final" type="checkbox" />I confirm these are
-                      final totals for the ended month.
-                    </label>
-                    <label className="ops-checkbox">
-                      <input name="revise" type="checkbox" />
-                      If values change an existing report, save a new revision
-                      and retain earlier entries.
-                    </label>
-                    <button className="button primary" disabled={busy}>
-                      Save reported totals
-                    </button>
-                  </form>
-                  <details>
-                    <summary>Import monthly totals from CSV or Excel</summary>
-                    <p className="table-note">
-                      Required headers: Month, SPPB, Tanita, Reported As Of,
-                      Final. Month uses YYYY-MM, dates YYYY-MM-DD, and Final
-                      YES/NO. Only assessment counts are imported; attendance
-                      and participant totals remain calculated from the
-                      attendance records.
+                  </div>
+                  {!report.health.unsegmented && (
+                    <p className="warning">
+                      Monthly totals are not split by programme or audience.
+                      Reset programme, domain and demographic filters to view
+                      assessment totals.
                     </p>
-                    <form className="ops-inline-form" onSubmit={importPreview}>
-                      <input
-                        aria-label="Monthly assessment report"
-                        type="file"
-                        name="file"
-                        accept=".csv,.xlsx"
-                        required
-                      />
-                      <button className="button" disabled={busy}>
-                        <Upload size={15} />
-                        Preview monthly report
-                      </button>
-                    </form>
-                  </details>
-                  {preview && (
-                    <div className="ops-preview">
-                      <h3>Review {preview.rows.length} assessment totals</h3>
-                      <p>{preview.message}</p>
-                      {preview.warnings.map((w, i) => (
-                        <p className="warning" key={i}>
-                          Row {w.row}: {w.message}
+                  )}
+                  <div className="ops-screening-cards">
+                    {(["sppb", "tanita"] as const).map((type) => (
+                      <section key={type} className={`panel screening-${type}`}>
+                        <div className="screening-title">
+                          <span className="metric-icon">
+                            {type === "sppb" ? (
+                              <Activity size={23} />
+                            ) : (
+                              <HeartPulse size={23} />
+                            )}
+                          </span>
+                          <div>
+                            <span className="eyebrow">
+                              REPORTED ASSESSMENTS
+                            </span>
+                            <h2>
+                              {type === "sppb"
+                                ? "SPPB Assessment"
+                                : "Tanita Assessment"}
+                            </h2>
+                          </div>
+                        </div>
+                        <strong className="screening-total">
+                          {number(report.health[type].total)}
+                        </strong>
+                        <p>
+                          Total reported across{" "}
+                          {report.health[type].reportedMonths} of{" "}
+                          {report.health.selectedMonths} selected months
                         </p>
-                      ))}
+                        <div className="screening-detail">
+                          <div>
+                            <span>Unique people assessed</span>
+                            <strong>Unavailable</strong>
+                          </div>
+                          <div>
+                            <span>Current month in selection</span>
+                            <strong>
+                              {number(report.health[type].thisMonth)}
+                            </strong>
+                          </div>
+                        </div>
+                        <p className="table-note">
+                          Missing monthly records and partially selected
+                          historical months are not counted as zero.
+                        </p>
+                      </section>
+                    ))}
+                  </div>
+                  <Panel
+                    title="SPPB and Tanita assessment trends"
+                    subtitle="Reported monthly counts · incomplete or unavailable months remain distinct"
+                  >
+                    <OperationalChart
+                      title="Monthly SPPB and Tanita assessment totals"
+                      rows={report.monthly}
+                      mode="grouped"
+                      series={[
+                        { key: "sppb", label: "SPPB", color: "#8061bf" },
+                        { key: "tanita", label: "Tanita", color: "#12918b" },
+                      ]}
+                    />
+                  </Panel>
+                  {report.insights.some((i) => i.view === "health") && (
+                    <div className="ops-insights">
+                      {report.insights
+                        .filter((i) => i.view === "health")
+                        .map((insight) => (
+                          <article className="insight-card" key={insight.title}>
+                            <h3>{insight.title}</h3>
+                            <p>{insight.detail}</p>
+                            <div className="suggestion">
+                              <p>{insight.action}</p>
+                            </div>
+                            <button
+                              className="text-button"
+                              onClick={() =>
+                                document
+                                  .getElementById("assessment-ledger")
+                                  ?.scrollIntoView({ block: "nearest" })
+                              }
+                            >
+                              View reporting ledger
+                              <ArrowRight size={14} />
+                            </button>
+                          </article>
+                        ))}
+                    </div>
+                  )}
+                  {admin && (
+                    <div className="ops-toolbar">
+                      <button
+                        className="button primary"
+                        onClick={() => setEntryOpen(!entryOpen)}
+                      >
+                        <Plus size={16} />
+                        Record monthly totals
+                      </button>
+                      <a
+                        className="button"
+                        href="/assessment-monthly-template.csv"
+                        download
+                      >
+                        <Download size={16} />
+                        Download monthly template
+                      </a>
+                    </div>
+                  )}
+                  {admin && entryOpen && (
+                    <Panel
+                      title="Record completed assessment totals"
+                      subtitle="Leave unavailable values blank. Enter zero only when the report confirms zero assessments."
+                    >
+                      <form
+                        className="form-stack"
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const form = new FormData(e.currentTarget);
+                          if (
+                            await mutate("/api/operations/assessments", {
+                              month: form.get("month"),
+                              sppb: form.get("sppb"),
+                              tanita: form.get("tanita"),
+                              reportedAsOf: form.get("asOf"),
+                              final: form.has("final"),
+                              revise: form.has("revise"),
+                            })
+                          )
+                            setEntryOpen(false);
+                        }}
+                      >
+                        <div className="ops-form-grid">
+                          <label className="field">
+                            <span>Report month</span>
+                            <input
+                              name="month"
+                              type="month"
+                              max={now.slice(0, 7)}
+                              defaultValue={report.period.to.slice(0, 7)}
+                              required
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Reported as of</span>
+                            <input
+                              name="asOf"
+                              type="date"
+                              max={now}
+                              defaultValue={now}
+                              required
+                            />
+                          </label>
+                          <label className="field">
+                            <span>SPPB completed assessments</span>
+                            <input
+                              name="sppb"
+                              type="number"
+                              min="0"
+                              max="1000000"
+                              placeholder="Unavailable"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Tanita completed assessments</span>
+                            <input
+                              name="tanita"
+                              type="number"
+                              min="0"
+                              max="1000000"
+                              placeholder="Unavailable"
+                            />
+                          </label>
+                        </div>
+                        <label className="ops-checkbox">
+                          <input name="final" type="checkbox" />I confirm these
+                          are final totals for the ended month.
+                        </label>
+                        <label className="ops-checkbox">
+                          <input name="revise" type="checkbox" />
+                          If values change an existing report, save a new
+                          revision and retain earlier entries.
+                        </label>
+                        <button className="button primary" disabled={busy}>
+                          Save reported totals
+                        </button>
+                      </form>
+                      <details>
+                        <summary>
+                          Import monthly totals from CSV or Excel
+                        </summary>
+                        <p className="table-note">
+                          Required headers: Month, SPPB, Tanita, Reported As Of,
+                          Final. Month uses YYYY-MM, dates YYYY-MM-DD, and Final
+                          YES/NO. Only assessment counts are imported;
+                          attendance and participant totals remain calculated
+                          from the attendance records.
+                        </p>
+                        <form
+                          className="ops-inline-form"
+                          onSubmit={importPreview}
+                        >
+                          <input
+                            aria-label="Monthly assessment report"
+                            type="file"
+                            name="file"
+                            accept=".csv,.xlsx"
+                            required
+                          />
+                          <button className="button" disabled={busy}>
+                            <Upload size={15} />
+                            Preview monthly report
+                          </button>
+                        </form>
+                      </details>
+                      {preview && (
+                        <div className="ops-preview">
+                          <h3>
+                            Review {preview.rows.length} assessment totals
+                          </h3>
+                          <p>{preview.message}</p>
+                          {preview.warnings.map((w, i) => (
+                            <p className="warning" key={i}>
+                              Row {w.row}: {w.message}
+                            </p>
+                          ))}
+                          <div className="table-scroll">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Month</th>
+                                  <th>Assessment</th>
+                                  <th>Total</th>
+                                  <th>Reported as of</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {preview.rows.map((r, i) => (
+                                  <tr key={i}>
+                                    <td>{r.month}</td>
+                                    <td>{r.type}</td>
+                                    <td>{r.total}</td>
+                                    <td>{r.reported_as_of}</td>
+                                    <td>
+                                      {r.complete ? "Final" : "Provisional"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <label className="ops-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={revise}
+                              onChange={(e) => setRevise(e.target.checked)}
+                            />
+                            Confirm revisions to existing totals; preserve
+                            previous entries.
+                          </label>
+                          <div className="ops-toolbar">
+                            <button
+                              className="button primary"
+                              disabled={busy}
+                              onClick={async () => {
+                                if (
+                                  await mutate(
+                                    "/api/operations/assessments/confirm",
+                                    { id: preview.id, revise },
+                                  )
+                                ) {
+                                  setPreview(null);
+                                  setEntryOpen(false);
+                                }
+                              }}
+                            >
+                              Confirm reported totals
+                            </button>
+                            <button
+                              className="button"
+                              disabled={busy}
+                              onClick={async () => {
+                                if (
+                                  await mutate(
+                                    "/api/import/preview/" + preview.id,
+                                    undefined,
+                                    "DELETE",
+                                  )
+                                )
+                                  setPreview(null);
+                              }}
+                            >
+                              Discard preview
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </Panel>
+                  )}
+                  <section className="panel" id="assessment-ledger">
+                    <div className="panel-head">
+                      <div>
+                        <h2>Monthly assessment reporting ledger</h2>
+                        <p className="muted">
+                          Latest revision per month and assessment ·{" "}
+                          {report.health.revisions} historical entries retained
+                          · workspace totals
+                        </p>
+                      </div>
+                    </div>
+                    {report.health.history.length ? (
                       <div className="table-scroll">
                         <table>
                           <thead>
                             <tr>
-                              <th>Month</th>
-                              <th>Assessment</th>
-                              <th>Total</th>
-                              <th>Reported as of</th>
-                              <th>Status</th>
+                              <th scope="col">Month</th>
+                              <th scope="col">Assessment</th>
+                              <th scope="col">Completed count</th>
+                              <th scope="col">Reported as of</th>
+                              <th scope="col">Status</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {preview.rows.map((r, i) => (
-                              <tr key={i}>
-                                <td>{r.month}</td>
-                                <td>{r.type}</td>
+                            {report.health.history.map((r) => (
+                              <tr key={r.month + r.type}>
+                                <th scope="row">{r.month}</th>
+                                <td>
+                                  {r.type === "TANITA" ? "Tanita" : "SPPB"}
+                                </td>
                                 <td>{r.total}</td>
                                 <td>{r.reported_as_of}</td>
-                                <td>{r.complete ? "Final" : "Provisional"}</td>
+                                <td>
+                                  <span className="badge soft">
+                                    {r.complete ? "Final" : "Provisional"}
+                                  </span>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                      <label className="ops-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={revise}
-                          onChange={(e) => setRevise(e.target.checked)}
-                        />
-                        Confirm revisions to existing totals; preserve previous
-                        entries.
-                      </label>
-                      <div className="ops-toolbar">
-                        <button
-                          className="button primary"
-                          disabled={busy}
-                          onClick={async () => {
-                            if (
-                              await mutate(
-                                "/api/operations/assessments/confirm",
-                                { id: preview.id, revise },
-                              )
-                            ) {
-                              setPreview(null);
-                              setEntryOpen(false);
-                            }
-                          }}
-                        >
-                          Confirm reported totals
-                        </button>
-                        <button
-                          className="button"
-                          disabled={busy}
-                          onClick={async () => {
-                            if (
-                              await mutate(
-                                "/api/import/preview/" + preview.id,
-                                undefined,
-                                "DELETE",
-                              )
-                            )
-                              setPreview(null);
-                          }}
-                        >
-                          Discard preview
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </Panel>
-              )}
-              <section className="panel" id="assessment-ledger">
-                <div className="panel-head">
-                  <div>
-                    <h2>Monthly assessment reporting ledger</h2>
-                    <p className="muted">
-                      Latest revision per month and assessment ·{" "}
-                      {report.health.revisions} historical entries retained ·
-                      workspace totals
+                    ) : (
+                      <p className="chart-empty">
+                        No assessment totals have been recorded. Nothing has
+                        been inferred from attendance.
+                      </p>
+                    )}
+                    {report.health.revisionHistory.length >
+                      report.health.history.length && (
+                      <details>
+                        <summary>View retained reporting revisions</summary>
+                        <div className="table-scroll">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th scope="col">Month</th>
+                                <th scope="col">Assessment</th>
+                                <th scope="col">Count</th>
+                                <th scope="col">Reported as of</th>
+                                <th scope="col">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {report.health.revisionHistory.map((r, i) => (
+                                <tr key={i}>
+                                  <th scope="row">{r.month}</th>
+                                  <td>{r.type}</td>
+                                  <td>{r.total}</td>
+                                  <td>{r.reported_as_of}</td>
+                                  <td>
+                                    {r.complete ? "Final" : "Provisional"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    )}
+                    <p className="table-note">
+                      Both assessments, neither assessment, repeat assessments
+                      and eligible-person coverage remain unavailable without
+                      individual records and approved eligibility rules. No
+                      clinical interpretation is generated.
                     </p>
-                  </div>
-                </div>
-                {report.health.history.length ? (
-                  <div className="table-scroll">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th scope="col">Month</th>
-                          <th scope="col">Assessment</th>
-                          <th scope="col">Completed count</th>
-                          <th scope="col">Reported as of</th>
-                          <th scope="col">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {report.health.history.map((r) => (
-                          <tr key={r.month + r.type}>
-                            <th scope="row">{r.month}</th>
-                            <td>{r.type === "TANITA" ? "Tanita" : "SPPB"}</td>
-                            <td>{r.total}</td>
-                            <td>{r.reported_as_of}</td>
-                            <td>
-                              <span className="badge soft">
-                                {r.complete ? "Final" : "Provisional"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="chart-empty">
-                    No assessment totals have been recorded. Nothing has been
-                    inferred from attendance.
-                  </p>
-                )}
-                {report.health.revisionHistory.length >
-                  report.health.history.length && (
-                  <details>
-                    <summary>View retained reporting revisions</summary>
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th scope="col">Month</th>
-                            <th scope="col">Assessment</th>
-                            <th scope="col">Count</th>
-                            <th scope="col">Reported as of</th>
-                            <th scope="col">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {report.health.revisionHistory.map((r, i) => (
-                            <tr key={i}>
-                              <th scope="row">{r.month}</th>
-                              <td>{r.type}</td>
-                              <td>{r.total}</td>
-                              <td>{r.reported_as_of}</td>
-                              <td>{r.complete ? "Final" : "Provisional"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </details>
-                )}
-                <p className="table-note">
-                  Both assessments, neither assessment, repeat assessments and
-                  eligible-person coverage remain unavailable without individual
-                  records and approved eligibility rules. No clinical
-                  interpretation is generated.
-                </p>
-              </section>
+                  </section>
+                </>
+              )}
             </>
           )}
           {view === "report" && (
