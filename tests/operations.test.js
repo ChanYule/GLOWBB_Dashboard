@@ -235,6 +235,64 @@ test("screening participant counts respect actual dates and filters without merg
   assert.equal(all.activityScreening.sppb.people, 3);
   assert.equal(all.summary.sppb, 10);
 });
+
+test("Tanita recognizes the workbook's singular activity and the previously supplied plural spelling without fuzzy matches", () => {
+  const fixture = screeningData();
+  fixture.programmes[1].name = "GLOW - Tanita Body Measurement";
+  fixture.programmes.push(
+    {
+      id: "pluralTanita",
+      name: "GLOW - Tanita Body Measurements",
+      domain: "Physical",
+    },
+    {
+      id: "tanitaBrief",
+      name: "GLOW - Tanita Body Measurement briefing",
+      domain: "Physical",
+    },
+  );
+  fixture.sessions.push(
+    {
+      id: "plural",
+      programmeId: "pluralTanita",
+      date: "2026-05-02",
+      start: 700,
+      end: 730,
+    },
+    {
+      id: "tanitaBrief",
+      programmeId: "tanitaBrief",
+      date: "2026-05-02",
+      start: 740,
+      end: 760,
+    },
+  );
+  fixture.attendance.push(
+    { id: "plural", participantId: "b", sessionId: "plural" },
+    { id: "tanitaBrief", participantId: "a", sessionId: "tanitaBrief" },
+  );
+  const result = operationsReport(
+    fixture,
+    defaults,
+    { from: "2026-05-01", to: "2026-06-30" },
+    [],
+    {},
+    "month",
+    now,
+  );
+  assert.equal(
+    result.activityScreening.activityNames.tanita,
+    "GLOW - Tanita Body Measurement",
+  );
+  assert.equal(result.activityScreening.tanita.people, 2);
+  assert.equal(result.activityScreening.tanita.attendance, 4);
+  assert.equal(
+    result.activityScreening.daily.find((d) => d.label === "2026-05-02")
+      .tanitaPeople,
+    2,
+  );
+  assert.equal(result.activityScreening.monthly[0].tanitaPeople, 2);
+});
 test("monthly assessment totals preserve unknown people, missing months and date granularity", () => {
   const f = { from: "2026-05-01", to: "2026-06-30" };
   const r = operationsReport(data(), defaults, f, ledger, {}, "month", now);

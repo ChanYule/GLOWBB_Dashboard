@@ -19,11 +19,15 @@ export const operationMetrics = {
 const dayMs = 86400000;
 export const screeningActivities = {
   sppb: "GLOW - SPPB Assessment",
-  tanita: "GLOW - Tanita Body Measurements",
+  tanita: "GLOW - Tanita Body Measurement",
+};
+const screeningActivityNames = {
+  sppb: [screeningActivities.sppb],
+  tanita: [screeningActivities.tanita, "GLOW - Tanita Body Measurements"],
 };
 const screeningType = (name) =>
-  Object.keys(screeningActivities).find(
-    (key) => screeningActivities[key] === name?.trim(),
+  Object.keys(screeningActivityNames).find((key) =>
+    screeningActivityNames[key].includes(name?.trim()),
   );
 const stamp = (day) => Date.parse(day + "T00:00:00Z");
 const iso = (n) => new Date(n).toISOString().slice(0, 10);
