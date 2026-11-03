@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { defaults } from "./domain.js";
+import { defaults, hash } from "./domain.js";
 export function openDb(
   path = process.env.DB_PATH || resolve("data/glowbb.sqlite"),
 ) {
@@ -28,6 +28,19 @@ export function openDb(
   db.exec(
     `CREATE TABLE IF NOT EXISTS import_previews(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),expires REAL NOT NULL,payload TEXT NOT NULL);`,
   );
+  db.exec(`CREATE TABLE IF NOT EXISTS staff_preferences(user_id INTEGER PRIMARY KEY REFERENCES users(id),value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS risk_observations(id TEXT PRIMARY KEY,participant_id TEXT NOT NULL REFERENCES participants(id),raw TEXT,imported TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS attendance_backups(id TEXT PRIMARY KEY,created TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id),payload TEXT NOT NULL);
+INSERT OR IGNORE INTO schema_version VALUES(3);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS participant_profiles(participant_id TEXT PRIMARY KEY REFERENCES participants(id),revision INTEGER NOT NULL,details TEXT NOT NULL,updated TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS profile_history(id TEXT PRIMARY KEY,participant_id TEXT NOT NULL REFERENCES participants(id),details TEXT NOT NULL,created TEXT NOT NULL,effective_date TEXT,source TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS profile_observations(id TEXT PRIMARY KEY,participant_id TEXT NOT NULL REFERENCES participants(id),field TEXT NOT NULL,raw TEXT,recorded TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS participant_feedback(id TEXT PRIMARY KEY,participant_id TEXT NOT NULL REFERENCES participants(id),date TEXT NOT NULL,details TEXT NOT NULL,created TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS needs_actions(id TEXT PRIMARY KEY,kind TEXT NOT NULL,revision INTEGER NOT NULL,details TEXT NOT NULL,created TEXT NOT NULL,updated TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS member_registry(participant_id TEXT NOT NULL REFERENCES participants(id),snapshot TEXT NOT NULL,details TEXT NOT NULL,PRIMARY KEY(participant_id,snapshot));
+CREATE INDEX IF NOT EXISTS feedback_participant ON participant_feedback(participant_id,date);
+CREATE INDEX IF NOT EXISTS profile_history_participant ON profile_history(participant_id,created);
+INSERT OR IGNORE INTO schema_version VALUES(4);`);
   db.prepare("INSERT OR IGNORE INTO settings VALUES(1,?)").run(
     JSON.stringify(defaults),
   );
@@ -66,9 +79,12 @@ export function readData(db) {
   };
 }
 export function getSettings(db) {
-  return JSON.parse(
-    db.prepare("SELECT value FROM settings WHERE id=1").get().value,
-  );
+  return {
+    ...defaults,
+    ...JSON.parse(
+      db.prepare("SELECT value FROM settings WHERE id=1").get().value,
+    ),
+  };
 }
 export function audit(db, user, action, details = {}) {
   db.prepare(
@@ -78,12 +94,31 @@ export function audit(db, user, action, details = {}) {
 export function saveImport(db, parsed, inspection, user) {
   db.exec("BEGIN IMMEDIATE");
   try {
+    if (inspection.mode === "replace") {
+      db.prepare("INSERT INTO attendance_backups VALUES(?,?,?,?)").run(
+        crypto.randomUUID(),
+        new Date().toISOString(),
+        user,
+        JSON.stringify({
+          ...readData(db),
+          attendanceRows: db.prepare("SELECT * FROM attendance").all(),
+        }),
+      );
+      db.prepare("DELETE FROM attendance").run();
+    }
+    for (const { id, ...details } of inspection.updates || [])
+      db.prepare("UPDATE participants SET details=? WHERE id=?").run(
+        JSON.stringify(details),
+        id,
+      );
     const summary = {
+      updatedProfiles: inspection.updates?.length || 0,
+      mode: inspection.mode || "add",
       raw: parsed.rawRows,
       imported: inspection.fresh.length,
       duplicates: inspection.duplicates.length,
       invalid: parsed.issues.length,
-      skipped: inspection.conflicts.length,
+      skipped: inspection.conflicts.filter((c) => c.action !== "update").length,
       exactDuplicates: parsed.exactDuplicates,
       warnings: inspection.warnings.length,
       invalidAgeCount: parsed.issues.filter((i) => i.code === "invalidAge")
@@ -103,7 +138,10 @@ export function saveImport(db, parsed, inspection, user) {
       const { id: pid, ...details } = r.participant;
       db.prepare("INSERT OR IGNORE INTO participants VALUES(?,?)").run(
         pid,
-        JSON.stringify(details),
+        JSON.stringify({
+          ...details,
+          profileImportedAt: new Date().toISOString(),
+        }),
       );
       db.prepare(
         "INSERT OR IGNORE INTO programmes(id,name,domain) VALUES(?,?,?)",
@@ -125,6 +163,60 @@ export function saveImport(db, parsed, inspection, user) {
         id,
       );
     }
+    for (const { id, ...details } of inspection.updates || [])
+      db.prepare("UPDATE participants SET details=? WHERE id=?").run(
+        JSON.stringify(details),
+        id,
+      );
+    for (const r of parsed.rows)
+      if (
+        "riskRaw" in r.participant &&
+        db
+          .prepare("SELECT id FROM participants WHERE id=?")
+          .get(r.participant.id)
+      )
+        db.prepare(
+          "INSERT OR IGNORE INTO risk_observations VALUES(?,?,?,?)",
+        ).run(
+          hash([r.participant.id, r.session.id, r.participant.riskRaw]),
+          r.participant.id,
+          r.participant.riskRaw,
+          new Date().toISOString(),
+        );
+    for (const r of parsed.rows)
+      for (const field of [
+        "age",
+        "gender",
+        "race",
+        "client",
+        "boundary",
+        "livingRaw",
+        "maritalRaw",
+        "cfs",
+        "riskRaw",
+        "preferredLanguage",
+        "registrationDate",
+        "cfsAssessedOn",
+      ]) {
+        if (
+          !(field in r.participant) ||
+          !db
+            .prepare("SELECT id FROM participants WHERE id=?")
+            .get(r.participant.id)
+        )
+          continue;
+        db.prepare(
+          "INSERT OR IGNORE INTO profile_observations VALUES(?,?,?,?,?)",
+        ).run(
+          hash([r.participant.id, field, r.participant[field]]),
+          r.participant.id,
+          field,
+          typeof r.participant[field] === "boolean"
+            ? String(r.participant[field])
+            : r.participant[field],
+          new Date().toISOString(),
+        );
+      }
     audit(db, user, "attendance.import", summary);
     db.exec("COMMIT");
     return summary;

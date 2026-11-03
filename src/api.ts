@@ -51,7 +51,7 @@
       typeof data.error === "string"
         ? data.error
         : "Unable to complete request.";
-    throw Error(message);
+    throw Object.assign(Error(message), { status: res.status });
   }
   return data as T;
 }

@@ -1,4 +1,4 @@
-import { hash, todaySG } from "./domain.js";
+import { hash, todaySG, defaults, matchesSelection } from "./domain.js";
 
 export const assessmentHeaders = [
   "Month",
@@ -227,10 +227,10 @@ function bounds(label, grain) {
 }
 function matches(p, pg, f, settings) {
   return (
-    (!f.domain || pg?.domain === f.domain) &&
-    (!f.programme || pg?.id === f.programme) &&
-    (!f.gender || p.gender === f.gender) &&
-    (!f.race || p.race === f.race) &&
+    matchesSelection(f.domain, pg?.domain) &&
+    matchesSelection(f.programme, pg?.id) &&
+    matchesSelection(f.gender, p.gender) &&
+    matchesSelection(f.race, p.race) &&
     (!f.client || String(p.client) === f.client) &&
     (!f.boundary || String(p.boundary) === f.boundary) &&
     (!f.ageBand ||
@@ -255,6 +255,7 @@ export function operationsReport(
   grain = "month",
   now = todaySG(),
 ) {
+  definitions = { ...defaults, ...definitions };
   const people = new Map(data.participants.map((p) => [p.id, p])),
     programmes = new Map(data.programmes.map((p) => [p.id, p])),
     sessions = new Map(data.sessions.map((s) => [s.id, s]));
@@ -269,8 +270,23 @@ export function operationsReport(
   for (const a of full)
     if (!first.has(a.p.id) || a.s.date < first.get(a.p.id))
       first.set(a.p.id, a.s.date);
-  const history = full.filter((a) =>
-    matches(a.p, programmes.get(a.s.programmeId), filters, definitions),
+  const history = full.filter(
+    (a) =>
+      matches(a.p, programmes.get(a.s.programmeId), filters, definitions) &&
+      matchesSelection(filters.cfs, a.p.cfs) &&
+      (!filters.weekday ||
+        String(new Date(a.s.date + "T00:00:00Z").getUTCDay()) ===
+          filters.weekday) &&
+      (!filters.timeSlot ||
+        (a.s.start < definitions.timeBands[0]
+          ? "Morning"
+          : a.s.start < definitions.timeBands[1]
+            ? "Afternoon"
+            : "Evening") === filters.timeSlot) &&
+      (!filters.observed ||
+        (filters.observed === "first"
+          ? !filters.from || first.get(a.p.id) >= filters.from
+          : filters.from && first.get(a.p.id) < filters.from)),
   );
   const coverageStart = full.reduce(
     (v, a) => (a.s.date < v ? a.s.date : v),
@@ -290,6 +306,10 @@ export function operationsReport(
       "client",
       "boundary",
       "ageBand",
+      "cfs",
+      "weekday",
+      "timeSlot",
+      "observed",
     ].some((k) => filters[k]) &&
     (!filters.target || filters.target === "all");
   const latest = latestMonthly(monthlyRecords);

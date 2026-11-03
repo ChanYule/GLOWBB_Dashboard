@@ -224,7 +224,7 @@ test("global filters expand, submit exact filter changes and reset", () => {
   fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   assert.equal(next.race, "");
 });
-test("application opens directly with import, settings and planning and no login controls", async () => {
+test("authenticated administrator sees imports, settings, planning and sign out", async () => {
   const original = globalThis.fetch;
   const empty = {
     ...dashboard(),
@@ -235,7 +235,7 @@ test("application opens directly with import, settings and planning and no login
     new Response(
       JSON.stringify(
         String(url) === "/api/me"
-          ? { username: "planner", role: "planner" }
+          ? { username: "administrator", role: "admin" }
           : empty,
       ),
       { status: 200, headers: { "content-type": "application/json" } },
@@ -248,7 +248,7 @@ test("application opens directly with import, settings and planning and no login
     assert.ok(screen.getByRole("button", { name: "Import attendance" }));
     assert.ok(screen.getByRole("button", { name: "Data & settings" }));
     assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
-    assert.equal(screen.queryByRole("button", { name: "Sign out" }), null);
+    assert.ok(screen.getByRole("button", { name: "Sign out" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Planning & Recommendations" }),
     );
@@ -515,7 +515,13 @@ test("the integrated operations tab remains reachable when attendance is empty",
     targets: [],
   };
   globalThis.fetch = async (url) =>
-    Response.json(String(url).startsWith("/api/operations?") ? report : core);
+    Response.json(
+      String(url) === "/api/me"
+        ? { username: "Local workspace", role: "admin" }
+        : String(url).startsWith("/api/operations?")
+          ? report
+          : core,
+    );
   try {
     render(React.createElement(App));
     await waitFor(() =>
@@ -572,4 +578,355 @@ test("screening participation switches between daily and monthly unique people w
       name: "Daily unique SPPB and Tanita participants",
     }),
   );
+});
+
+const { PersonalWorkspace, SocialRisk, validTypes } = await tsImport(
+  "../src/workspace.tsx",
+  import.meta.url,
+);
+test("personal dashboard saves selected KPIs, chart settings, order and filters and reloads them from the staff account", async () => {
+  const original = globalThis.fetch;
+  let prefs = { views: [], active: "", template: "Overview" };
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), "/api/preferences");
+    if (options?.method === "PUT") {
+      prefs = JSON.parse(options.body);
+      return Response.json({ ok: true });
+    }
+    return Response.json(prefs);
+  };
+  const props = {
+    data: dashboard(),
+    filters,
+    setFilters: () => {},
+    user: { username: "staff-one", role: "planner" },
+  };
+  try {
+    const first = render(React.createElement(PersonalWorkspace, props));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Customise My Dashboard" }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        screen.getByRole("button", { name: "Save as New View" }).disabled,
+        false,
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Male seniors reached" }),
+    );
+    fireEvent.change(screen.getByLabelText("View name"), {
+      target: { value: "Monthly team discussion" },
+    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Chart 1 grouping" }),
+      { target: { value: "domain" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Chart 1 display" }),
+      { target: { value: "table" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save as New View" }));
+    await waitFor(() => assert.equal(prefs.views.length, 1));
+    assert.equal(prefs.views[0].name, "Monthly team discussion");
+    assert.equal(prefs.views[0].kpis.includes("male"), false);
+    assert.equal(prefs.views[0].charts[0].group, "domain");
+    assert.equal(prefs.views[0].charts[0].type, "table");
+    assert.deepEqual(prefs.views[0].filters, filters);
+    first.unmount();
+    render(React.createElement(PersonalWorkspace, props));
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("heading", { name: "Monthly team discussion" }),
+      ),
+    );
+    assert.equal(
+      screen.getByRole("combobox", { name: "Chart 1 display" }).value,
+      "table",
+    );
+    assert.equal(validTypes("programme").includes("donut"), false);
+    assert.equal(validTypes("month").includes("line"), true);
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("viewer risk page never requests sensitive data and protected pages show suppression explanations", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({
+      suppressed: true,
+      limited: true,
+      threshold: 5,
+      note: "Protected full cohort",
+      categories: [],
+      states: [],
+    });
+  };
+  try {
+    const viewer = render(
+      React.createElement(SocialRisk, {
+        user: { username: "viewer", role: "viewer" },
+      }),
+    );
+    assert.match(
+      screen.getByText(/restricted to authorised/).textContent,
+      /planners/,
+    );
+    assert.equal(calls, 0);
+    viewer.unmount();
+    render(
+      React.createElement(SocialRisk, {
+        user: { username: "planner", role: "planner" },
+      }),
+    );
+    await waitFor(() => assert.ok(screen.getByText(/Breakdown withheld/)));
+    assert.ok(screen.getByText(/Raw value 0 does not establish/));
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+
+const { NeedsPage, ParticipantEditor } = await tsImport(
+  "../src/needs-ui.tsx",
+  import.meta.url,
+);
+const needsDomain = await import("../server/needs-domain.js");
+const catalogue = {
+  interests: needsDomain.interests,
+  needs: needsDomain.needs,
+  barriers: needsDomain.barriers,
+  informationSources: needsDomain.informationSources,
+  needStates: needsDomain.needStates,
+  actionStates: needsDomain.actionStates,
+};
+test("the needs dashboard restricts viewer access and makes the three analysis levels available without attendance", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({});
+  };
+  try {
+    render(
+      React.createElement(NeedsPage, {
+        level: "profile",
+        filters,
+        user: { username: "viewer", role: "viewer" },
+        onRefresh: () => {},
+      }),
+    );
+    assert.ok(screen.getByText(/restricted to planners and administrators/));
+    assert.equal(calls, 0);
+    cleanup();
+    const empty = { ...dashboard(), coverage: { from: null, to: null } };
+    globalThis.fetch = async (url) =>
+      Response.json(
+        String(url) === "/api/me"
+          ? { username: "Local workspace", role: "admin" }
+          : String(url) === "/api/preferences"
+            ? { views: [], active: "", template: "Overview" }
+            : empty,
+      );
+    render(React.createElement(App));
+    await waitFor(() =>
+      assert.ok(screen.getByText("Make every connection count.")),
+    );
+    for (const label of [
+      "Who Are We Serving?",
+      "Gaps and Participation Barriers",
+      "Programme Planning and Actions",
+      "Programme Alignment",
+      "Data Quality and Administration",
+    ])
+      assert.ok(screen.getByRole("button", { name: label }));
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("staff can edit all eight profile sections without losing drafts and feedback requires voluntary consent", async () => {
+  const original = globalThis.fetch;
+  const data = readData(db),
+    base = {
+      ...data.participants[0],
+      livingRaw: "Alone",
+      maritalRaw: "SINGLE",
+      riskRaw: "0",
+    };
+  let savedProfile, feedback;
+  let revision = 0;
+  const detail = () => ({
+    base,
+    current: base,
+    revision,
+    details: savedProfile?.details || {},
+    updated: null,
+    notice: "Latest-known fixture profile.",
+    history: needsDomain.participantHistory(data, base.id, "2026-10-26"),
+    feedback: [],
+  });
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path === "/api/needs/catalogue") return Response.json(catalogue);
+    if (path === "/api/participants/lookup")
+      return Response.json({ id: base.id });
+    if (path.endsWith("/profile")) {
+      savedProfile = JSON.parse(options.body);
+      revision++;
+      return Response.json({ revision });
+    }
+    if (path.endsWith("/feedback")) {
+      feedback = JSON.parse(options.body);
+      return Response.json({ id: "saved" });
+    }
+    if (path === "/api/participants/" + base.id) return Response.json(detail());
+    throw Error("Unexpected request " + path);
+  };
+  try {
+    render(React.createElement(ParticipantEditor, { onSaved: () => {} }));
+    fireEvent.change(screen.getByLabelText("Exact Member ID"), {
+      target: { value: "fixture-member" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find participant" }));
+    await waitFor(() => assert.equal(screen.getAllByRole("tab").length, 8));
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Health and Functional Profile" }),
+    );
+    fireEvent.change(screen.getByLabelText("Mobility support information"), {
+      target: { value: "Participant requested a seated option" },
+    });
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Care and Support Needs" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add support need" }));
+    fireEvent.change(screen.getByLabelText("Category"), {
+      target: { value: "Transport assistance" },
+    });
+    fireEvent.change(screen.getByLabelText("Information state"), {
+      target: { value: "Not assessed" },
+    });
+    fireEvent.click(
+      screen.getByRole("tab", { name: "Interests and Programme Preferences" }),
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Games" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Arts and crafts" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Staff Follow-Up" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Follow-up required" }),
+    );
+    fireEvent.change(screen.getByLabelText("Assigned staff member"), {
+      target: { value: "Assigned planner" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review and save profile" }),
+    );
+    await waitFor(() => assert.ok(savedProfile));
+    assert.equal(
+      savedProfile.details.health.mobility,
+      "Participant requested a seated option",
+    );
+    assert.equal(savedProfile.details.needs[0].status, "Not assessed");
+    assert.deepEqual(savedProfile.details.preferences.interests, [
+      "Games",
+      "Arts and crafts",
+    ]);
+    assert.equal(savedProfile.details.followUp.assigned, "Assigned planner");
+    assert.equal(savedProfile.effectiveDate, "");
+    assert.equal(savedProfile.revision, 0);
+    await waitFor(() =>
+      assert.equal(
+        screen.getByRole("button", { name: "Review and save profile" })
+          .disabled,
+        false,
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Collect voluntary survey / staff feedback",
+      }),
+    );
+    assert.equal(
+      screen.getByRole("button", { name: "Review and save feedback" }).disabled,
+      true,
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Responses are voluntary/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review and save feedback" }),
+    );
+    await waitFor(() => assert.ok(feedback));
+    assert.equal(feedback.consent, true);
+    assert.equal(feedback.method, "survey");
+    assert.deepEqual(feedback.preferences, {});
+    assert.deepEqual(feedback.barriers, []);
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("outreach action forms keep missing stage counts blank and save staff-reviewed planning rather than sending messages", async () => {
+  const original = globalThis.fetch;
+  const report = needsDomain.needsAnalysis(
+    readData(db),
+    [],
+    [],
+    [],
+    defaults,
+    {},
+    "2026-10-26",
+  );
+  let saved;
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path.startsWith("/api/needs/overview")) return Response.json(report);
+    if (path === "/api/needs/actions") return Response.json([]);
+    if (path.startsWith("/api/needs/actions/") && options?.method === "PUT") {
+      saved = JSON.parse(options.body);
+      return Response.json({ revision: 1 });
+    }
+    throw Error("Unexpected request " + path);
+  };
+  try {
+    render(
+      React.createElement(NeedsPage, {
+        level: "actions",
+        filters,
+        user: { username: "planner", role: "planner" },
+        onRefresh: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("button", { name: "Create targeted outreach plan" }),
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Create targeted outreach plan" }),
+    );
+    assert.ok(screen.getByRole("dialog", { name: "Review planning action" }));
+    fireEvent.change(screen.getByLabelText("Action title"), {
+      target: { value: "Review stated language preferences" },
+    });
+    fireEvent.change(screen.getByLabelText("Staff owner"), {
+      target: { value: "Planner" },
+    });
+    assert.equal(screen.getByLabelText("Number attended").value, "");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save reviewed action" }),
+    );
+    await waitFor(() => assert.ok(saved));
+    assert.equal(saved.kind, "outreach");
+    assert.equal(saved.owner, "Planner");
+    assert.equal(saved.attended, null);
+    assert.equal(saved.contacted, null);
+    assert.equal(saved.status, "Proposed");
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
 });

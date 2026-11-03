@@ -45,7 +45,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
     if (target.origin !== base.origin || !target.pathname.startsWith("/api/"))
       return json(res, 400, "Invalid API path.");
     const headers = new Headers();
-    for (const key of ["content-type", "accept", "origin"])
+    for (const key of ["content-type", "accept", "origin", "cookie"])
       if (req.headers[key]) headers.set(key, req.headers[key]);
     let body;
     if (!["GET", "HEAD"].includes(req.method)) {
@@ -93,8 +93,13 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
         signal: AbortSignal.timeout(55000),
       });
       const type = upstream.headers.get("content-type") || "";
-      const report = incoming.pathname === "/api/export/report";
-      const csv = incoming.pathname === "/api/export/csv";
+      const report = /^\/api\/(?:export|needs\/export)\/report$/.test(
+        incoming.pathname,
+      );
+      const csv =
+        /^\/api\/(?:export\/csv|needs\/export\/csv|analysis\/export|analysis\/view\/[^/]+\/export)$/.test(
+          incoming.pathname,
+        );
       if (upstream.status >= 300 && upstream.status < 400)
         return json(
           res,
@@ -115,6 +120,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
       for (const key of [
         "content-type",
         "content-disposition",
+        "set-cookie",
         "content-security-policy",
         "x-content-type-options",
         "x-frame-options",

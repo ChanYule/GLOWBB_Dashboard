@@ -6,8 +6,19 @@ export type Settings = {
   minSessions: number;
   minParticipants: number;
   privacyMinimum: number;
+  riskMappings?: Record<
+    string,
+    { label: string; meaning: string; categories: string[]; noRisk: boolean }
+  >;
+  multipleRiskFactors?: boolean;
+  timeBands?: number[];
+  sharedTemplates?: SavedView[];
 };
 export type Stats = {
+  clientReach: number;
+  nonClientReach: number;
+  inBoundary: number;
+  outBoundary: number;
   unique: number;
   male: number;
   minority: number;
@@ -71,6 +82,10 @@ export type Filters = {
   client: string;
   boundary: string;
   ageBand: string;
+  cfs?: string;
+  weekday?: string;
+  timeSlot?: string;
+  observed?: string;
 };
 export type Target = {
   id: number;
@@ -80,6 +95,7 @@ export type Target = {
   end: string;
   programme_id?: string;
   current: number;
+  previousCurrent?: number | null;
   progress: number;
   gap: number;
   daysRemaining: number;
@@ -87,6 +103,10 @@ export type Target = {
 export type Decision = {
   id: string;
   status: string;
+  assigned?: string;
+  plannedAction?: string;
+  targetDate?: string;
+  outcome?: string;
   notes: string;
   updated: string;
 };
@@ -114,6 +134,7 @@ export type Dashboard = {
     domains: string[];
     programmes: { id: string; name: string }[];
     races: string[];
+    cfs?: string[];
   };
   settings: Settings;
   targets: Target[];
@@ -130,11 +151,18 @@ export type Insight = {
 };
 export type Preview = {
   id: string;
+  mode?: string;
+  updatedProfiles?: number;
+  matched?: number;
+  missing?: number;
+  resultingAttendance?: number;
+  resultingParticipants?: number;
   rawRows: number;
   ready: number;
   duplicates: number;
   invalid: number;
   skipped: number;
+  conflicts?: number;
   exactDuplicates: number;
   issues: { row: number; message: string }[];
   variants: string[][];
@@ -149,4 +177,27 @@ export type Preview = {
   }[];
   reference: Record<string, string | number | null>;
   expectedReference: Record<string, string | number>;
+};
+
+export type AnalysisChart = {
+  id: string;
+  metric: string;
+  group: string;
+  type: string;
+  wide?: boolean;
+};
+export type SavedView = {
+  id: string;
+  name: string;
+  kpis: string[];
+  charts: AnalysisChart[];
+  filters: Filters;
+  period?: string;
+  columns?: string[];
+};
+export type Preferences = {
+  views: SavedView[];
+  active: string;
+  template: string;
+  draft?: SavedView;
 };

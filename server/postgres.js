@@ -1,11 +1,11 @@
 import pg from "pg";
 import { rootCertificates } from "node:tls";
 import { readFileSync } from "node:fs";
-import { inspectImport } from "./domain.js";
+import { inspectImport, defaults, hash } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
-  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets)\b/g;
+  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
@@ -110,7 +110,7 @@ export function openPostgres(connectionString, { pool } = {}) {
       db
         .prepare("DELETE FROM import_previews WHERE id=? AND user_id=?")
         .run(id, user),
-    confirm: (id, user) =>
+    confirm: (id, user, options = {}) =>
       db.transaction(async (tx) => {
         // Serializes imports across functions, then recomputes conflicts on current data.
         await tx.query("SELECT pg_advisory_xact_lock(714204)");
@@ -126,7 +126,17 @@ export function openPostgres(connectionString, { pool } = {}) {
             Error("This preview is for a different import."),
             { status: 400 },
           );
-        const inspection = inspectImport(parsed, await readData(tx));
+        const current = await readData(tx);
+        if (
+          parsed.mode === "replace" &&
+          (options.confirmation !== "REPLACE ATTENDANCE" ||
+            parsed.fingerprint !== hash(current))
+        )
+          throw Object.assign(
+            Error("Replacement requires confirmation and a fresh preview."),
+            { status: 409 },
+          );
+        const inspection = inspectImport(parsed, current);
         const summary = await saveImport(tx, parsed, inspection, user);
         await tx.prepare("DELETE FROM import_previews WHERE id=?").run(id);
         return summary;
@@ -186,9 +196,12 @@ async function readData(db) {
   };
 }
 async function getSettings(db) {
-  return JSON.parse(
-    (await db.prepare("SELECT value FROM settings WHERE id=1").get()).value,
-  );
+  return {
+    ...defaults,
+    ...JSON.parse(
+      (await db.prepare("SELECT value FROM settings WHERE id=1").get()).value,
+    ),
+  };
 }
 async function audit(db, user, action, details = {}) {
   await db
@@ -198,12 +211,30 @@ async function audit(db, user, action, details = {}) {
     .run(new Date().toISOString(), user, action, JSON.stringify(details));
 }
 async function saveImport(db, parsed, inspection, user) {
+  if (inspection.mode === "replace") {
+    await db.prepare("INSERT INTO attendance_backups VALUES(?,?,?,?)").run(
+      crypto.randomUUID(),
+      new Date().toISOString(),
+      user,
+      JSON.stringify({
+        ...(await readData(db)),
+        attendanceRows: await db.prepare("SELECT * FROM attendance").all(),
+      }),
+    );
+    await db.prepare("DELETE FROM attendance").run();
+  }
+  for (const { id, ...details } of inspection.updates || [])
+    await db
+      .prepare("UPDATE participants SET details=? WHERE id=?")
+      .run(JSON.stringify(details), id);
   const summary = {
+    updatedProfiles: inspection.updates?.length || 0,
+    mode: inspection.mode || "add",
     raw: parsed.rawRows,
     imported: inspection.fresh.length,
     duplicates: inspection.duplicates.length,
     invalid: parsed.issues.length,
-    skipped: inspection.conflicts.length,
+    skipped: inspection.conflicts.filter((c) => c.action !== "update").length,
     exactDuplicates: parsed.exactDuplicates,
     warnings: inspection.warnings.length,
     invalidAgeCount: parsed.issues.filter((i) => i.code === "invalidAge")
@@ -222,7 +253,16 @@ async function saveImport(db, parsed, inspection, user) {
     ...new Map(
       rows.map((r) => {
         const { id, ...details } = r.participant;
-        return [id, { id, details: JSON.stringify(details) }];
+        return [
+          id,
+          {
+            id,
+            details: JSON.stringify({
+              ...details,
+              profileImportedAt: new Date().toISOString(),
+            }),
+          },
+        ];
       }),
     ).values(),
   ];
@@ -276,6 +316,79 @@ async function saveImport(db, parsed, inspection, user) {
       [JSON.stringify(values)],
     );
   }
+  for (const { id, ...details } of inspection.updates || [])
+    await db
+      .prepare("UPDATE participants SET details=? WHERE id=?")
+      .run(JSON.stringify(details), id);
+  const observations = [
+    ...new Map(
+      parsed.rows
+        .filter((r) => "riskRaw" in r.participant)
+        .map((r) => {
+          const id = hash([
+            r.participant.id,
+            r.session.id,
+            r.participant.riskRaw,
+          ]);
+          return [
+            id,
+            {
+              id,
+              participant_id: r.participant.id,
+              raw: r.participant.riskRaw,
+              imported: new Date().toISOString(),
+            },
+          ];
+        }),
+    ).values(),
+  ];
+  if (observations.length)
+    await db.query(
+      `INSERT INTO glowbb.risk_observations SELECT x.* FROM jsonb_to_recordset($1::jsonb) AS x(id text,participant_id text,raw text,imported text) JOIN glowbb.participants p ON p.id=x.participant_id ON CONFLICT DO NOTHING`,
+      [JSON.stringify(observations)],
+    );
+  const profileObservations = [
+    ...new Map(
+      parsed.rows.flatMap((r) =>
+        [
+          "age",
+          "gender",
+          "race",
+          "client",
+          "boundary",
+          "livingRaw",
+          "maritalRaw",
+          "cfs",
+          "riskRaw",
+          "preferredLanguage",
+          "registrationDate",
+          "cfsAssessedOn",
+        ]
+          .filter((field) => field in r.participant)
+          .map((field) => {
+            const id = hash([r.participant.id, field, r.participant[field]]);
+            return [
+              id,
+              {
+                id,
+                participant_id: r.participant.id,
+                field,
+                raw:
+                  typeof r.participant[field] === "boolean"
+                    ? String(r.participant[field])
+                    : r.participant[field],
+                recorded: new Date().toISOString(),
+              },
+            ];
+          }),
+      ),
+    ).values(),
+  ];
+  if (profileObservations.length)
+    await db.query(
+      `INSERT INTO glowbb.profile_observations SELECT x.* FROM jsonb_to_recordset($1::jsonb) AS x(id text,participant_id text,field text,raw text,recorded text) JOIN glowbb.participants p ON p.id=x.participant_id ON CONFLICT DO NOTHING`,
+      [JSON.stringify(profileObservations)],
+    );
   await audit(db, user, "attendance.import", summary);
   return summary;
 }

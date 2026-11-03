@@ -279,7 +279,7 @@ test("formula cells and ambiguous workbooks rejected", async () => {
     readFile(Buffer.from(await wb.xlsx.writeBuffer()), "a.xlsx"),
   );
 });
-test("dashboard opens without login; origin checks, import confirmation and persistence remain intact", async () => {
+test("local development opens directly; origin checks, import confirmation and persistence remain intact", async () => {
   const db = openDb(":memory:");
   const server = createApp(db).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
@@ -302,8 +302,8 @@ test("dashboard opens without login; origin checks, import confirmation and pers
     const me = await request("/api/me");
     assert.equal(me.headers.has("set-cookie"), false);
     assert.equal((await me.json()).username, "Local workspace");
-    assert.equal((await request("/api/login", "POST", {})).status, 404);
-    assert.equal((await request("/api/logout", "POST", {})).status, 404);
+    assert.equal((await request("/api/login", "POST", {})).status, 400);
+    assert.equal((await request("/api/logout", "POST", {})).status, 200);
     assert.equal(
       (await request("/api/settings", "PUT", defaults, false)).status,
       403,
@@ -465,6 +465,20 @@ test("recommendation rules yield Expand, Maintain, Improve and Review from measu
     row("young", "No eligible seniors", undefined, { "Name/Age": "59" }),
   );
   importRows(db, rows);
+  assert.notEqual(
+    analytics(readData(db), defaults, {}, now).recommendations.find(
+      (p) => p.programme === "Broad reach",
+    ).category,
+    "Expand",
+  );
+  db.prepare("UPDATE programmes SET optional=? WHERE name=?").run(
+    JSON.stringify({
+      confirmedDemand: true,
+      demandSource: "Reviewed participant requests",
+      demandDate: "2026-05-20",
+    }),
+    "Broad reach",
+  );
   const r = analytics(
     readData(db),
     defaults,
@@ -537,7 +551,7 @@ test("SQLite startup migrations preserve records and decisions through a real fi
     assert.equal(readData(db).participants.length, 1);
     assert.equal(
       db.prepare("SELECT count(*) AS n FROM schema_version").get().n,
-      1,
+      3,
     );
     assert.equal(importRows(db, [row()]).imported, 0);
     db.close();

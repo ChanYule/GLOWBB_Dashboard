@@ -5,7 +5,7 @@ import { createApp } from "../server/app.js";
 import { openDb, readData, saveImport } from "../server/db.js";
 import { HEADERS, parseRows, inspectImport } from "../server/domain.js";
 const db = openDb(":memory:");
-const app = createApp(db, { production: true });
+const app = createApp(db, { production: true, authRequired: false });
 const actor = db
   .prepare("SELECT id FROM users WHERE username=?")
   .get("__local_workspace__").id;

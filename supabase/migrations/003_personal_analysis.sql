@@ -1,0 +1,10 @@
+BEGIN;
+CREATE TABLE IF NOT EXISTS glowbb.staff_preferences(user_id INTEGER PRIMARY KEY REFERENCES glowbb.users(id),value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS glowbb.risk_observations(id TEXT PRIMARY KEY,participant_id TEXT NOT NULL REFERENCES glowbb.participants(id),raw TEXT,imported TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS glowbb.attendance_backups(id TEXT PRIMARY KEY,created TEXT NOT NULL,user_id INTEGER NOT NULL REFERENCES glowbb.users(id),payload TEXT NOT NULL);
+ALTER TABLE glowbb.risk_observations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE glowbb.staff_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE glowbb.attendance_backups ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON glowbb.risk_observations,glowbb.staff_preferences,glowbb.attendance_backups FROM PUBLIC,anon,authenticated;
+INSERT INTO glowbb.schema_version VALUES(3) ON CONFLICT DO NOTHING;
+COMMIT;

@@ -553,7 +553,7 @@ test("SQLite operations API migrates additively, retains revisions, previews saf
     await json(await request("/api/operations?from=2026-05-01&to=2026-06-30"));
     assert.equal(
       db.prepare("SELECT MAX(version) AS v FROM schema_version").get().v,
-      2,
+      4,
     );
     assert.equal(db.prepare("SELECT count(*) AS n FROM users").get().n, before);
     const entry = {

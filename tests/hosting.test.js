@@ -233,3 +233,58 @@ test("hosted upload size errors remain useful when Vercel returns plain text", a
       assert.rejects(api("/api/import/preview"), /file smaller than 4 MB/),
   );
 });
+
+test("Vercel proxy forwards staff session cookies in both directions", async () => {
+  let received;
+  await withProxy(
+    {
+      backendUrl: "https://backend.example",
+      fetchImpl: async (_url, options) => {
+        received = options.headers.get("cookie");
+        return Response.json(
+          { ok: true },
+          {
+            headers: {
+              "Set-Cookie":
+                "glow_session=test; HttpOnly; Secure; SameSite=Strict; Path=/",
+            },
+          },
+        );
+      },
+    },
+    async (base) => {
+      const r = await fetch(base + "/api/me", {
+        headers: { Cookie: "glow_session=test" },
+      });
+      assert.equal(received, "glow_session=test");
+      assert.match(r.headers.get("set-cookie"), /HttpOnly; Secure/);
+    },
+  );
+});
+
+test("Vercel proxy permits needs management reports and protected-route approved general CSV downloads", async () => {
+  for (const [path, type] of [
+    ["/api/needs/export/report", "text/html"],
+    ["/api/needs/export/csv", "text/csv"],
+    ["/api/analysis/export?group=programme&metric=unique", "text/csv"],
+    ["/api/analysis/view/personal-view/export", "text/csv"],
+  ])
+    await withProxy(
+      {
+        backendUrl: "https://backend.example",
+        fetchImpl: async () =>
+          new Response("Verified report", {
+            headers: {
+              "Content-Type": type,
+              "Content-Disposition": "attachment; filename=summary.csv",
+            },
+          }),
+      },
+      async (base) => {
+        const r = await fetch(base + path);
+        assert.equal(r.status, 200, path);
+        assert.match(r.headers.get("content-type"), new RegExp(type));
+        assert.equal(await r.text(), "Verified report");
+      },
+    );
+});

@@ -17,6 +17,21 @@ async function database() {
   );
   await engine.exec(migration);
   await engine.exec(migration); // Reapplying must preserve existing data.
+  const analysisMigration = await readFile(
+    new URL(
+      "../supabase/migrations/003_personal_analysis.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  await engine.exec(analysisMigration);
+  await engine.exec(analysisMigration);
+  const needsMigration = await readFile(
+    new URL("../supabase/migrations/004_needs_based.sql", import.meta.url),
+    "utf8",
+  );
+  await engine.exec(needsMigration);
+  await engine.exec(needsMigration);
   const query = async (sql, values) => {
     if (!values && sql.trim().startsWith("BEGIN;")) {
       const results = await engine.exec(sql);
@@ -446,7 +461,7 @@ test("failed operational setup rolls back and can retry without poisoning the da
           .prepare("SELECT MAX(version) AS version FROM schema_version")
           .get()
       ).version,
-      1,
+      4,
     );
     // This is a deliberately incompatible table in the isolated test engine.
     await db.query("DROP TABLE glowbb.assessment_monthly");
@@ -458,7 +473,228 @@ test("failed operational setup rolls back and can retry without poisoning the da
           .prepare("SELECT MAX(version) AS version FROM schema_version")
           .get()
       ).version,
+      4,
+    );
+  } finally {
+    await app.close();
+    await db.close();
+  }
+});
+
+test("PostgreSQL migration preserves attendance while merging profiles, isolating preferences and backing up replacement", async () => {
+  const { parseRows, inspectImport, hash } =
+    await import("../server/domain.js");
+  const db = await database();
+  try {
+    const actor = (
+      await db
+        .prepare("SELECT id FROM users WHERE username=?")
+        .get("__local_workspace__")
+    ).id;
+    const headers = [...HEADERS, "Name/Social Risk Factor(s)"];
+    const source = (risk, member = "same", date = "04") =>
+      parseRows([
+        headers,
+        [
+          member,
+          "MALE",
+          "65",
+          "MALAY",
+          "CFS1",
+          "YES",
+          "YES",
+          "Movement",
+          "Physical",
+          `2026-05-${date}, 09:00 AM - 10:00 AM`,
+          risk,
+        ],
+      ]);
+    const first = source("");
+    first.mode = "merge";
+    await db.previews.put("first", first, actor);
+    await db.previews.confirm("first", actor);
+    const update = source("0");
+    update.mode = "merge";
+    await db.previews.put("update", update, actor);
+    const result = await db.previews.confirm("update", actor);
+    assert.equal(result.imported, 0);
+    assert.equal(result.updatedProfiles, 1);
+    const data = await db.storage.readData(db);
+    assert.equal(data.attendance.length, 1);
+    assert.equal(data.participants[0].riskRaw, "0");
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT count(*)::integer n FROM risk_observations")
+          .get()
+      ).n,
       2,
+    );
+    const duplicate = source("0");
+    duplicate.mode = "merge";
+    assert.equal(inspectImport(duplicate, data).fresh.length, 0);
+    await db
+      .prepare("INSERT INTO staff_preferences VALUES(?,?)")
+      .run(actor, JSON.stringify({ views: [{ name: "Outreach" }] }));
+    assert.match(
+      (
+        await db
+          .prepare("SELECT value FROM staff_preferences WHERE user_id=?")
+          .get(actor)
+      ).value,
+      /Outreach/,
+    );
+    const replacement = source("A;B", "new", "05");
+    replacement.mode = "replace";
+    replacement.fingerprint = hash(data);
+    await db.previews.put("replacement", replacement, actor);
+    await assert.rejects(
+      () => db.previews.confirm("replacement", actor),
+      /confirmation/,
+    );
+    await db.previews.confirm("replacement", actor, {
+      confirmation: "REPLACE ATTENDANCE",
+    });
+    const backup = JSON.parse(
+      (await db.prepare("SELECT payload FROM attendance_backups").get())
+        .payload,
+    );
+    assert.equal(backup.attendance.length, 1);
+    assert.equal(
+      backup.attendanceRows[0].source_session,
+      "2026-05-04, 09:00 AM - 10:00 AM",
+    );
+    const after = await db.storage.readData(db);
+    assert.equal(after.attendance.length, 1);
+    assert.equal(after.participants.length, 2);
+  } finally {
+    await db.close();
+  }
+});
+
+test("PostgreSQL needs profiles, voluntary feedback, accessibility reviews and action revisions survive API requests", async () => {
+  const db = await database(),
+    app = await serve(createApp(db));
+  try {
+    const preview = await json(
+      await app.request("/api/import/preview", "POST", upload()),
+    );
+    await json(
+      await app.request("/api/import/confirm", "POST", { id: preview.id }),
+    );
+    const participant = (await db.storage.readData(db)).participants[0];
+    const p = await json(
+      await app.request("/api/participants/" + participant.id),
+    );
+    assert.equal(p.revision, 0);
+    const details = {
+      basic: { preferredLanguage: "Malay" },
+      preferences: { responded: true, interests: ["Games"] },
+      needs: [
+        {
+          category: "Transport assistance",
+          status: "Not assessed",
+          source: "Unconfirmed",
+          date: "",
+        },
+      ],
+    };
+    await json(
+      await app.request(
+        "/api/participants/" + participant.id + "/profile",
+        "PUT",
+        {
+          revision: 0,
+          details,
+          source: "Participant-reported",
+          effectiveDate: "2026-10-20",
+        },
+      ),
+    );
+    await json(
+      await app.request(
+        "/api/participants/" + participant.id + "/profile",
+        "PUT",
+        { revision: 0, details, source: "Participant-reported" },
+      ),
+      409,
+    );
+    const persisted = await json(
+      await app.request("/api/participants/" + participant.id),
+    );
+    assert.equal(persisted.details.basic.preferredLanguage, "Malay");
+    assert.equal(persisted.details.needs[0].status, "Not assessed");
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT count(*)::integer n FROM profile_history")
+          .get()
+      ).n,
+      1,
+    );
+    await json(
+      await app.request(
+        "/api/participants/" + participant.id + "/feedback",
+        "POST",
+        {
+          id: "pg-feedback",
+          consent: true,
+          date: "2026-10-20",
+          source: "Participant-reported",
+          method: "survey",
+          preferences: { interests: ["Games"], responded: true },
+          barriers: [],
+          comments: "",
+        },
+      ),
+    );
+    const programmes = await json(await app.request("/api/needs/programmes"));
+    await json(
+      await app.request(
+        "/api/programmes/" + programmes[0].id + "/profile",
+        "PUT",
+        {
+          revision: programmes[0].revision,
+          outcomes: "Staff-reviewed social participation objective",
+          offeringStatus: "Current offering",
+          interestCategories: ["Games"],
+          intendedNeeds: [],
+          accessibility: { seatedOption: "Available by arrangement" },
+        },
+      ),
+    );
+    const action = {
+      kind: "action",
+      revision: 0,
+      title: "Review stated demand",
+      priority: "Medium",
+      status: "Proposed",
+      owner: "Planner",
+      due: "2026-12-01",
+    };
+    await json(
+      await app.request("/api/needs/actions/pg-action", "PUT", action),
+    );
+    const actions = await json(await app.request("/api/needs/actions"));
+    assert.equal(actions[0].title, "Review stated demand");
+    await json(
+      await app.request("/api/needs/actions/pg-action", "PUT", {
+        ...actions[0],
+        id: undefined,
+        status: "Under Review",
+      }),
+    );
+    const report = await json(await app.request("/api/needs/overview"));
+    assert.equal(report.registry.available, false);
+    assert.equal(report.responses.interests.suppressed, true);
+    assert.equal(report.summary.unique, 1);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT count(*)::integer n FROM participant_feedback")
+          .get()
+      ).n,
+      1,
     );
   } finally {
     await app.close();

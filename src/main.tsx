@@ -1,5 +1,24 @@
+import { NeedsManagement, NeedsPage } from "./needs-ui";
 import { api } from "./api";
-import { useEffect, useRef, useState, lazy, Suspense } from "react";
+import {
+  PersonalWorkspace,
+  SocialRisk,
+  RiskSettings,
+  Login,
+  ProgrammeCompare,
+  metrics,
+  reportingFilters,
+} from "./workspace";
+import {
+  useEffect,
+  useRef,
+  useState,
+  lazy,
+  Suspense,
+  Children,
+  Fragment,
+  isValidElement,
+} from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   Activity,
@@ -36,6 +55,7 @@ import type {
   User,
   Count,
   Preview,
+  Preferences,
   Decision,
 } from "./types";
 import "./styles.css";
@@ -122,12 +142,61 @@ function Select({
   value,
   onChange,
   children,
+  multiple = false,
 }: {
+  multiple?: boolean;
   label: string;
   value: string;
   onChange: (v: string) => void;
   children: ReactNode;
 }) {
+  if (multiple) {
+    let selected: string[] = [];
+    try {
+      selected = value.startsWith("[")
+        ? JSON.parse(value)
+        : value
+          ? [value]
+          : [];
+    } catch {
+      selected = [];
+    }
+    return (
+      <div className="field work-multiselect">
+        <span>{label}</span>
+        <details>
+          <summary>
+            {selected.length ? `${selected.length} selected` : "All"}
+          </summary>
+          <button className="text-button" onClick={() => onChange("")}>
+            Clear {label.toLowerCase()}
+          </button>
+          {Children.toArray(children)
+            .filter(isValidElement<{ value?: string; children?: ReactNode }>)
+            .map((child, i) => {
+              const v = String(child.props.value ?? child.props.children ?? "");
+              return v ? (
+                <label key={i} className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(v)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...selected, v]
+                        : selected.filter((x) => x !== v);
+                      onChange(
+                        next.length > 1 ? JSON.stringify(next) : next[0] || "",
+                      );
+                    }}
+                  />
+                  {child.props.children}
+                </label>
+              ) : null;
+            })}
+        </details>
+      </div>
+    );
+  }
   return (
     <label className="field">
       <span>{label}</span>
@@ -220,11 +289,13 @@ function Modal({
   children,
   onClose,
   wide = false,
+  drawer = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  drawer?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -236,7 +307,7 @@ function Modal({
     <dialog
       ref={ref}
       aria-label={title}
-      className={wide ? "modal wide" : "modal"}
+      className={`${wide ? "modal wide" : "modal"} ${drawer ? "programme-drawer" : ""}`}
       onCancel={onClose}
     >
       <div className="modal-head">
@@ -267,7 +338,17 @@ function Brand() {
   );
 }
 function App() {
-  const user: User = { username: "Local workspace", role: "admin" };
+  const [user, setUser] = useState<User | null>(null),
+    [authError, setAuthError] = useState(""),
+    [needsLogin, setNeedsLogin] = useState(false);
+  useEffect(() => {
+    api<User>("/api/me")
+      .then(setUser)
+      .catch((e) => {
+        if (e.status === 401) setNeedsLogin(true);
+        else setAuthError(e.message);
+      });
+  }, []);
   const [tab, setTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>(emptyFilters),
     [data, setData] = useState<Dashboard | null>(null),
@@ -278,6 +359,7 @@ function App() {
     [revision, setRevision] = useState(0),
     [toast, setToast] = useState("");
   useEffect(() => {
+    if (!user) return;
     let live = true;
     setLoading(true);
     api<Dashboard>("/api/dashboard?" + new URLSearchParams(filters))
@@ -290,6 +372,10 @@ function App() {
       .catch((e) => {
         if (live) {
           setData(null);
+          if (e.status === 401) {
+            setUser(null);
+            setNeedsLogin(true);
+          }
           setError(e.message);
         }
       })
@@ -299,7 +385,20 @@ function App() {
     return () => {
       live = false;
     };
-  }, [filters, revision]);
+  }, [filters, revision, user]);
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+    api<Preferences>("/api/preferences")
+      .then((p) => {
+        if (live && p.draft)
+          setFilters(reportingFilters(p.draft, emptyFilters));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [user]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 6000);
@@ -310,43 +409,90 @@ function App() {
     setToast(message);
   };
   const tabs = [
+    { name: "Who Are We Serving?", icon: Users },
+    { name: "Gaps and Participation Barriers", icon: HeartHandshake },
+    { name: "Programme Planning and Actions", icon: ClipboardList },
     { name: "Overview", icon: LayoutDashboard },
     { name: "Programme Performance", icon: BarChart3 },
     { name: "Audience & Outreach", icon: Users },
     { name: "Planning & Recommendations", icon: ClipboardList },
     { name: "Operations & Screening", icon: Activity },
+    { name: "Social Risk Analysis", icon: ShieldCheck },
+    { name: "Explore the Data", icon: ChartNoAxesCombined },
+    { name: "Programme Alignment", icon: BarChart3 },
+    { name: "Data Quality and Administration", icon: ShieldCheck },
   ];
   const title =
     tab === "Overview"
-      ? "Programme impact & outreach"
-      : tab === "Programme Performance"
-        ? "Programme performance"
-        : tab === "Audience & Outreach"
-          ? "Audience & outreach gaps"
-          : tab === "Operations & Screening"
-            ? "Operations & health screening"
-            : "Programme planning recommendations";
+      ? "Management overview"
+      : [
+            "Who Are We Serving?",
+            "Gaps and Participation Barriers",
+            "Programme Planning and Actions",
+            "Programme Alignment",
+            "Data Quality and Administration",
+          ].includes(tab)
+        ? tab
+        : tab === "Programme Performance"
+          ? "Programme performance"
+          : tab === "Social Risk Analysis" || tab === "Explore the Data"
+            ? tab
+            : tab === "Audience & Outreach"
+              ? "Audience & outreach gaps"
+              : tab === "Operations & Screening"
+                ? "Operations & health screening"
+                : "Programme planning recommendations";
   const sensitive =
     ["gender", "race", "ageBand", "client", "boundary"].some(
       (k) => filters[k as keyof Filters],
     ) || filters.target !== "all";
+  if (needsLogin && !user)
+    return (
+      <Login
+        onDone={(u) => {
+          setUser(u);
+          setNeedsLogin(false);
+        }}
+      />
+    );
+  if (!user)
+    return (
+      <main className="login-shell">
+        <div className="panel" role={authError ? "alert" : "status"}>
+          {authError || "Loading staff workspace?"}
+          <button className="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+      </main>
+    );
   return (
     <div className="app">
       <aside className="sidebar">
         <Brand />
         <div className="workspace-label">STAFF WORKSPACE</div>
         <nav aria-label="Main navigation">
-          {tabs.map((t) => (
-            <button
-              key={t.name}
-              className={tab === t.name ? "nav-item active" : "nav-item"}
-              aria-current={tab === t.name ? "page" : undefined}
-              onClick={() => setTab(t.name)}
-            >
-              <t.icon size={20} />
-              <span>{t.name}</span>
-              {tab === t.name && <ChevronRight size={16} />}
-            </button>
+          {tabs.map((t, index) => (
+            <Fragment key={t.name}>
+              {index === 0 && (
+                <div className="nav-section-label">ANALYSIS LEVELS</div>
+              )}
+              {index === 3 && (
+                <div className="nav-section-label">OVERVIEW & TOOLS</div>
+              )}
+              <button
+                key={t.name}
+                className={tab === t.name ? "nav-item active" : "nav-item"}
+                aria-current={tab === t.name ? "page" : undefined}
+                onClick={() => setTab(t.name)}
+              >
+                <t.icon size={20} />
+                <span>
+                  {t.name === "Overview" ? "Management Overview" : t.name}
+                </span>
+                {tab === t.name && <ChevronRight size={16} />}
+              </button>
+            </Fragment>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -361,6 +507,15 @@ function App() {
               </p>
             </div>
           </div>
+          {user.role === "admin" && (
+            <button
+              className="nav-item"
+              onClick={() => setModal("risk-settings")}
+            >
+              <ShieldCheck size={20} />
+              Risk & staff configuration
+            </button>
+          )}
           {user.role === "admin" && (
             <button className="nav-item" onClick={() => setModal("settings")}>
               <Settings2 size={20} />
@@ -384,8 +539,24 @@ function App() {
             <span className="green-dot" /> Programme intelligence
           </span>
           <div>
+            {user.username !== "Local workspace" && (
+              <button
+                className="text-button"
+                onClick={async () => {
+                  await api("/api/logout", { method: "POST" });
+                  setData(null);
+                  setUser(null);
+                  setNeedsLogin(true);
+                }}
+              >
+                Sign out
+              </button>
+            )}
             <span className="restricted">
-              <ShieldCheck size={15} /> Local workspace
+              <ShieldCheck size={15} />{" "}
+              {user.username === "Local workspace"
+                ? "Local workspace"
+                : "Staff access"}
             </span>
             <span className="top-date">{pretty(sgToday())}</span>
           </div>
@@ -399,14 +570,24 @@ function App() {
               <h1>{title}</h1>
               <p className="muted">
                 {tab === "Overview"
-                  ? "A clearer view of who we reach, and where we can go next."
-                  : tab === "Programme Performance"
-                    ? "Compare reach and engagement with the right context."
-                    : tab === "Audience & Outreach"
-                      ? "Explore participation patterns and opportunities to connect."
-                      : tab === "Operations & Screening"
-                        ? "Monitor participation, client outreach and reported monthly assessments."
-                        : "Turn observed participation into thoughtful plans for the next 3–6 months."}
+                  ? "Who participates, what information is missing, and which actions need review."
+                  : tab === "Who Are We Serving?"
+                    ? "Understand current participant profiles and explicitly reported needs."
+                    : tab === "Gaps and Participation Barriers"
+                      ? "Review observed engagement, voluntary feedback and information gaps."
+                      : tab === "Programme Planning and Actions"
+                        ? "Agree next steps using documented needs and transparent evidence."
+                        : tab === "Programme Alignment"
+                          ? "Compare programme supply, unique reach and stated demand."
+                          : tab === "Data Quality and Administration"
+                            ? "Keep source completeness and organisation definitions visible."
+                            : tab === "Programme Performance"
+                              ? "Compare reach and engagement with the right context."
+                              : tab === "Audience & Outreach"
+                                ? "Explore participation patterns and opportunities to connect."
+                                : tab === "Operations & Screening"
+                                  ? "Monitor participation, client outreach and reported monthly assessments."
+                                  : "Turn observed participation into thoughtful plans for the next 3–6 months."}
               </p>
             </div>
             <div className="heading-actions">
@@ -478,6 +659,13 @@ function App() {
               ![
                 "Planning & Recommendations",
                 "Operations & Screening",
+                "Explore the Data",
+                "Social Risk Analysis",
+                "Who Are We Serving?",
+                "Gaps and Participation Barriers",
+                "Programme Planning and Actions",
+                "Programme Alignment",
+                "Data Quality and Administration",
               ].includes(tab) ? (
                 <div className="welcome panel">
                   <div className="icon-tile">
@@ -543,12 +731,47 @@ function App() {
                     onProgramme={setProgramme}
                   />
                 </Suspense>
-              ) : tab === "Overview" ? (
-                <Overview
+              ) : [
+                  "Who Are We Serving?",
+                  "Gaps and Participation Barriers",
+                  "Programme Planning and Actions",
+                  "Programme Alignment",
+                  "Data Quality and Administration",
+                ].includes(tab) ? (
+                <NeedsPage
+                  level={
+                    tab === "Who Are We Serving?"
+                      ? "profile"
+                      : tab === "Gaps and Participation Barriers"
+                        ? "gaps"
+                        : tab === "Programme Planning and Actions"
+                          ? "actions"
+                          : tab === "Programme Alignment"
+                            ? "alignment"
+                            : "quality"
+                  }
+                  filters={filters}
+                  user={user}
+                  onRefresh={() => refresh("Reviewed needs data refreshed.")}
+                />
+              ) : tab === "Social Risk Analysis" ? (
+                <SocialRisk user={user} />
+              ) : tab === "Explore the Data" ? (
+                <PersonalWorkspace
                   data={data}
                   filters={filters}
                   setFilters={setFilters}
-                  onProgramme={setProgramme}
+                  user={user}
+                  explore
+                  onRisk={() => setTab("Social Risk Analysis")}
+                />
+              ) : tab === "Overview" ? (
+                <NeedsManagement
+                  data={data}
+                  filters={filters}
+                  setFilters={setFilters}
+                  user={user}
+                  onNavigate={setTab}
                 />
               ) : tab === "Programme Performance" ? (
                 <Programmes data={data} onProgramme={setProgramme} />
@@ -596,6 +819,17 @@ function App() {
             refresh("Import confirmed. Dashboard updated from saved records.");
           }}
         />
+      )}
+      {modal === "risk-settings" && user.role === "admin" && (
+        <Modal
+          title="Organisation reporting controls"
+          onClose={() => setModal("")}
+          wide
+        >
+          <RiskSettings
+            onSaved={() => refresh("Organisation definitions saved.")}
+          />
+        </Modal>
       )}
       {modal === "settings" && data && (
         <SettingsDialog
@@ -757,6 +991,20 @@ function FilterBar({
           />
         </label>
         <Select
+          multiple
+          label="Programme"
+          value={filters.programme}
+          onChange={(v) => update("programme", v)}
+        >
+          <option value="">All programmes</option>
+          {data?.options.programmes.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          multiple
           label="AAP domain"
           value={filters.domain}
           onChange={(v) => update("domain", v)}
@@ -795,18 +1043,6 @@ function FilterBar({
       </div>
       {advanced && (
         <div className="advanced-filters">
-          <Select
-            label="Programme"
-            value={filters.programme}
-            onChange={(v) => update("programme", v)}
-          >
-            <option value="">All programmes</option>
-            {data?.options.programmes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
           <Select
             label="Age"
             value={filters.ageBand}
@@ -872,6 +1108,56 @@ function FilterBar({
             <option value="false">Outside boundary</option>
             <option value="null">Unknown</option>
           </Select>
+          <p className="muted">
+            CFS and living-circumstance analysis is available in the protected
+            Who Are We Serving? view; arbitrary sensitive cross-filters are
+            restricted.
+          </p>
+
+          <Select
+            label="Day of week"
+            value={filters.weekday || ""}
+            onChange={(v) => update("weekday", v)}
+          >
+            <option value="">All days</option>
+            {[
+              "Sunday",
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ].map((x, i) => (
+              <option key={x} value={i}>
+                {x}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Time of day"
+            value={filters.timeSlot || ""}
+            onChange={(v) => update("timeSlot", v)}
+          >
+            <option value="">All time slots</option>
+            {["Morning", "Afternoon", "Evening"].map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </Select>
+          <Select
+            label="First observed / returning"
+            value={filters.observed || ""}
+            onChange={(v) => update("observed", v)}
+          >
+            <option value="">All participants</option>
+            <option value="first">First observed in this period</option>
+            <option value="returning">Previously observed</option>
+          </Select>
+          <p className="muted">
+            Different fields combine using AND; choices within Programme or AAP
+            domain combine using OR. Risk cross-filters are restricted to
+            prevent disclosure.
+          </p>
         </div>
       )}
     </div>
@@ -1120,6 +1406,23 @@ function Programmes({
           | "returning"
         >
       >("unique");
+  const [page, setPage] = useState(0),
+    [columns, setColumns] = useState<string[]>([
+      "sessions",
+      "unique",
+      "male",
+      "minority",
+      "attendance",
+      "average",
+    ]),
+    [savedMessage, setSavedMessage] = useState("");
+  useEffect(() => {
+    api<{ programmeColumns?: string[] }>("/api/preferences")
+      .then((p) => {
+        if (p.programmeColumns) setColumns(p.programmeColumns);
+      })
+      .catch(() => {});
+  }, []);
   const list = data.programmes
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
@@ -1160,56 +1463,111 @@ function Programmes({
           ))}
         </Select>
       </div>
-      <div className="programme-table">
-        <div className="programme-row table-header">
-          <span>Programme / AAP domain</span>
-          <span>Sessions</span>
-          <span>Unique seniors</span>
-          <span>Attendance</span>
-          <span>Avg / session</span>
-          <span>Repeat rate</span>
-          <span>Male reach</span>
-          <span>Minority reach</span>
-          <span />
+      <details>
+        <summary>Choose visible programme columns</summary>
+        <div className="work-checks">
+          {Object.entries(metrics).map(([k, [label]]) => (
+            <label key={k}>
+              <input
+                type="checkbox"
+                checked={columns.includes(k)}
+                onChange={(e) =>
+                  setColumns(
+                    e.target.checked
+                      ? [...columns, k]
+                      : columns.filter((x) => x !== k),
+                  )
+                }
+              />
+              {label}
+            </label>
+          ))}
         </div>
-        {list.map((p) => (
-          <button
-            className="programme-row"
-            key={p.id}
-            onClick={() => onProgramme(p)}
-          >
-            <span className="programme-name">
-              <strong>{p.name}</strong>
-              <small>
-                {p.domain} ·{" "}
-                {p.sessions === 1
-                  ? "One observed session"
-                  : "Recurring in available records"}
-              </small>
-            </span>
-            <span data-label="Sessions">{p.sessions}</span>
-            <span data-label="Unique seniors">
-              <b>{p.unique}</b>
-              <small>{p.firstObserved} first observed</small>
-            </span>
-            <span data-label="Attendance">{number(p.attendance)}</span>
-            <span data-label="Avg / session">{number(p.average)}</span>
-            <span data-label="Repeat rate">
-              {pct(p.repeatRate)}
-              <small>{p.repeat} seniors in 2+ sessions</small>
-            </span>
-            <span data-label="Male reach">
-              {p.male}
-              <small>{pct(p.malePct)} of known gender</small>
-            </span>
-            <span data-label="Minority reach">
-              {p.minority}
-              <small>{pct(p.minorityPct)} of known race</small>
-            </span>
-            <ChevronRight size={17} />
-          </button>
-        ))}
+        <Button
+          onClick={async () => {
+            try {
+              const prefs =
+                await api<Record<string, unknown>>("/api/preferences");
+              await api("/api/preferences", {
+                method: "PUT",
+                body: JSON.stringify({ ...prefs, programmeColumns: columns }),
+              });
+              setSavedMessage("Programme columns saved to your account.");
+            } catch (e) {
+              setSavedMessage((e as Error).message);
+            }
+          }}
+        >
+          Save programme columns
+        </Button>
+        {savedMessage && <p role="status">{savedMessage}</p>}
+      </details>
+      <div className="work-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Programme / AAP domain</th>
+              {columns
+                .filter((k) => metrics[k])
+                .map((k) => (
+                  <th key={k}>{metrics[k][0]}</th>
+                ))}
+            </tr>
+          </thead>
+          <tbody>
+            {list
+              .slice(
+                Math.min(page, Math.max(0, Math.ceil(list.length / 20) - 1)) *
+                  20,
+                (Math.min(page, Math.max(0, Math.ceil(list.length / 20) - 1)) +
+                  1) *
+                  20,
+              )
+              .map((p) => (
+                <tr key={p.id}>
+                  <th>
+                    <button
+                      className="text-button"
+                      onClick={() => onProgramme(p)}
+                    >
+                      {p.name}
+                    </button>
+                    <small>{p.domain}</small>
+                  </th>
+                  {columns
+                    .filter((k) => metrics[k])
+                    .map((k) => (
+                      <td key={k}>{number(Number(p[k as keyof Stats]))}</td>
+                    ))}
+                </tr>
+              ))}
+          </tbody>
+        </table>
       </div>
+      <div className="work-actions">
+        <Button
+          disabled={page === 0}
+          onClick={() => setPage(Math.max(0, page - 1))}
+        >
+          Previous page
+        </Button>
+        <span>{list.length} programmes ? 20 per page</span>
+        <Button
+          disabled={(page + 1) * 20 >= list.length}
+          onClick={() => setPage(page + 1)}
+        >
+          Next page
+        </Button>
+      </div>
+      <details>
+        <summary>Compare Programmes ? select 2?4</summary>
+        <ProgrammeCompare
+          data={{ ...data, programmes: list }}
+          onProgramme={onProgramme}
+          columns={columns}
+          setColumns={setColumns}
+        />
+      </details>
       {list.length === 0 && (
         <div className="empty">No programmes match your search.</div>
       )}
@@ -1509,6 +1867,11 @@ function Planning({
                   max="100"
                   aria-label="Target achievement"
                 />
+                <small>
+                  {t.previousCurrent == null
+                    ? "No valid prior-period comparison"
+                    : `${t.previousCurrent} in the previous equivalent elapsed period`}
+                </small>
                 <p>
                   {t.gap} remaining · {t.daysRemaining} days left
                 </p>
@@ -1652,13 +2015,28 @@ function Planning({
                     {r.limitations} Sufficient evidence requires at least{" "}
                     {data.settings.minSessions} sessions and{" "}
                     {data.settings.minParticipants} unique seniors. Expand flags
-                    reach of at least 25% of selected senior reach; Improve
-                    flags a decline over 25% between two complete observed
-                    months, each meeting the session threshold. Otherwise
-                    sufficient-evidence programmes are Maintain. These rules are
-                    prompts for review.
+                    reach of at least 25% of selected senior reach; Improve also
+                    requires a documented confirmed-demand source and review
+                    date. Improve flags a decline over 25% between two complete
+                    observed months, each meeting the session threshold.
+                    Otherwise sufficient-evidence programmes are Maintain. These
+                    rules are prompts for review.
                   </p>
                 </details>
+                {decision?.assigned && (
+                  <p>
+                    Assigned to {decision.assigned}
+                    {decision.targetDate
+                      ? ` ? Target: ${decision.targetDate}`
+                      : ""}
+                  </p>
+                )}
+                {decision?.plannedAction && (
+                  <p>Planned action: {decision.plannedAction}</p>
+                )}
+                {decision?.outcome && (
+                  <p>Recorded outcome: {decision.outcome}</p>
+                )}
                 {decision?.notes && (
                   <p className="planning-notes">
                     Staff planning notes: {decision.notes}
@@ -1778,7 +2156,7 @@ function ProgrammeDialog({
 }) {
   const rec = data.recommendations.find((r) => r.id === p.id);
   return (
-    <Modal title={p.name} onClose={onClose} wide>
+    <Modal title={p.name} onClose={onClose} wide drawer>
       <div className="detail-intro">
         <span className="badge soft">{p.domain}</span>
         <span>
@@ -1857,14 +2235,25 @@ function DecisionDialog({
   const [status, setStatus] = useState(existing?.status || "For review"),
     [notes, setNotes] = useState(existing?.notes || ""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [assigned, setAssigned] = useState(existing?.assigned || ""),
+    [plannedAction, setPlannedAction] = useState(existing?.plannedAction || ""),
+    [targetDate, setTargetDate] = useState(existing?.targetDate || ""),
+    [outcome, setOutcome] = useState(existing?.outcome || "");
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
       await api("/api/decisions/" + r.id, {
         method: "PUT",
-        body: JSON.stringify({ status, notes }),
+        body: JSON.stringify({
+          status,
+          notes,
+          assigned,
+          plannedAction,
+          targetDate,
+          outcome,
+        }),
       });
       onDone();
     } catch (e) {
@@ -1889,6 +2278,38 @@ function DecisionDialog({
             <option key={x}>{x}</option>
           ))}
         </Select>
+        <label className="field">
+          Assigned staff member
+          <input
+            value={assigned}
+            onChange={(e) => setAssigned(e.target.value)}
+            maxLength={200}
+          />
+        </label>
+        <label className="field">
+          Planned action
+          <textarea
+            value={plannedAction}
+            onChange={(e) => setPlannedAction(e.target.value)}
+            maxLength={2000}
+          />
+        </label>
+        <label className="field">
+          Target date
+          <input
+            type="date"
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          Outcome after implementation
+          <textarea
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value)}
+            maxLength={2000}
+          />
+        </label>
         <label className="field">
           <span>Planning notes & resource assumptions</span>
           <textarea
@@ -1925,7 +2346,9 @@ function TargetDialog({
   onDone: () => void;
 }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [start, setStart] = useState(sgToday()),
+    [end, setEnd] = useState("");
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -1971,14 +2394,56 @@ function TargetDialog({
             required
           />
         </label>
+        <label className="field">
+          Target period
+          <select
+            defaultValue="Custom range"
+            onChange={(e) => {
+              const kind = e.target.value;
+              if (kind === "Custom range") return;
+              const now = sgToday(),
+                y = Number(now.slice(0, 4)),
+                m = Number(now.slice(5, 7)) - 1;
+              const base = kind === "Quarter" ? Math.floor(m / 3) * 3 : m;
+              const months =
+                kind === "Monthly" ? 1 : kind === "Six months" ? 6 : 3;
+              setStart(
+                new Date(Date.UTC(y, base, 1)).toISOString().slice(0, 10),
+              );
+              setEnd(
+                new Date(Date.UTC(y, base + months, 0))
+                  .toISOString()
+                  .slice(0, 10),
+              );
+            }}
+          >
+            <option>Custom range</option>
+            <option>Monthly</option>
+            <option>Quarter</option>
+            <option>Three months</option>
+            <option>Six months</option>
+          </select>
+        </label>
         <div className="form-row">
           <label className="field">
             <span>Start date</span>
-            <input name="start" type="date" defaultValue={sgToday()} required />
+            <input
+              name="start"
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              required
+            />
           </label>
           <label className="field">
             <span>End date</span>
-            <input name="end" type="date" required />
+            <input
+              name="end"
+              type="date"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              required
+            />
           </label>
         </div>
         <label className="field">
@@ -2023,7 +2488,9 @@ function ImportDialog({
   const [preview, setPreview] = useState<Preview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [consent, setConsent] = useState(false);
+    [consent, setConsent] = useState(false),
+    [mode, setMode] = useState("merge"),
+    [confirmation, setConfirmation] = useState("");
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -2040,7 +2507,7 @@ function ImportDialog({
           `Choose a file smaller than ${maxFileMb} MB. Split larger attendance exports into smaller files.`,
         );
       setPreview(
-        await api<Preview>("/api/import/preview", {
+        await api<Preview>("/api/import/preview?mode=" + mode, {
           method: "POST",
           body: form,
         }),
@@ -2057,7 +2524,7 @@ function ImportDialog({
     try {
       await api("/api/import/confirm", {
         method: "POST",
-        body: JSON.stringify({ id: preview!.id }),
+        body: JSON.stringify({ id: preview!.id, confirmation }),
       });
       onDone();
     } catch (e) {
@@ -2097,6 +2564,21 @@ function ImportDialog({
     >
       {!preview ? (
         <form onSubmit={upload} className="form-stack">
+          <Select label="Import mode" value={mode} onChange={setMode}>
+            <option value="add">
+              Add New Records ? retain existing profiles
+            </option>
+            <option value="merge">Merge and Update Existing Records</option>
+            <option value="replace">
+              Full Replacement ? attendance only, backup required
+            </option>
+          </Select>
+          <p>
+            Merge keeps historical attendance, updates nonblank profile values
+            by Member ID, and retains existing values when incoming fields are
+            blank. Conflicting incoming nonblank values use source row order:
+            the last reviewed value wins.
+          </p>
           <div className="upload-area">
             <Upload size={32} />
             <h3>Bring your attendance records together</h3>
@@ -2115,8 +2597,10 @@ function ImportDialog({
           <details>
             <summary>Required column headers & source rules</summary>
             <p>
-              Name/Member ID, Gender, Name/Age, Name/Race, Name/CFS, Is Client,
-              Within Boundary, Activity Name, AAP Domain, Session Detail
+              Name/Member ID, Gender, optional Name/Current Living Arrangement
+              and Name/Marital Status, Name/Age, Name/Race, Name/CFS, optional
+              Name/Social Risk Factor(s), Is Client, Within Boundary, Activity
+              Name, AAP Domain, Session Detail
             </p>
             <p>
               Headers in row 1 of exactly one worksheet. Session example:
@@ -2139,6 +2623,11 @@ function ImportDialog({
           <div className="import-counts">
             {[
               ["Raw rows", preview.rawRows],
+              ["Existing matches", preview.matched ?? 0],
+              ["Profile updates", preview.updatedProfiles ?? 0],
+              ["Missing values", preview.missing ?? 0],
+              ["Resulting attendance", preview.resultingAttendance ?? 0],
+              ["Resulting profiles", preview.resultingParticipants ?? 0],
               ["Ready to import", preview.ready],
               ["Duplicates", preview.duplicates],
               ["Invalid", preview.invalid],
@@ -2154,8 +2643,10 @@ function ImportDialog({
             Attendance identity uses Member ID, exact trimmed programme name,
             date and both session times. Separate sessions on the same day
             remain separate. Existing member details and programme domains are
-            retained; conflicting rows are skipped. Future sessions are stored
-            but excluded from delivered attendance until their date.
+            retained in Add mode. Merge updates reviewed nonblank profile fields
+            and preserves blank incoming values; programme-domain conflicts
+            remain skipped. Future sessions are stored but excluded from
+            delivered attendance until their date.
           </Note>
           {preview.variants.length > 0 && (
             <div className="warning">
@@ -2224,6 +2715,24 @@ function ImportDialog({
               ))}
             </div>
           </details>
+          {mode === "replace" && (
+            <div className="warning">
+              <h3>Replace all saved attendance</h3>
+              <p>
+                A transactional database backup will be created. Existing
+                profiles, targets, programme metadata and decisions remain. All
+                attendance is replaced by valid imported entries. Invalid or
+                conflicting rows are excluded.
+              </p>
+              <label className="field">
+                Type REPLACE ATTENDANCE to confirm
+                <input
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
           <label className="checkbox">
             <input
               type="checkbox"
@@ -2231,8 +2740,9 @@ function ImportDialog({
               onChange={(e) => setConsent(e.target.checked)}
             />
             <span>
-              I reviewed the preview and issue report. Import ready rows only;
-              retain existing records and skip conflicts.
+              I reviewed the preview, mode, profile updates and issue report.
+              Apply the displayed changes; skip invalid rows and unresolved
+              programme conflicts.
             </span>
           </label>
           <div className="modal-actions">
@@ -2247,10 +2757,17 @@ function ImportDialog({
             </Button>
             <Button
               primary
-              disabled={busy || !consent || !preview.ready}
+              disabled={
+                busy ||
+                !consent ||
+                (!preview.ready && !preview.updatedProfiles) ||
+                (mode === "replace" && confirmation !== "REPLACE ATTENDANCE")
+              }
               onClick={confirm}
             >
-              {busy ? "Saving…" : `Confirm ${preview.ready} attendance entries`}
+              {busy
+                ? "Saving…"
+                : `Confirm ${preview.ready} entries and ${preview.updatedProfiles || 0} profile updates`}
             </Button>
           </div>
         </>

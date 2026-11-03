@@ -14,6 +14,14 @@ export const HEADERS = [
   "AAP Domain",
   "Session Detail",
 ];
+export const RISK_HEADER = "Name/Social Risk Factor(s)";
+export const OPTIONAL_PROFILE_HEADERS = {
+  livingRaw: "Name/Current Living Arrangement",
+  maritalRaw: "Name/Marital Status",
+  preferredLanguage: "Name/Preferred Language",
+  registrationDate: "Name/Registration Date",
+  cfsAssessedOn: "Name/CFS Assessment Date",
+};
 export const defaults = {
   seniorAge: 60,
   minority: ["MALAY", "INDIAN", "OTHERS"],
@@ -21,6 +29,19 @@ export const defaults = {
   minSessions: 3,
   minParticipants: 5,
   privacyMinimum: 5,
+  riskMappings: {},
+  multipleRiskFactors: false,
+  timeBands: [720, 1080],
+  inactivityBands: [30, 60, 90],
+  planningPriorities: {
+    quality: "Medium",
+    barrier: "High",
+    interest: "Medium",
+  },
+  cfsMappings: {},
+  livingGroups: {},
+  domainGroups: {},
+  registry: { complete: false, snapshot: null, asOf: null, source: null },
 };
 export const hash = (x) =>
   createHash("sha256").update(JSON.stringify(x)).digest("hex");
@@ -79,7 +100,11 @@ export function parseRows(matrix) {
       return;
     }
     const raw = Object.fromEntries(headers.map((h, j) => [h, str(values[j])]));
-    const signature = hash(HEADERS.map((h) => raw[h]));
+    const signature = hash(
+      [...HEADERS, RISK_HEADER, ...Object.values(OPTIONAL_PROFILE_HEADERS)].map(
+        (h) => raw[h],
+      ),
+    );
     if (seen.has(signature)) exactDuplicates++;
     seen.add(signature);
     try {
@@ -129,6 +154,14 @@ export function parseRows(matrix) {
         gender,
         race,
         cfs: raw["Name/CFS"] || null,
+        ...(headers.includes(RISK_HEADER)
+          ? { riskRaw: raw[RISK_HEADER] || null }
+          : {}),
+        ...Object.fromEntries(
+          Object.entries(OPTIONAL_PROFILE_HEADERS)
+            .filter(([, h]) => headers.includes(h))
+            .map(([key, h]) => [key, raw[h] || null]),
+        ),
         client,
         boundary,
       };
@@ -227,7 +260,12 @@ export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
 export async function readFile(buffer, name) {
   return parseRows(await readMatrix(buffer, name));
 }
-export function inspectImport(parsed, existing) {
+export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
+  const updates = new Map();
+  const missing = [];
+  const original = existing;
+  const originalAttendance = new Set(existing.attendance.map((a) => a.id));
+  if (mode === "replace") existing = { ...existing, attendance: [] };
   const participants = new Map(existing.participants.map((p) => [p.id, p])),
     programmes = new Map(existing.programmes.map((p) => [p.id, p])),
     att = new Set(existing.attendance.map((a) => a.id));
@@ -246,25 +284,63 @@ export function inspectImport(parsed, existing) {
       variants.push([names.get(key), p.name]);
     else names.set(key, p.name);
   }
-  for (const r of parsed.rows) {
+  for (let r of parsed.rows) {
     const old = participants.get(r.participant.id),
       pg = programmes.get(r.programme.id);
+    const fields = [
+      "age",
+      "gender",
+      "race",
+      "cfs",
+      "client",
+      "boundary",
+      "riskRaw",
+      ...Object.keys(OPTIONAL_PROFILE_HEADERS),
+    ];
+    const empty = (v) =>
+      v === null ||
+      v === undefined ||
+      v === "" ||
+      v === "UNKNOWN" ||
+      v === "MISSING";
     const changes = old
-      ? ["age", "gender", "race", "cfs", "client", "boundary"].filter(
-          (k) => old[k] !== r.participant[k],
+      ? fields.filter(
+          (k) => !empty(r.participant[k]) && old[k] !== r.participant[k],
         )
       : [];
-    if (changes.length || (pg && pg.domain !== r.programme.domain)) {
+    for (const k of fields)
+      if (empty(r.participant[k])) missing.push({ row: r.row, field: k });
+    const differences = changes.filter((k) => !empty(old[k]));
+    if (
+      (mode === "add" && differences.length) ||
+      (pg && pg.domain !== r.programme.domain)
+    ) {
       conflicts.push({
         row: r.row,
-        message: changes.length
-          ? "Member details differ (" +
-            changes.join(", ") +
-            "). Row skipped; existing details retained."
-          : "Programme domain differs. Row skipped; existing domain retained.",
+        message:
+          "Member details or programme domain differ. Row skipped; existing details retained.",
       });
       continue;
     }
+    if (old && changes.length && mode !== "add") {
+      const next = { ...old };
+      for (const k of changes) next[k] = r.participant[k];
+      next.profileImportedAt = new Date().toISOString();
+      if (changes.includes("riskRaw"))
+        next.riskUpdatedAt = new Date().toISOString();
+      updates.set(next.id, next);
+      participants.set(next.id, next);
+      if (differences.length)
+        conflicts.push({
+          row: r.row,
+          action: "update",
+          message:
+            "Reviewed merge updates latest-known profile fields: " +
+            differences.join(", "),
+        });
+    }
+    // Attendance identity never includes changing profile attributes.
+    if (old) r = { ...r, participant: participants.get(old.id) };
     if (att.has(r.id)) {
       duplicates.push(r.row);
       continue;
@@ -277,6 +353,13 @@ export function inspectImport(parsed, existing) {
   }
   return {
     fresh,
+    updates: [...updates.values()],
+    missing,
+    mode,
+    matched: parsed.rows.filter((r) => originalAttendance.has(r.id)).length,
+    resultingAttendance: existing.attendance.length + fresh.length,
+    resultingParticipants: participants.size,
+    fingerprint: hash(original),
     duplicates,
     conflicts,
     warnings,
@@ -401,6 +484,7 @@ export function analytics(
   now = todaySG(),
   summaryOnly = false,
 ) {
+  settings = { ...defaults, ...settings };
   const pmap = new Map(data.participants.map((p) => [p.id, p]));
   const pgmap = new Map(data.programmes.map((p) => [p.id, p]));
   const smap = new Map(data.sessions.map((s) => [s.id, s]));
@@ -422,12 +506,29 @@ export function analytics(
   const isMinority = (p) => settings.minority.includes(p.race);
   const base = all.filter(
     (a) =>
+      (!filters.risk ||
+        riskState(a.p, settings).categories.includes(filters.risk) ||
+        riskState(a.p, settings).state === filters.risk) &&
+      matchesSelection(filters.cfs, a.p.cfs) &&
+      (!filters.weekday ||
+        String(new Date(a.s.date + "T00:00:00Z").getUTCDay()) ===
+          filters.weekday) &&
+      (!filters.timeSlot ||
+        (a.s.start < settings.timeBands[0]
+          ? "Morning"
+          : a.s.start < settings.timeBands[1]
+            ? "Afternoon"
+            : "Evening") === filters.timeSlot) &&
+      (!filters.observed ||
+        (filters.observed === "first"
+          ? !filters.from || first.get(a.p.id) >= filters.from
+          : filters.from && first.get(a.p.id) < filters.from)) &&
       (!filters.from || a.s.date >= filters.from) &&
       (!filters.to || a.s.date <= filters.to) &&
-      (!filters.domain || a.pg.domain === filters.domain) &&
-      (!filters.programme || a.pg.id === filters.programme) &&
-      (!filters.gender || a.p.gender === filters.gender) &&
-      (!filters.race || a.p.race === filters.race) &&
+      matchesSelection(filters.domain, a.pg.domain) &&
+      matchesSelection(filters.programme, a.pg.id) &&
+      matchesSelection(filters.gender, a.p.gender) &&
+      matchesSelection(filters.race, a.p.race) &&
       (!filters.client || String(a.p.client) === filters.client) &&
       (!filters.boundary || String(a.p.boundary) === filters.boundary) &&
       (!filters.ageBand ||
@@ -471,6 +572,22 @@ export function analytics(
     }
     const repeat = [...counts.values()].filter((s) => s.size > 1).length;
     return {
+      riskRecorded: people.filter(
+        (p) => riskState(p, settings).state === "recorded",
+      ).length,
+      riskMissing: people.filter(
+        (p) => riskState(p, settings).state === "missing",
+      ).length,
+      riskUnmapped: people.filter(
+        (p) => riskState(p, settings).state === "unmapped",
+      ).length,
+      riskNoRisk: people.filter(
+        (p) => riskState(p, settings).state === "no-risk",
+      ).length,
+      clientReach: people.filter((p) => p.client === true).length,
+      nonClientReach: people.filter((p) => p.client === false).length,
+      inBoundary: people.filter((p) => p.boundary === true).length,
+      outBoundary: people.filter((p) => p.boundary === false).length,
       unique: people.length,
       male,
       minority,
@@ -636,9 +753,9 @@ export function analytics(
         "Saturday",
       ][new Date(a.s.date + "T00:00:00Z").getUTCDay()] +
       " · " +
-      (a.s.start < 720
+      (a.s.start < settings.timeBands[0]
         ? "Morning"
-        : a.s.start < 1080
+        : a.s.start < settings.timeBands[1]
           ? "Afternoon"
           : "Evening"),
   );
@@ -676,13 +793,24 @@ export function analytics(
         1 &&
       recent.every((t) => t.sessions >= settings.minSessions) &&
       recent[1].unique < recent[0].unique * 0.75;
+    const demandConfirmed =
+      p.optional.confirmedDemand === true &&
+      typeof p.optional.demandSource === "string" &&
+      p.optional.demandSource.trim() &&
+      typeof p.optional.demandDate === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(p.optional.demandDate) &&
+      Number.isFinite(Date.parse(p.optional.demandDate)) &&
+      new Date(p.optional.demandDate).toISOString().slice(0, 10) ===
+        p.optional.demandDate &&
+      p.optional.demandDate <= now;
     const category =
       evidence !== "Sufficient"
         ? "Review"
         : decline
           ? "Improve"
           : p.unique >=
-              Math.max(settings.minParticipants, summary.unique * 0.25)
+                Math.max(settings.minParticipants, summary.unique * 0.25) &&
+              demandConfirmed
             ? "Expand"
             : "Maintain";
     const reason =
@@ -732,6 +860,23 @@ export function analytics(
   }
   return {
     summary,
+    socialRisk: {
+      note: "Latest-known participant profile information; not historical assessments. Overlapping categories are not additive.",
+      categories: [
+        ...new Set(people.flatMap((p) => riskState(p, settings).categories)),
+      ].map((label) => ({
+        label,
+        ...stats(
+          base.filter((a) =>
+            riskState(a.p, settings).categories.includes(label),
+          ),
+        ),
+      })),
+      states: ["recorded", "no-risk", "missing", "unmapped"].map((label) => ({
+        label,
+        ...stats(base.filter((a) => riskState(a.p, settings).state === label)),
+      })),
+    },
     previous,
     trends,
     programmes,
@@ -804,6 +949,39 @@ export function analytics(
       domains: [...new Set(data.programmes.map((p) => p.domain))].sort(),
       programmes: data.programmes.map((p) => ({ id: p.id, name: p.name })),
       races: [...new Set(data.participants.map((p) => p.race))].sort(),
+      cfs: [
+        ...new Set(data.participants.map((p) => p.cfs).filter(Boolean)),
+      ].sort(),
     },
   };
+}
+
+// Codes are matched as complete strings. Multiple categories require an explicit mapping.
+export function riskState(participant, settings = defaults) {
+  const raw = participant.riskRaw;
+  if (raw === undefined || raw === null || raw === "")
+    return { state: "missing", categories: [] };
+  const mapping = settings.riskMappings?.[raw];
+  if (!mapping) return { state: "unmapped", categories: [] };
+  if (mapping.noRisk) return { state: "no-risk", categories: [] };
+  if (!mapping.categories?.length) return { state: "unmapped", categories: [] };
+  return {
+    state: "recorded",
+    categories: settings.multipleRiskFactors
+      ? [...new Set(mapping.categories)]
+      : mapping.categories.slice(0, 1),
+  };
+}
+
+export function matchesSelection(selected, value) {
+  if (!selected) return true;
+  if (!selected.startsWith("[")) return String(value) === selected;
+  const choices = JSON.parse(selected);
+  if (
+    !Array.isArray(choices) ||
+    choices.length > 50 ||
+    choices.some((x) => typeof x !== "string")
+  )
+    throw Error("Invalid multi-select filter.");
+  return choices.length === 0 || choices.includes(String(value));
 }

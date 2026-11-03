@@ -1,3 +1,4 @@
+import { readEffectiveData } from "./needs-domain.js";
 import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { readMatrix, hash, todaySG } from "./domain.js";
@@ -34,9 +35,9 @@ export function mountOperations(
       if (
         (
           await db
-            .prepare("SELECT MAX(version) AS version FROM schema_version")
+            .prepare("SELECT version FROM schema_version WHERE version=2")
             .get()
-        ).version >= 2
+        )?.version === 2
       )
         return;
       if (db.storage) {
@@ -91,7 +92,7 @@ export function mountOperations(
     const grain = req.query.grain || "month";
     if (!["day", "week", "month", "year"].includes(grain))
       throw error("Choose day, week, month or year.");
-    const data = await storage.readData(db),
+    const data = await readEffectiveData(db, storage),
       settings = await storage.getSettings(db),
       state = await readState();
     const result = operationsReport(

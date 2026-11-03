@@ -1,5 +1,5 @@
 import { readData, saveImport } from "./db.js";
-import { inspectImport } from "./domain.js";
+import { inspectImport, hash } from "./domain.js";
 
 export function expiredPreview() {
   return Object.assign(Error("Preview expired. Upload the file again."), {
@@ -33,7 +33,7 @@ export function sqlitePreviews(db) {
         user,
       );
     },
-    confirm(id, user) {
+    confirm(id, user, options = {}) {
       const p = db
         .prepare("SELECT * FROM import_previews WHERE id=? AND user_id=?")
         .get(id, user);
@@ -43,6 +43,15 @@ export function sqlitePreviews(db) {
         throw Object.assign(Error("This preview is for a different import."), {
           status: 400,
         });
+      if (
+        parsed.mode === "replace" &&
+        (options.confirmation !== "REPLACE ATTENDANCE" ||
+          parsed.fingerprint !== hash(readData(db)))
+      )
+        throw Object.assign(
+          Error("Replacement requires confirmation and a fresh preview."),
+          { status: 409 },
+        );
       const result = saveImport(
         db,
         parsed,

@@ -1,4 +1,8 @@
+import { readEffectiveData } from "./needs-domain.js";
 import express from "express";
+import { mountIdentity } from "./identity.js";
+import { mountNeeds } from "./needs-routes.js";
+import { mountAnalysis } from "./analysis-routes.js";
 import multer from "multer";
 import { randomBytes } from "node:crypto";
 import { readFile, inspectImport, analytics } from "./domain.js";
@@ -19,7 +23,13 @@ const esc = (x) =>
         c
       ],
   );
-export function createApp(db = openDb(), { production = false } = {}) {
+export function createApp(
+  db = openDb(),
+  {
+    production = false,
+    authRequired = production || process.env.DASHBOARD_AUTH === "1",
+  } = {},
+) {
   const app = express(),
     previews = db.previews || sqlitePreviews(db);
   const storage = db.storage || { readData, getSettings, audit };
@@ -56,29 +66,6 @@ export function createApp(db = openDb(), { production = false } = {}) {
     db.prepare(
       "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
     ).run("__local_workspace__", "disabled");
-  const localActor = db.storage
-    ? null
-    : db
-        .prepare("SELECT id FROM users WHERE username=?")
-        .get("__local_workspace__");
-  app.use("/api", async (req, res, next) => {
-    const actor =
-      localActor ||
-      (await db
-        .prepare("SELECT id FROM users WHERE username=?")
-        .get("__local_workspace__"));
-    if (!actor)
-      throw error(
-        503,
-        "Database setup is incomplete. Apply the Supabase migration.",
-      );
-    req.user = {
-      id: actor.id,
-      username: "Local workspace",
-      role: "admin",
-    };
-    next();
-  });
   app.get("/api/ready", async (_req, res) => {
     const version = (
       await db
@@ -88,6 +75,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
     await db.prepare("SELECT count(*) AS count FROM attendance").get();
     res.json({ ready: true, schemaVersion: version });
   });
+  mountIdentity(app, db, { required: authRequired, production });
   app.get("/api/me", (req, res) => res.json(req.user));
   const filters = (req) => {
     const f = { ...req.query };
@@ -99,8 +87,18 @@ export function createApp(db = openDb(), { production = false } = {}) {
       if (typeof v !== "string") throw error(400, "Invalid filter.");
     return f;
   };
+  const planningDetails = (d) => {
+    try {
+      const parsed = JSON.parse(d.notes);
+      if (parsed.planning && typeof parsed.planning.notes === "string")
+        return { ...d, ...parsed.planning };
+    } catch {
+      /* Existing plain-text notes remain valid. */
+    }
+    return d;
+  };
   async function dashboard(req) {
-    const data = await storage.readData(db),
+    const data = await readEffectiveData(db, storage),
       settings = await storage.getSettings(db),
       f = filters(req),
       report = analytics(data, settings, f);
@@ -115,7 +113,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
             programme: t.programme_id || "",
           },
           undefined,
-          true,
+          false,
         );
         const value = scoped.summary[t.metric];
         const remaining = Math.max(
@@ -127,6 +125,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
         return {
           ...t,
           current: value,
+          previousCurrent: scoped.previous?.[t.metric] ?? null,
           progress: (value / t.value) * 100,
           gap: Math.max(0, t.value - value),
           daysRemaining: remaining,
@@ -146,14 +145,46 @@ export function createApp(db = openDb(), { production = false } = {}) {
       },
       settings,
       targets,
-      decisions: await db
-        .prepare(
-          "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
-        )
-        .all(),
+      decisions: (
+        await db
+          .prepare(
+            "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
+          )
+          .all()
+      ).map(planningDetails),
     };
   }
-  app.get("/api/dashboard", async (req, res) => res.json(await dashboard(req)));
+  app.use("/api", (req, _res, next) => {
+    if (
+      ["cfs", "living", "marital", "needs", "barriers", "interests"].some(
+        (k) => req.query[k],
+      )
+    )
+      throw error(
+        403,
+        "Sensitive profile filters are restricted. Use the fixed protected analysis under Who Are We Serving? or Gaps and Participation Barriers.",
+      );
+    next();
+  });
+  mountAnalysis(app, { db, storage, filters });
+  app.get("/api/dashboard", async (req, res) => {
+    if (req.query.risk)
+      throw error(
+        403,
+        "Social risk is available in the protected aggregate view only. Combined risk queries are restricted to prevent disclosure.",
+      );
+    const report = await dashboard(req);
+    const stripRisk = (value) => {
+      if (!value || typeof value !== "object") return;
+      for (const key of Object.keys(value)) {
+        if (key.startsWith("risk") || key === "socialRisk") delete value[key];
+        else stripRisk(value[key]);
+      }
+    };
+    stripRisk(report);
+    delete report.options.cfs;
+    res.json(report);
+  });
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -162,6 +193,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
       fields: 0,
     },
   }).single("file");
+  mountNeeds(app, { db, storage, previews, upload, filters });
   mountOperations(app, { db, storage, previews, upload, filters });
   app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
@@ -182,7 +214,39 @@ export function createApp(db = openDb(), { production = false } = {}) {
     }
     if (parsed.rawRows > 50000)
       throw error(400, "Maximum 50,000 rows per upload.");
+    const mode = req.query.mode || "merge";
+    if (!["add", "merge", "replace"].includes(mode))
+      throw error(400, "Select a valid import mode.");
+    parsed.mode = mode;
     const inspection = inspectImport(parsed, await storage.readData(db));
+    const reviewedProfiles = new Map(
+      (
+        await db
+          .prepare("SELECT participant_id,details FROM participant_profiles")
+          .all()
+      ).map((p) => [p.participant_id, JSON.parse(p.details).basic || {}]),
+    );
+    for (const row of parsed.rows) {
+      const reviewed = reviewedProfiles.get(row.participant.id);
+      if (!reviewed) continue;
+      const differences = Object.keys(reviewed).filter(
+        (k) =>
+          reviewed[k] !== null &&
+          reviewed[k] !== "" &&
+          row.participant[k] != null &&
+          reviewed[k] !== row.participant[k],
+      );
+      if (differences.length)
+        inspection.warnings.push({
+          row: row.row,
+          message:
+            "Staff-reviewed fields differ (" +
+            differences.join(", ") +
+            "). Reviewed overrides remain current; the import updates source values only. Review the profile separately.",
+        });
+    }
+
+    parsed.fingerprint = inspection.fingerprint;
     const id = randomBytes(24).toString("hex");
     await previews.put(id, parsed, req.user.id);
     const referenceRows = inspectImport(parsed, {
@@ -225,11 +289,18 @@ export function createApp(db = openDb(), { production = false } = {}) {
     );
     res.json({
       id,
+      mode,
+      updatedProfiles: inspection.updates.length,
+      matched: inspection.matched,
+      missing: inspection.missing.length,
+      resultingAttendance: inspection.resultingAttendance,
+      resultingParticipants: inspection.resultingParticipants,
       rawRows: parsed.rawRows,
       ready: inspection.fresh.length,
       duplicates: inspection.duplicates.length,
       invalid: parsed.issues.length,
-      skipped: inspection.conflicts.length,
+      skipped: inspection.conflicts.filter((c) => c.action !== "update").length,
+      conflicts: inspection.conflicts.length,
       exactDuplicates: parsed.exactDuplicates,
       issues: [
         ...parsed.issues,
@@ -248,6 +319,26 @@ export function createApp(db = openDb(), { production = false } = {}) {
       })),
       reference: {
         raw: parsed.rawRows,
+        sessions: reference.summary.sessions,
+        livingMissingParticipants: new Set(
+          parsed.rows
+            .filter((r) => !r.participant.livingRaw)
+            .map((r) => r.participant.id),
+        ).size,
+        riskZeroParticipants: new Set(
+          parsed.rows
+            .filter((r) => r.participant.riskRaw === "0")
+            .map((r) => r.participant.id),
+        ).size,
+        riskMissingParticipants: new Set(
+          parsed.rows
+            .filter((r) => !r.participant.riskRaw)
+            .map((r) => r.participant.id),
+        ).size,
+        riskZeroRows: parsed.rows.filter((r) => r.participant.riskRaw === "0")
+          .length,
+        riskMissingRows: parsed.rows.filter((r) => !r.participant.riskRaw)
+          .length,
         allAges: reference.summary.allAges,
         seniors: reference.summary.unique,
         male: reference.summary.male,
@@ -258,18 +349,45 @@ export function createApp(db = openDb(), { production = false } = {}) {
         from: reference.coverage.from,
         to: reference.coverage.to,
       },
-      expectedReference: {
-        raw: 3101,
-        allAges: 385,
-        seniors: 364,
-        male: 84,
-        minority: 18,
-        unknownRace: 2,
-        programmes: 110,
-        exactDuplicates: 1,
-        from: "2026-05-04",
-        to: "2026-10-26",
-      },
+      expectedReference: parsed.rows.some((r) => "livingRaw" in r.participant)
+        ? {
+            raw: 3344,
+            allAges: 405,
+            seniors: 382,
+            male: 86,
+            programmes: 116,
+            sessions: 351,
+            exactDuplicates: 1,
+            livingMissingParticipants: 223,
+            riskMissingParticipants: 66,
+            from: "2026-05-04",
+            to: "2026-11-03",
+          }
+        : parsed.rows.some((r) => "riskRaw" in r.participant)
+          ? {
+              raw: 80,
+              allAges: 21,
+              seniors: 18,
+              programmes: 42,
+              riskZeroParticipants: 18,
+              riskMissingParticipants: 3,
+              riskZeroRows: 73,
+              riskMissingRows: 7,
+              from: "2026-05-04",
+              to: "2026-11-02",
+            }
+          : {
+              raw: 3101,
+              allAges: 385,
+              seniors: 364,
+              male: 84,
+              minority: 18,
+              unknownRace: 2,
+              programmes: 110,
+              exactDuplicates: 1,
+              from: "2026-05-04",
+              to: "2026-10-26",
+            },
     });
   });
   app.delete("/api/import/preview/:id", async (req, res) => {
@@ -279,7 +397,9 @@ export function createApp(db = openDb(), { production = false } = {}) {
   app.post("/api/import/confirm", async (req, res) => {
     if (typeof req.body?.id !== "string")
       throw error(400, "Select an import preview.");
-    const result = await previews.confirm(req.body.id, req.user.id);
+    const result = await previews.confirm(req.body.id, req.user.id, {
+      confirmation: req.body.confirmation,
+    });
     res.json(result);
   });
   app.get("/api/quality", async (req, res) =>
@@ -329,14 +449,12 @@ export function createApp(db = openDb(), { production = false } = {}) {
         "Check age bands and definitions. Minimum evidence is 3 sessions and 5 seniors.",
       );
     const clean = {
+      ...(await storage.getSettings(db)),
       seniorAge: s.seniorAge,
-      minority: [
-        ...new Set(s.minority.map((x) => x.trim().toUpperCase())),
-      ].filter((x) => x !== "UNKNOWN"),
+      minority: [...new Set(s.minority.map((x) => x.trim().toUpperCase()))],
       ageBands: s.ageBands,
       minSessions: s.minSessions,
       minParticipants: s.minParticipants,
-      privacyMinimum: 5,
     };
     await db
       .prepare("UPDATE settings SET value=? WHERE id=1")
@@ -381,7 +499,33 @@ export function createApp(db = openDb(), { production = false } = {}) {
     res.json({ ok: true });
   });
   app.put("/api/decisions/:id", async (req, res) => {
-    const { status, notes } = req.body;
+    const {
+      status,
+      notes,
+      assigned = "",
+      plannedAction = "",
+      targetDate = "",
+      outcome = "",
+    } = req.body;
+    if (
+      [assigned, plannedAction, targetDate, outcome].some(
+        (x) => typeof x !== "string",
+      ) ||
+      assigned.length > 200 ||
+      plannedAction.length > 2000 ||
+      outcome.length > 2000 ||
+      (targetDate && !date(targetDate))
+    )
+      throw error(
+        400,
+        "Check assigned staff, action, target date and outcome.",
+      );
+    const savedNotes =
+      assigned || plannedAction || targetDate || outcome
+        ? JSON.stringify({
+            planning: { notes, assigned, plannedAction, targetDate, outcome },
+          })
+        : notes;
     const opportunity = /^target-\d+$/.test(req.params.id);
     const entityId = opportunity
       ? Number(req.params.id.slice(7))
@@ -409,7 +553,7 @@ export function createApp(db = openDb(), { production = false } = {}) {
           ? "INSERT INTO opportunity_decisions VALUES(?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id"
           : "INSERT INTO decisions VALUES(?,?,?,?,?) ON CONFLICT(programme_id) DO UPDATE SET status=excluded.status,notes=excluded.notes,updated=excluded.updated,user_id=excluded.user_id",
       )
-      .run(entityId, status, notes, new Date().toISOString(), req.user.id);
+      .run(entityId, status, savedNotes, new Date().toISOString(), req.user.id);
     await storage.audit(db, req.user.id, "planning.updated");
     res.json({ ok: true });
   });
@@ -417,9 +561,17 @@ export function createApp(db = openDb(), { production = false } = {}) {
   app.get("/api/export/:format", async (req, res) => {
     const f = filters(req);
     if (
-      ["gender", "race", "target", "ageBand", "client", "boundary"].some(
-        (k) => f[k] && f[k] !== "all",
-      )
+      [
+        "gender",
+        "race",
+        "target",
+        "ageBand",
+        "client",
+        "boundary",
+        "risk",
+        "cfs",
+        "observed",
+      ].some((k) => f[k] && f[k] !== "all")
     )
       throw error(
         400,

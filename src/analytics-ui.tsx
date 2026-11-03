@@ -277,7 +277,9 @@ export function TrendChart({
       rows.length - 1,
       values.indexOf(Math.max(...values)),
       values.indexOf(Math.min(...values)),
-      ...Array.from({ length: 8 }, (_, i) => Math.round(i * (rows.length - 1) / 7)),
+      ...Array.from({ length: 8 }, (_, i) =>
+        Math.round((i * (rows.length - 1)) / 7),
+      ),
       ...rows.map((_, i) => i),
     ]),
   ];
@@ -823,6 +825,10 @@ export function ActiveFilters({
     "client",
     "boundary",
     "ageBand",
+    "cfs",
+    "weekday",
+    "timeSlot",
+    "observed",
   ] as const;
   const names = {
     domain: "Domain",
@@ -833,6 +839,10 @@ export function ActiveFilters({
     client: "Client",
     boundary: "Boundary",
     ageBand: "Age",
+    cfs: "CFS",
+    weekday: "Day",
+    timeSlot: "Time slot",
+    observed: "Observed history",
   };
   const labels: Record<string, Record<string, string>> = {
     client: {
@@ -863,7 +873,7 @@ export function ActiveFilters({
             {k === "programme"
               ? data?.options.programmes.find((p) => p.id === filters[k])
                   ?.name || "Selected programme"
-              : labels[k]?.[filters[k]] || filters[k]}{" "}
+              : labels[k]?.[filters[k] || ""] || filters[k]}{" "}
             <span aria-hidden="true">×</span>
           </button>
         ))}
