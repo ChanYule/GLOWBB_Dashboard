@@ -279,9 +279,9 @@ test("formula cells and ambiguous workbooks rejected", async () => {
     readFile(Buffer.from(await wb.xlsx.writeBuffer()), "a.xlsx"),
   );
 });
-test("local development opens directly; origin checks, import confirmation and persistence remain intact", async () => {
+test("temporary direct access works in production; origin checks, import confirmation and persistence remain intact", async () => {
   const db = openDb(":memory:");
-  const server = createApp(db).listen(0, "127.0.0.1");
+  const server = createApp(db, { production: true }).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const origin = "http://127.0.0.1:" + server.address().port;
   const request = (path, method = "GET", body, withOrigin = true) =>

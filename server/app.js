@@ -27,7 +27,7 @@ export function createApp(
   db = openDb(),
   {
     production = false,
-    authRequired = production || process.env.DASHBOARD_AUTH === "1",
+    authRequired = process.env.DASHBOARD_AUTH === "1",
   } = {},
 ) {
   const app = express(),

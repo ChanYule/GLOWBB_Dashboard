@@ -2,6 +2,8 @@
 
 Release: 3 November 2026. This guide supersedes the earlier upgrade's missing-workbook limitation. The original Excel workbook was read only; it was not rewritten or imported into a saved local/hosted database during development. All import and browser verification used isolated in-memory databases. Staff retain the review-before-confirm import workflow.
 
+Temporary access update: staff sign-in is disabled by default in development and production. Access uses the shared workspace administrator. Existing accounts and history are retained; set `DASHBOARD_AUTH=1` to restore sign-in. If an existing hosting environment has that variable set to `1`, change it to `0` and redeploy/restart. For a single copy-paste Supabase setup, run `supabase/setup-through-004.sql`, which combines migrations 001–004 in order and preserves existing records.
+
 ## Source reconciliation
 
 The supplied `member_attendances_20261103110958.xlsx` matches the reference figures through independent raw-row aggregation and application parsing:
@@ -156,7 +158,7 @@ SQLite adds schema version 4 and six tables on startup:
 
 Participant JSON gains optional raw living/marital fields and import timestamps. Settings JSON gains reviewed CFS/living/domain mappings, engagement bands, registry attestation metadata and planning priorities. No existing table is dropped. Existing attendance backup/replacement protections remain.
 
-For PostgreSQL/Supabase, back up and apply **supabase/migrations/004_needs_based.sql** after migrations 001, 002 and 003, before running this application revision. The new private `glowbb` tables have row-level security and no browser-role grants. Reapplying migration 004 preserves records. No live migration was executed. SQLite migration happens when the updated local server starts. Restart the server after backend changes. Production still requires a staff account; account bootstrap remains in the earlier upgrade guide.
+For PostgreSQL/Supabase, back up and apply **supabase/migrations/004_needs_based.sql** after migrations 001, 002 and 003, before running this application revision. Alternatively run **supabase/setup-through-004.sql** to apply all four idempotent migrations in order. The new private `glowbb` tables have row-level security and no browser-role grants. Reapplying migration 004 preserves records. No live migration was executed. SQLite migration happens when the updated local server starts. Restart the server after backend changes. Sign-in is temporarily optional as described at the start of this guide.
 
 Main new files: `server/needs-domain.js`, `server/needs-routes.js`, `src/needs-ui.tsx`, `src/needs.css`, migration 004, `scripts/reconcile-needs.mjs`, `scripts/check-needs-layout.mjs`, `tests/needs.test.js` and this guide.
 
