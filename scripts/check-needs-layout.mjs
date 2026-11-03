@@ -33,6 +33,9 @@ const actor = db
 const parsed = await readFile(readFileSync(source), source);
 parsed.mode = "merge";
 saveImport(db, parsed, inspectImport(parsed, readData(db)), actor);
+const sourceAttendanceCount = db
+  .prepare("SELECT count(*) n FROM attendance")
+  .get().n;
 app.use(express.static("dist"));
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
@@ -134,6 +137,7 @@ try {
     "Programme Alignment",
     "Explore the Data",
     "Data Quality and Administration",
+    "Data management",
   ];
   for (const [width, height] of [
     [1440, 1000],
@@ -154,8 +158,17 @@ try {
     );
     for (const page of pages) {
       if (page !== "Management Overview") {
+        if (width <= 650) {
+          await evaluate(
+            "(() => { const menu = document.querySelector('.navigation-toggle'); if (menu?.getAttribute('aria-expanded') === 'false') menu.click(); })()",
+          );
+          await wait(
+            "document.querySelector('.navigation-toggle')?.getAttribute('aria-expanded') === 'true'",
+            "mobile menu",
+          );
+        }
         const clicked = await evaluate(
-          `(() => { const button = [...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === ${JSON.stringify(page)}); if (!button) return false; button.click(); return true; })()`,
+          `(() => { const menu = document.querySelector('.navigation-toggle'); if (innerWidth <= 650 && menu?.getAttribute('aria-expanded') === 'false') menu.click(); const button = [...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === ${JSON.stringify(page)}); if (!button) return false; const details = button.closest('details'); if (details && !details.open) details.querySelector('summary').click(); if (!button.getClientRects().length) return false; button.click(); return true; })()`,
         );
         if (!clicked) throw Error("Navigation missing: " + page);
         await wait(
@@ -163,6 +176,11 @@ try {
           "page " + page,
         );
       }
+      if (page === "Data management")
+        await wait(
+          "!!document.querySelector('.data-stat-grid')",
+          "saved data inventory",
+        );
       await pause(200);
       const check = await evaluate(
         `({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,errors:[...document.querySelectorAll('[role=alert]')].map(e=>e.innerText),kpis:document.querySelectorAll('.metric-card').length,headings:[...document.querySelectorAll('h1,h2')].map(e=>e.textContent)})`,
@@ -177,8 +195,27 @@ try {
           alerts: check.errors.length,
         }),
       );
-      if (check.scrollWidth > width + 1)
-        throw Error("Horizontal page overflow: " + width + " " + page);
+      if (check.scrollWidth > width + 1) {
+        const overflow = await evaluate(
+          "[...document.querySelectorAll('body *')].map(e=>({tag:e.tagName,class:e.className,left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width})).filter(e=>e.right>innerWidth+1 && e.width>0).slice(0,18)",
+        );
+        const screenshot = await command("Page.captureScreenshot", {
+          format: "png",
+          captureBeyondViewport: false,
+        });
+        writeFileSync(
+          join(output, `${width}-overflow.png`),
+          Buffer.from(screenshot.data, "base64"),
+        );
+        throw Error(
+          "Horizontal page overflow: " +
+            width +
+            " " +
+            page +
+            " " +
+            JSON.stringify(overflow),
+        );
+      }
       if (check.errors.length)
         throw Error("Visible page error: " + check.errors.join(" | "));
       if (
@@ -187,6 +224,7 @@ try {
           "Management Overview",
           "Who Are We Serving?",
           "Programme Planning and Actions",
+          "Data management",
         ].includes(page)
       ) {
         const screenshot = await command("Page.captureScreenshot", {
@@ -197,6 +235,62 @@ try {
           join(output, `${width}-${page.replace(/[^A-Za-z]+/g, "-")}.png`),
           Buffer.from(screenshot.data, "base64"),
         );
+      }
+      if (page === "Data management") {
+        await evaluate(
+          "[...document.querySelectorAll('button')].find(b => b.textContent === 'Choose data to delete').click()",
+        );
+        await wait(
+          "!!document.querySelector('.data-choice')",
+          "deletion options",
+        );
+        await evaluate(
+          "[...document.querySelectorAll('.data-choice')].find(e => e.textContent.includes('All attendance')).querySelector('input').click()",
+        );
+        await wait(
+          "[...document.querySelectorAll('.data-choice')].find(e => e.textContent.includes('All attendance')).querySelector('input').checked",
+          "attendance selection",
+        );
+        await evaluate(
+          "[...document.querySelectorAll('button')].find(b => b.textContent.includes('Review deletion')).click()",
+        );
+        await wait(
+          "!!document.querySelector('.data-confirm[open]')",
+          "deletion preview dialog",
+        );
+        const review = await evaluate(
+          `({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,errors:[...document.querySelectorAll('[role=alert]')].map(e=>e.innerText),deleteEnabled:[...document.querySelectorAll('button')].find(b => b.textContent === 'Delete selected data')?.disabled === false})`,
+        );
+        if (
+          review.scrollWidth > width + 1 ||
+          review.errors.length ||
+          review.deleteEnabled
+        )
+          throw Error(
+            "Deletion preview layout or confirmation guard failed: " +
+              JSON.stringify(review),
+          );
+        results.push({
+          viewport: `${width}x${height}`,
+          page: "Deletion preview",
+          ...review,
+        });
+        const screenshot = await command("Page.captureScreenshot", {
+          format: "png",
+          captureBeyondViewport: false,
+        });
+        writeFileSync(
+          join(output, `${width}-Deletion-preview.png`),
+          Buffer.from(screenshot.data, "base64"),
+        );
+        await evaluate(
+          "document.querySelector('[aria-label=\"Close review\"]').click()",
+        );
+        if (
+          db.prepare("SELECT count(*) n FROM attendance").get().n !==
+          sourceAttendanceCount
+        )
+          throw Error("A preview changed the source fixture.");
       }
     }
   }

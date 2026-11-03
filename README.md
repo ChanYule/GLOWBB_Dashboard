@@ -1,3 +1,5 @@
+> **Data management update:** Review imports, delete selected attendance or reset programme data, and recover from automatic backups. Secondary reports are under **More analysis tools**; mobile navigation opens through **Menu**. [Staff guide](docs/DATA-MANAGEMENT.md). No new SQL migration is required beyond 001 through 004.
+
 > **Latest 13-column needs-based upgrade:** [Features, actual workbook reconciliation, migration 004 and staff workflows](docs/NEEDS-BASED-UPGRADE.md). The three analysis levels, profile/feedback collection, registry attestations and action tracking extend the existing dashboard.
 
 > **3 November 2026 upgrade:** See [the upgrade guide](docs/UPGRADE-2026-11-03.md) for safe merge imports, social risk mappings, staff sign-in, personal dashboard views, migration 003 and current limitations. Older delivery notes describe previous releases.

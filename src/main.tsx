@@ -1,5 +1,6 @@
 import { NeedsManagement, NeedsPage } from "./needs-ui";
 import { api } from "./api";
+import { DataManagement } from "./data-management";
 import {
   PersonalWorkspace,
   SocialRisk,
@@ -16,7 +17,6 @@ import {
   lazy,
   Suspense,
   Children,
-  Fragment,
   isValidElement,
 } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -31,13 +31,14 @@ import {
   ChevronRight,
   ClipboardList,
   Download,
+  Database,
   Filter,
   HeartHandshake,
   Info,
   LayoutDashboard,
+  Menu,
   Plus,
   Search,
-  Settings2,
   ShieldCheck,
   Target,
   Upload,
@@ -60,6 +61,7 @@ import type {
 } from "./types";
 import "./styles.css";
 import "./redesign.css";
+import "./data-management.css";
 const OperationsPage = lazy(() =>
   import("./operations-ui").then((module) => ({
     default: module.OperationsPage,
@@ -357,7 +359,8 @@ function App() {
     [modal, setModal] = useState(""),
     [programme, setProgramme] = useState<Programme | null>(null),
     [revision, setRevision] = useState(0),
-    [toast, setToast] = useState("");
+    [toast, setToast] = useState(""),
+    [navigationOpen, setNavigationOpen] = useState(false);
   useEffect(() => {
     if (!user) return;
     let live = true;
@@ -423,25 +426,27 @@ function App() {
     { name: "Data Quality and Administration", icon: ShieldCheck },
   ];
   const title =
-    tab === "Overview"
-      ? "Management overview"
-      : [
-            "Who Are We Serving?",
-            "Gaps and Participation Barriers",
-            "Programme Planning and Actions",
-            "Programme Alignment",
-            "Data Quality and Administration",
-          ].includes(tab)
-        ? tab
-        : tab === "Programme Performance"
-          ? "Programme performance"
-          : tab === "Social Risk Analysis" || tab === "Explore the Data"
-            ? tab
-            : tab === "Audience & Outreach"
-              ? "Audience & outreach gaps"
-              : tab === "Operations & Screening"
-                ? "Operations & health screening"
-                : "Programme planning recommendations";
+    tab === "Data management"
+      ? "Data management"
+      : tab === "Overview"
+        ? "Management overview"
+        : [
+              "Who Are We Serving?",
+              "Gaps and Participation Barriers",
+              "Programme Planning and Actions",
+              "Programme Alignment",
+              "Data Quality and Administration",
+            ].includes(tab)
+          ? tab
+          : tab === "Programme Performance"
+            ? "Programme performance"
+            : tab === "Social Risk Analysis" || tab === "Explore the Data"
+              ? tab
+              : tab === "Audience & Outreach"
+                ? "Audience & outreach gaps"
+                : tab === "Operations & Screening"
+                  ? "Operations & health screening"
+                  : "Programme planning recommendations";
   const sensitive =
     ["gender", "race", "ageBand", "client", "boundary"].some(
       (k) => filters[k as keyof Filters],
@@ -467,33 +472,85 @@ function App() {
       </main>
     );
   return (
-    <div className="app">
+    <div className={`app${navigationOpen ? " navigation-open" : ""}`}>
       <aside className="sidebar">
         <Brand />
         <div className="workspace-label">STAFF WORKSPACE</div>
-        <nav aria-label="Main navigation">
-          {tabs.map((t, index) => (
-            <Fragment key={t.name}>
-              {index === 0 && (
-                <div className="nav-section-label">ANALYSIS LEVELS</div>
-              )}
-              {index === 3 && (
-                <div className="nav-section-label">OVERVIEW & TOOLS</div>
-              )}
+        <button
+          className="navigation-toggle"
+          aria-expanded={navigationOpen}
+          aria-controls="main-navigation"
+          onClick={() => setNavigationOpen((open) => !open)}
+        >
+          <Menu size={18} /> Menu
+        </button>
+        <nav aria-label="Main navigation" id="main-navigation">
+          <button
+            className={tab === "Overview" ? "nav-item active" : "nav-item"}
+            aria-current={tab === "Overview" ? "page" : undefined}
+            onClick={() => {
+              setTab("Overview");
+              setNavigationOpen(false);
+            }}
+          >
+            <LayoutDashboard size={20} />
+            <span>Management Overview</span>
+            {tab === "Overview" && <ChevronRight size={16} />}
+          </button>
+          <div className="nav-section-label">UNDERSTAND · REVIEW · ACT</div>
+          {tabs.slice(0, 3).map((t) => (
+            <button
+              key={t.name}
+              className={tab === t.name ? "nav-item active" : "nav-item"}
+              aria-current={tab === t.name ? "page" : undefined}
+              onClick={() => {
+                setTab(t.name);
+                setNavigationOpen(false);
+              }}
+            >
+              <t.icon size={20} />
+              <span>{t.name}</span>
+              {tab === t.name && <ChevronRight size={16} />}
+            </button>
+          ))}
+          <details
+            className="nav-tools"
+            open={tabs.slice(4).some((t) => t.name === tab) || undefined}
+          >
+            <summary>
+              <ChartNoAxesCombined size={19} /> More analysis tools{" "}
+              <ChevronRight size={16} />
+            </summary>
+            {tabs.slice(4).map((t) => (
               <button
                 key={t.name}
                 className={tab === t.name ? "nav-item active" : "nav-item"}
                 aria-current={tab === t.name ? "page" : undefined}
-                onClick={() => setTab(t.name)}
+                onClick={() => {
+                  setTab(t.name);
+                  setNavigationOpen(false);
+                }}
               >
-                <t.icon size={20} />
-                <span>
-                  {t.name === "Overview" ? "Management Overview" : t.name}
-                </span>
-                {tab === t.name && <ChevronRight size={16} />}
+                <t.icon size={18} />
+                <span>{t.name}</span>
               </button>
-            </Fragment>
-          ))}
+            ))}
+          </details>
+          {user.role === "admin" && (
+            <button
+              className={
+                tab === "Data management" ? "nav-item active" : "nav-item"
+              }
+              aria-current={tab === "Data management" ? "page" : undefined}
+              onClick={() => {
+                setTab("Data management");
+                setNavigationOpen(false);
+              }}
+            >
+              <Database size={20} />
+              <span>Data management</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="privacy-note">
@@ -507,21 +564,6 @@ function App() {
               </p>
             </div>
           </div>
-          {user.role === "admin" && (
-            <button
-              className="nav-item"
-              onClick={() => setModal("risk-settings")}
-            >
-              <ShieldCheck size={20} />
-              Risk & staff configuration
-            </button>
-          )}
-          {user.role === "admin" && (
-            <button className="nav-item" onClick={() => setModal("settings")}>
-              <Settings2 size={20} />
-              Data & settings
-            </button>
-          )}
           <div className="staff">
             <div className="avatar">
               {user.username.slice(0, 2).toUpperCase()}
@@ -569,25 +611,27 @@ function App() {
               </div>
               <h1>{title}</h1>
               <p className="muted">
-                {tab === "Overview"
-                  ? "Who participates, what information is missing, and which actions need review."
-                  : tab === "Who Are We Serving?"
-                    ? "Understand current participant profiles and explicitly reported needs."
-                    : tab === "Gaps and Participation Barriers"
-                      ? "Review observed engagement, voluntary feedback and information gaps."
-                      : tab === "Programme Planning and Actions"
-                        ? "Agree next steps using documented needs and transparent evidence."
-                        : tab === "Programme Alignment"
-                          ? "Compare programme supply, unique reach and stated demand."
-                          : tab === "Data Quality and Administration"
-                            ? "Keep source completeness and organisation definitions visible."
-                            : tab === "Programme Performance"
-                              ? "Compare reach and engagement with the right context."
-                              : tab === "Audience & Outreach"
-                                ? "Explore participation patterns and opportunities to connect."
-                                : tab === "Operations & Screening"
-                                  ? "Monitor participation, client outreach and reported monthly assessments."
-                                  : "Turn observed participation into thoughtful plans for the next 3–6 months."}
+                {tab === "Data management"
+                  ? "Import, review, delete and recover saved records in one place."
+                  : tab === "Overview"
+                    ? "Who participates, what information is missing, and which actions need review."
+                    : tab === "Who Are We Serving?"
+                      ? "Understand current participant profiles and explicitly reported needs."
+                      : tab === "Gaps and Participation Barriers"
+                        ? "Review observed engagement, voluntary feedback and information gaps."
+                        : tab === "Programme Planning and Actions"
+                          ? "Agree next steps using documented needs and transparent evidence."
+                          : tab === "Programme Alignment"
+                            ? "Compare programme supply, unique reach and stated demand."
+                            : tab === "Data Quality and Administration"
+                              ? "Keep source completeness and organisation definitions visible."
+                              : tab === "Programme Performance"
+                                ? "Compare reach and engagement with the right context."
+                                : tab === "Audience & Outreach"
+                                  ? "Explore participation patterns and opportunities to connect."
+                                  : tab === "Operations & Screening"
+                                    ? "Monitor participation, client outreach and reported monthly assessments."
+                                    : "Turn observed participation into thoughtful plans for the next 3–6 months."}
               </p>
             </div>
             <div className="heading-actions">
@@ -600,11 +644,13 @@ function App() {
                 <RefreshCw size={16} />
                 Refresh
               </Button>
-              <Button onClick={() => setModal("export")}>
-                <Download size={17} />
-                Export report
-              </Button>
-              {user.role === "admin" && (
+              {tab !== "Data management" && (
+                <Button onClick={() => setModal("export")}>
+                  <Download size={17} />
+                  Export report
+                </Button>
+              )}
+              {user.role === "admin" && tab !== "Data management" && (
                 <Button primary onClick={() => setModal("import")}>
                   <Upload size={17} />
                   Import attendance
@@ -612,12 +658,16 @@ function App() {
               )}
             </div>
           </div>
-          <FilterBar filters={filters} setFilters={setFilters} data={data} />
-          <ActiveFilters
-            filters={filters}
-            data={data}
-            setFilters={setFilters}
-          />
+          {tab !== "Data management" && (
+            <FilterBar filters={filters} setFilters={setFilters} data={data} />
+          )}
+          {tab !== "Data management" && (
+            <ActiveFilters
+              filters={filters}
+              data={data}
+              setFilters={setFilters}
+            />
+          )}
           {error && (
             <div className="error" role="alert">
               {error}
@@ -644,29 +694,39 @@ function App() {
               }
               aria-busy={loading}
             >
-              <div className="period-caption">
-                <span>
-                  <CalendarDays size={15} />
-                  {pretty(data.period.from)} — {pretty(data.period.to)}
-                </span>
-                <span>
-                  {data.metadata?.lastImportAt
-                    ? `Last import: ${new Date(data.metadata.lastImportAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
-                    : "Available records - Singapore time"}
-                </span>
-              </div>
-              {data.coverage.from === null &&
-              ![
-                "Planning & Recommendations",
-                "Operations & Screening",
-                "Explore the Data",
-                "Social Risk Analysis",
-                "Who Are We Serving?",
-                "Gaps and Participation Barriers",
-                "Programme Planning and Actions",
-                "Programme Alignment",
-                "Data Quality and Administration",
-              ].includes(tab) ? (
+              {tab !== "Data management" && (
+                <div className="period-caption">
+                  <span>
+                    <CalendarDays size={15} />
+                    {pretty(data.period.from)} — {pretty(data.period.to)}
+                  </span>
+                  <span>
+                    {data.metadata?.lastImportAt
+                      ? `Last import: ${new Date(data.metadata.lastImportAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
+                      : "Available records - Singapore time"}
+                  </span>
+                </div>
+              )}
+              {tab === "Data management" && user.role === "admin" ? (
+                <DataManagement
+                  version={revision}
+                  onImport={() => setModal("import")}
+                  onDefinitions={() => setModal("settings")}
+                  onReporting={() => setModal("risk-settings")}
+                  onChanged={refresh}
+                />
+              ) : data.coverage.from === null &&
+                ![
+                  "Planning & Recommendations",
+                  "Operations & Screening",
+                  "Explore the Data",
+                  "Social Risk Analysis",
+                  "Who Are We Serving?",
+                  "Gaps and Participation Barriers",
+                  "Programme Planning and Actions",
+                  "Programme Alignment",
+                  "Data Quality and Administration",
+                ].includes(tab) ? (
                 <div className="welcome panel">
                   <div className="icon-tile">
                     <ChartNoAxesCombined size={30} />
@@ -711,6 +771,13 @@ function App() {
                 ![
                   "Planning & Recommendations",
                   "Operations & Screening",
+                  "Who Are We Serving?",
+                  "Gaps and Participation Barriers",
+                  "Programme Planning and Actions",
+                  "Programme Alignment",
+                  "Data Quality and Administration",
+                  "Explore the Data",
+                  "Social Risk Analysis",
                 ].includes(tab) ? (
                 <div className="panel empty">
                   <Search size={28} />
@@ -789,7 +856,7 @@ function App() {
                   onTarget={() => setModal("target")}
                 />
               )}
-              {data.coverage.from !== null && (
+              {data.coverage.from !== null && tab !== "Data management" && (
                 <footer className="data-footnote">
                   <ShieldCheck size={16} />
                   <p>

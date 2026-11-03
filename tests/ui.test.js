@@ -54,6 +54,10 @@ const { OperationsPage, ActivityScreening } = await tsImport(
   "../src/operations-ui.tsx",
   import.meta.url,
 );
+const { DataManagement } = await tsImport(
+  "../src/data-management.tsx",
+  import.meta.url,
+);
 const db = openDb(":memory:");
 db.prepare("INSERT INTO users VALUES(1,?,?,?)").run(
   "admin",
@@ -246,9 +250,10 @@ test("authenticated administrator sees imports, settings, planning and sign out"
       assert.ok(screen.getByText("Make every connection count.")),
     );
     assert.ok(screen.getByRole("button", { name: "Import attendance" }));
-    assert.ok(screen.getByRole("button", { name: "Data & settings" }));
+    assert.ok(screen.getByRole("button", { name: "Data management" }));
     assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
     assert.ok(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByText("More analysis tools"));
     fireEvent.click(
       screen.getByRole("button", { name: "Planning & Recommendations" }),
     );
@@ -527,6 +532,7 @@ test("the integrated operations tab remains reachable when attendance is empty",
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
+    fireEvent.click(screen.getByText("More analysis tools"));
     fireEvent.click(
       screen.getByRole("button", { name: "Operations & Screening" }),
     );
@@ -735,6 +741,7 @@ test("the needs dashboard restricts viewer access and makes the three analysis l
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
+    fireEvent.click(screen.getByText("More analysis tools"));
     for (const label of [
       "Who Are We Serving?",
       "Gaps and Participation Barriers",
@@ -864,6 +871,193 @@ test("staff can edit all eight profile sections without losing drafts and feedba
     assert.equal(feedback.method, "survey");
     assert.deepEqual(feedback.preferences, {});
     assert.deepEqual(feedback.barriers, []);
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("data management requires a preview and typed confirmation, supports cancel and offers a reviewed undo", async () => {
+  const original = globalThis.fetch;
+  const counts = {
+    attendance: 12,
+    participants: 5,
+    programmes: 2,
+    sessions: 3,
+    profiles: 2,
+    feedback: 1,
+    actions: 1,
+    registryRows: 0,
+    assessments: 0,
+    targets: 0,
+  };
+  const calls = [],
+    changes = [];
+  const inventory = {
+    counts,
+    imports: [
+      { id: 1, created: "2026-11-03T02:00:00Z", imported: 12, remaining: 12 },
+    ],
+    backups: [],
+  };
+  globalThis.fetch = async (url, options) => {
+    const path = String(url),
+      body = options?.body ? JSON.parse(options.body) : null;
+    calls.push({ path, body });
+    if (path === "/api/data-management") return Response.json(inventory);
+    if (path.endsWith("/preview"))
+      return Response.json({
+        id: "review",
+        operation: body.operation || "delete",
+        selection: body,
+        counts: {
+          ...counts,
+          ...(body.operation === "restore"
+            ? {}
+            : {
+                participants: 0,
+                profiles: 0,
+                programmes: 0,
+                feedback: 0,
+                actions: 0,
+              }),
+        },
+        current: counts,
+        affectedPeople: 5,
+        confirmation:
+          body.operation === "restore" ? "RESTORE DATA" : "DELETE ATTENDANCE",
+      });
+    if (path.endsWith("/confirm"))
+      return Response.json({ operation: "delete", backupId: "saved-recovery" });
+    throw Error("Unexpected request " + path);
+  };
+  try {
+    render(
+      React.createElement(DataManagement, {
+        onImport: () => {},
+        onDefinitions: () => {},
+        onReporting: () => {},
+        onChanged: (message) => changes.push(message),
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getByRole("button", { name: "Choose data to delete" })),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose data to delete" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /All attendance/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Review deletion" }));
+    await waitFor(() =>
+      assert.ok(screen.getByRole("dialog", { name: "Review data deletion" })),
+    );
+    assert.equal(
+      screen.getByRole("button", { name: "Delete selected data" }).disabled,
+      true,
+    );
+    assert.equal(
+      calls.some((c) => c.path.endsWith("/confirm")),
+      false,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    assert.equal(screen.queryByRole("dialog"), null);
+    assert.equal(
+      calls.some((c) => c.path.endsWith("/confirm")),
+      false,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Review deletion" }));
+    await waitFor(() => assert.ok(screen.getByRole("dialog")));
+    fireEvent.change(
+      screen.getByLabelText("Type DELETE ATTENDANCE to confirm"),
+      { target: { value: "DELETE ATTENDANCE" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete selected data" }),
+    );
+    await waitFor(() => assert.ok(changes.length));
+    assert.equal(
+      calls.find((c) => c.path.endsWith("/confirm")).body.confirmation,
+      "DELETE ATTENDANCE",
+    );
+    assert.equal(screen.queryByRole("dialog"), null);
+    fireEvent.click(screen.getByRole("button", { name: "Review undo" }));
+    await waitFor(() =>
+      assert.ok(screen.getByRole("dialog", { name: "Review data restore" })),
+    );
+    assert.equal(
+      screen.getByRole("button", { name: "Restore data" }).disabled,
+      true,
+    );
+    assert.equal(calls.at(-1).body.backupId, "saved-recovery");
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("data management shows an empty state and requires a separate confirmation to permanently delete a backup", async () => {
+  const original = globalThis.fetch;
+  let deletion;
+  const emptyCounts = {
+    attendance: 0,
+    participants: 0,
+    programmes: 0,
+    sessions: 0,
+    profiles: 0,
+    feedback: 0,
+    actions: 0,
+    registryRows: 0,
+    assessments: 0,
+    targets: 0,
+  };
+  globalThis.fetch = async (url, options) => {
+    if (options?.method === "DELETE") {
+      deletion = JSON.parse(options.body);
+      return Response.json({ ok: true });
+    }
+    return Response.json({
+      counts: emptyCounts,
+      imports: [],
+      backups: [
+        {
+          id: "backup",
+          created: "2026-11-03T02:00:00Z",
+          reason: "Before deleting attendance",
+          attendance: 12,
+          restorable: true,
+        },
+      ],
+    });
+  };
+  try {
+    render(
+      React.createElement(DataManagement, {
+        onImport: () => {},
+        onDefinitions: () => {},
+        onReporting: () => {},
+        onChanged: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getByText("No attendance imports yet")),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Backups/ }));
+    assert.equal(
+      screen.getByRole("link", { name: "Download" }).getAttribute("href"),
+      "/api/backups/backup",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Delete backup from/ }));
+    assert.equal(
+      screen.getByRole("button", { name: "Delete backup permanently" })
+        .disabled,
+      true,
+    );
+    fireEvent.change(screen.getByLabelText("Type DELETE BACKUP to confirm"), {
+      target: { value: "DELETE BACKUP" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete backup permanently" }),
+    );
+    await waitFor(() => assert.ok(deletion));
+    assert.equal(deletion.confirmation, "DELETE BACKUP");
   } finally {
     cleanup();
     globalThis.fetch = original;

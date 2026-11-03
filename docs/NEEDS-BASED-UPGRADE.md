@@ -4,6 +4,8 @@ Release: 3 November 2026. This guide supersedes the earlier upgrade's missing-wo
 
 Temporary access update: staff sign-in is disabled by default in development and production. Access uses the shared workspace administrator. Existing accounts and history are retained; set `DASHBOARD_AUTH=1` to restore sign-in. If an existing hosting environment has that variable set to `1`, change it to `0` and redeploy/restart. For a single copy-paste Supabase setup, run `supabase/setup-through-004.sql`, which combines migrations 001–004 in order and preserves existing records.
 
+Latest interface update: use **Data management** for imports, definitions, deletion and recovery. Secondary reports are grouped under **More analysis tools**; phone navigation opens through **Menu**. See [Managing and deleting saved data](DATA-MANAGEMENT.md).
+
 ## Source reconciliation
 
 The supplied `member_attendances_20261103110958.xlsx` matches the reference figures through independent raw-row aggregation and application parsing:

@@ -1,6 +1,7 @@
 import { readEffectiveData } from "./needs-domain.js";
 import express from "express";
 import { mountIdentity } from "./identity.js";
+import { mountDataManagement } from "./data-management.js";
 import { mountNeeds } from "./needs-routes.js";
 import { mountAnalysis } from "./analysis-routes.js";
 import multer from "multer";
@@ -76,6 +77,7 @@ export function createApp(
     res.json({ ready: true, schemaVersion: version });
   });
   mountIdentity(app, db, { required: authRequired, production });
+  mountDataManagement(app, { db });
   app.get("/api/me", (req, res) => res.json(req.user));
   const filters = (req) => {
     const f = { ...req.query };

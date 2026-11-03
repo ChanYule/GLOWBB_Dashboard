@@ -25,13 +25,10 @@ const columns =
   "fingerprint,month,type,total,reported_as_of,complete,created,user_id";
 const insertSql = `INSERT OR IGNORE INTO assessment_monthly(${columns}) VALUES(?,?,?,?,?,?,?,?)`;
 
-export function mountOperations(
-  app,
-  { db, storage, previews, upload, filters },
-) {
-  let setup;
-  app.use("/api/operations", async (_req, _res, next) => {
-    setup ||= (async () => {
+const operationSetups = new WeakMap();
+export function ensureOperations(db) {
+  if (!operationSetups.has(db)) {
+    const setup = (async () => {
       if (
         (
           await db
@@ -64,10 +61,20 @@ export function mountOperations(
         }
       }
     })().catch((e) => {
-      setup = undefined;
+      operationSetups.delete(db);
       throw e;
     });
-    await setup;
+    operationSetups.set(db, setup);
+  }
+  return operationSetups.get(db);
+}
+
+export function mountOperations(
+  app,
+  { db, storage, previews, upload, filters },
+) {
+  app.use("/api/operations", async (_req, _res, next) => {
+    await ensureOperations(db);
     next();
   });
   const admin = (req) => {
