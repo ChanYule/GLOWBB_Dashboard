@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openDb, readData, saveImport } from "../server/db.js";
 import { createApp } from "../server/app.js";
+import { needsAnalysis } from "../server/needs-domain.js";
 import {
   analytics,
   analyticsContext,
@@ -41,6 +42,54 @@ function fixture() {
   saveImport(db, parsed, inspectImport(parsed, readData(db)), 1);
   return db;
 }
+test("fast briefing preserves full-report response counts and all privacy suppression rules", () => {
+  const db = fixture();
+  try {
+    const data = readData(db),
+      profiles = data.participants.map((p, i) => ({
+        participant_id: p.id,
+        revision: 1,
+        details: JSON.stringify({
+          preferences: {
+            responded: true,
+            interests: [i < 6 ? "Arts and crafts" : "Music and performance"],
+          },
+        }),
+        updated: "2026-11-04",
+      }));
+    for (const filters of [
+      {},
+      { from: "2026-10-01" },
+      { gender: "MALE" },
+      { programme: data.programmes[0].id },
+    ]) {
+      const full = needsAnalysis(
+        data,
+        profiles,
+        [],
+        [],
+        defaults,
+        filters,
+        "2026-11-04",
+      );
+      const brief = needsAnalysis(
+        data,
+        profiles,
+        [],
+        [],
+        defaults,
+        filters,
+        "2026-11-04",
+        true,
+      );
+      for (const key of ["respondents", "eligible", "note", "interests"])
+        assert.deepEqual(brief.responses[key], full.responses[key]);
+      assert.equal("profiles" in brief, false);
+    }
+  } finally {
+    db.close();
+  }
+});
 test("lean overview and context preserve exact counts and prior comparisons without detailed programme data", () => {
   const db = fixture();
   try {
@@ -143,7 +192,13 @@ test("management briefing is read-only and excludes identities, clinical distrib
     1,
   );
   const before = JSON.stringify(readData(db));
-  db.prepare("INSERT INTO decisions VALUES(?,?,?,?,?)").run(readData(db).programmes[0].id,"Review","PRIVATE DECISION NOTE","2026-11-04",1);
+  db.prepare("INSERT INTO decisions VALUES(?,?,?,?,?)").run(
+    readData(db).programmes[0].id,
+    "Review",
+    "PRIVATE DECISION NOTE",
+    "2026-11-04",
+    1,
+  );
   const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -165,12 +220,20 @@ test("management briefing is read-only and excludes identities, clinical distrib
     ])
       assert.equal(serialized.includes(privateValue), false);
     assert.equal(JSON.stringify(readData(db)), before);
-    for(const view of ["overview","context"]){
-      const lean=await (await fetch(base+"/api/dashboard?view="+view)).json();
-      assert.deepEqual(lean.decisions,[]);
-      assert.equal(JSON.stringify(lean).includes("PRIVATE DECISION NOTE"),false);
+    for (const view of ["overview", "context"]) {
+      const lean = await (
+        await fetch(base + "/api/dashboard?view=" + view)
+      ).json();
+      assert.deepEqual(lean.decisions, []);
+      assert.equal(
+        JSON.stringify(lean).includes("PRIVATE DECISION NOTE"),
+        false,
+      );
     }
-    assert.equal(db.prepare("SELECT notes FROM decisions").get().notes,"PRIVATE DECISION NOTE");
+    assert.equal(
+      db.prepare("SELECT notes FROM decisions").get().notes,
+      "PRIVATE DECISION NOTE",
+    );
     assert.equal(
       (await fetch(base + "/api/reporting/briefing?cfs=1-3")).status,
       403,

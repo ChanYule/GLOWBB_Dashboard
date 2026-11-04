@@ -1727,37 +1727,54 @@ function ClientFollowups({
     [direction, setDirection] = useState("asc"),
     [page, setPage] = useState(1),
     [error, setError] = useState(""),
+    [updating, setUpdating] = useState(false),
     [membership, setMembership] = useState("Active");
   useEffect(() => setPage(1), [filters, search, sort, direction, membership]);
+  const requestBody = JSON.stringify({
+    filters,
+    search,
+    sort,
+    direction,
+    page,
+    pageSize: 25,
+    membership,
+  });
   useEffect(() => {
     let live = true;
-    api<typeof data>("/api/clients/followups", {
-      method: "POST",
-      body: JSON.stringify({
-        filters,
-        search,
-        sort,
-        direction,
-        page,
-        pageSize: 25,
-        membership,
-      }),
-    })
-      .then((d) => {
-        if (live) {
-          setData(d);
-          setError("");
-        }
+    const controller = new AbortController();
+    setUpdating(true);
+    const timer = setTimeout(() => {
+      api<typeof data>("/api/clients/followups", {
+        method: "POST",
+        body: requestBody,
+        signal: controller.signal,
       })
-      .catch((e) => {
-        if (live) setError(e.message);
-      });
+        .then((d) => {
+          if (live) {
+            setData(d);
+            setError("");
+          }
+        })
+        .catch((e) => {
+          if (live && !controller.signal.aborted) setError(e.message);
+        })
+        .finally(() => {
+          if (live) setUpdating(false);
+        });
+    }, 180);
     return () => {
       live = false;
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, [filters, search, sort, direction, page, revision, membership]);
+  }, [requestBody, revision]);
   return (
-    <section className="panel client-followups">
+    <section className="panel client-followups" aria-busy={updating}>
+      {updating && (
+        <p role="status" className="muted">
+          Updating follow-up list...
+        </p>
+      )}
       <div className="client-panel-head">
         <div>
           <span className="eyebrow">REVIEW BEFORE CONTACTING</span>

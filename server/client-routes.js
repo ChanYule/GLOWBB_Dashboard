@@ -1,3 +1,4 @@
+import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
 import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
@@ -31,6 +32,7 @@ const admin = (req) => {
 };
 const text = (v, max = 2000) => typeof v === "string" && v.length <= max;
 function* readState(db, storage) {
+  if (storage.readPlanningState) return yield storage.readPlanningState(db);
   return {
     data: yield storage.readData(db),
     settings: yield storage.getSettings(db),
@@ -130,7 +132,9 @@ export function mountClients(app, { db, storage, upload }) {
     if (!req.file)
       throw fail(400, "Choose the client registry Excel or CSV file.");
     const parsed = parseClientRegistry(
-      await readMatrix(req.file.buffer, req.file.originalname, [["Member ID", "Name/Member ID"]]),
+      await readMatrix(req.file.buffer, req.file.originalname, [
+        ["Member ID", "Name/Member ID"],
+      ]),
     );
     const sourceHash = hash(req.file.buffer.toString("base64")),
       id = randomUUID();
@@ -226,6 +230,13 @@ export function mountClients(app, { db, storage, upload }) {
           state.data.participants.map((p) => [p.id, p]),
         );
         const timestamp = new Date().toISOString();
+        const batch = {
+          created: [],
+          updated: [],
+          originals: [],
+          current: [],
+          observations: [],
+        };
         let changed = 0,
           created = 0;
         for (const row of parsed.rows) {
@@ -281,9 +292,7 @@ export function mountClients(app, { db, storage, upload }) {
               profileSource: "Client registry",
               profileImportedAt: timestamp,
             };
-            yield tx
-              .prepare("INSERT OR IGNORE INTO participants VALUES(?,?)")
-              .run(pid, JSON.stringify(base));
+            batch.created.push({ id: pid, details: JSON.stringify(base) });
             created++;
           } else {
             const base = { ...existing };
@@ -295,49 +304,42 @@ export function mountClients(app, { db, storage, upload }) {
               )
                 base[field] = value;
             base.registryImportedAt = timestamp;
-            yield tx
-              .prepare("UPDATE participants SET details=? WHERE id=?")
-              .run(JSON.stringify(base), pid);
+            batch.updated.push({ id: pid, details: JSON.stringify(base) });
           }
-          yield tx
-            .prepare("INSERT OR IGNORE INTO member_registry VALUES(?,?,?)")
-            .run(
-              pid,
-              parsed.sourceHash,
-              JSON.stringify({
-                ...incoming,
-                memberId,
-                source: parsed.source,
-                asOf,
-                recorded: timestamp,
-                sourceRow,
-              }),
-            );
-          yield tx
-            .prepare(
-              "INSERT INTO member_registry VALUES(?,?,?) ON CONFLICT(participant_id,snapshot) DO UPDATE SET details=excluded.details",
-            )
-            .run(pid, CLIENT_SNAPSHOT, JSON.stringify(details));
+          batch.originals.push({
+            participant_id: pid,
+            snapshot: parsed.sourceHash,
+            details: JSON.stringify({
+              ...incoming,
+              memberId,
+              source: parsed.source,
+              asOf,
+              recorded: timestamp,
+              sourceRow,
+            }),
+          });
+          batch.current.push({
+            participant_id: pid,
+            snapshot: CLIENT_SNAPSHOT,
+            details: JSON.stringify(details),
+          });
           for (const [field, value] of Object.entries(incoming))
             if (!missing(value))
-              yield tx
-                .prepare(
-                  "INSERT OR IGNORE INTO profile_observations VALUES(?,?,?,?,?)",
-                )
-                .run(
-                  hash([
-                    "client-registry",
-                    pid,
-                    field,
-                    String(value),
-                    parsed.sourceHash,
-                  ]),
+              batch.observations.push({
+                id: hash([
+                  "client-registry",
                   pid,
                   field,
                   String(value),
-                  timestamp,
-                );
+                  parsed.sourceHash,
+                ]),
+                participant_id: pid,
+                field,
+                raw: String(value),
+                recorded: timestamp,
+              });
         }
+        yield* writeClientRegistry(tx, batch);
         const settings = {
           ...state.settings,
           registry: {
@@ -456,7 +458,8 @@ export function mountClients(app, { db, storage, upload }) {
           pageSize,
           coverage: ctx.coverage,
           notice:
-            ctx.historyNote + " Authorised follow-up workspace. Member IDs and residential details must not be copied into general reports. No message is sent by recording a contact.",
+            ctx.historyNote +
+            " Authorised follow-up workspace. Member IDs and residential details must not be copied into general reports. No message is sent by recording a contact.",
         };
       }),
     );

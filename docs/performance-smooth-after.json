@@ -1,0 +1,131 @@
+{
+  "label": "after",
+  "environment": {
+    "node": "v24.19.0",
+    "browser": "Isolated headless Chromium, 1440x1000",
+    "database": "Local SQLite :memory:",
+    "network": "Loopback; first API call and seven warm calls; no provider cold-start measurement",
+    "sourceAttendance": 3343,
+    "registeredSource": true
+  },
+  "entry": {
+    "bytes": 303482,
+    "gzipBytes": 90901
+  },
+  "apis": {
+    "dashboard": {
+      "firstMs": 167.20249999999987,
+      "warmMedianMs": 63.42489999999998,
+      "warmP95Ms": 118.63920000000007,
+      "bytes": 359411,
+      "samplesMs": [
+        167.20249999999987,
+        118.63920000000007,
+        83.99749999999995,
+        63.42489999999998,
+        70.86920000000009,
+        57.42959999999994,
+        55.04930000000013,
+        55.99519999999984
+      ]
+    },
+    "needs": {
+      "firstMs": 224.5975000000003,
+      "warmMedianMs": 187.13900000000012,
+      "warmP95Ms": 266.8075000000008,
+      "bytes": 21179,
+      "samplesMs": [
+        224.5975000000003,
+        216.04759999999987,
+        164.77499999999964,
+        266.8075000000008,
+        178.26339999999982,
+        187.13900000000012,
+        207.6875,
+        182.21430000000055
+      ]
+    },
+    "clients": {
+      "firstMs": 74.89900000000034,
+      "warmMedianMs": 62.76919999999973,
+      "warmP95Ms": 76.22720000000027,
+      "bytes": 38878,
+      "samplesMs": [
+        74.89900000000034,
+        58.578700000000026,
+        74.19200000000001,
+        51.585799999999836,
+        58.58060000000023,
+        67.51620000000003,
+        62.76919999999973,
+        76.22720000000027
+      ]
+    },
+    "filter": {
+      "firstMs": 34.088700000000244,
+      "warmMedianMs": 42.88549999999941,
+      "warmP95Ms": 49.359300000000076,
+      "bytes": 300391,
+      "samplesMs": [
+        34.088700000000244,
+        26.580399999999827,
+        35.638600000000224,
+        42.88549999999941,
+        38.013600000000224,
+        46.22450000000026,
+        49.359300000000076,
+        46.052599999999984
+      ]
+    },
+    "overview": {
+      "firstMs": 38.65449999999964,
+      "warmMedianMs": 65.39400000000023,
+      "warmP95Ms": 84.1255999999994,
+      "bytes": 107982,
+      "samplesMs": [
+        38.65449999999964,
+        68.95380000000023,
+        84.1255999999994,
+        65.39400000000023,
+        63.175099999999475,
+        65.9394000000002,
+        49.96189999999933,
+        57.54869999999937
+      ]
+    }
+  },
+  "overviewReadyMs": 621.6264000000001,
+  "requests": {
+    "/api/me": 1,
+    "/api/preferences": 1,
+    "/api/dashboard?from=&to=2026-11-04&domain=&programme=&target=all&interval=month&gender=&race=&client=&boundary=&ageBand=&view=overview": 1,
+    "/api/reporting/briefing?from=&to=2026-11-04&domain=&programme=&target=all&interval=month&gender=&race=&client=&boundary=&ageBand=": 1
+  },
+  "warmFilterReadyMs": 190.5605999999998,
+  "filterRequests": {
+    "/api/reporting/briefing?from=2026-09-01&to=2026-11-04&domain=&programme=&target=all&interval=month&gender=&race=&client=&boundary=&ageBand=": 1,
+    "/api/dashboard?from=2026-09-01&to=2026-11-04&domain=&programme=&target=all&interval=month&gender=&race=&client=&boundary=&ageBand=&view=overview": 1
+  },
+  "resources": [
+    {
+      "name": "/assets/index-40wSDcGN.js",
+      "transfer": 303782,
+      "decoded": 303482
+    },
+    {
+      "name": "/assets/calendar-days-D6oD7_O2.js",
+      "transfer": 827,
+      "decoded": 527
+    },
+    {
+      "name": "/assets/arrow-right-Due8JZR-.js",
+      "transfer": 13789,
+      "decoded": 13489
+    },
+    {
+      "name": "/assets/index-DRyH-u_A.css",
+      "transfer": 64281,
+      "decoded": 63981
+    }
+  ]
+}

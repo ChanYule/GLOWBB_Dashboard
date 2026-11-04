@@ -147,7 +147,7 @@ export function openPostgres(connectionString, { pool } = {}) {
 
 function adapter(client) {
   return {
-    storage: { readData, getSettings, audit },
+    storage: { readData, readPlanningState, getSettings, audit },
     query: (sql, values) => client.query(sql, values),
     prepare(statement) {
       const sql = postgresStatement(statement);
@@ -163,13 +163,37 @@ function adapter(client) {
   };
 }
 
+// One statement gives a consistent snapshot without a network trip per table.
+const coreSnapshot = `(SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.participants p) AS participants,
+(SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.programmes p) AS programmes,
+(SELECT COALESCE(json_agg(s),'[]'::json) FROM glowbb.sessions s) AS sessions,
+(SELECT COALESCE(json_agg(a),'[]'::json) FROM glowbb.attendance a) AS attendance`;
 async function readData(db) {
   if (db.transaction) return db.transaction(readData, { readOnly: true });
-  // Sequential queries work with the transaction pooler's single connection.
-  const participants = await db.prepare("SELECT * FROM participants").all();
-  const programmes = await db.prepare("SELECT * FROM programmes").all();
-  const sessions = await db.prepare("SELECT * FROM sessions").all();
-  const attendance = await db.prepare("SELECT * FROM attendance").all();
+  const {
+    rows: [snapshot],
+  } = await db.query(`SELECT ${coreSnapshot}`);
+  return decodeData(snapshot);
+}
+async function readPlanningState(db) {
+  if (db.transaction)
+    return db.transaction(readPlanningState, { readOnly: true });
+  const {
+    rows: [snapshot],
+  } = await db.query(`SELECT ${coreSnapshot},
+(SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.participant_profiles p) AS profiles,
+(SELECT COALESCE(json_agg(f ORDER BY f.date,f.created),'[]'::json) FROM glowbb.participant_feedback f) AS feedback,
+(SELECT COALESCE(json_agg(r),'[]'::json) FROM glowbb.member_registry r) AS registry,
+(SELECT value FROM glowbb.settings WHERE id=1) AS settings`);
+  return {
+    data: decodeData(snapshot),
+    profiles: snapshot.profiles,
+    feedback: snapshot.feedback,
+    registry: snapshot.registry,
+    settings: { ...defaults, ...JSON.parse(snapshot.settings) },
+  };
+}
+function decodeData({ participants, programmes, sessions, attendance }) {
   return {
     participants: participants.map((r) => ({
       id: r.id,
@@ -223,10 +247,6 @@ async function saveImport(db, parsed, inspection, user) {
     );
     await db.prepare("DELETE FROM attendance").run();
   }
-  for (const { id, ...details } of inspection.updates || [])
-    await db
-      .prepare("UPDATE participants SET details=? WHERE id=?")
-      .run(JSON.stringify(details), id);
   const summary = {
     updatedProfiles: inspection.updates?.length || 0,
     mode: inspection.mode || "add",
@@ -316,10 +336,15 @@ async function saveImport(db, parsed, inspection, user) {
       [JSON.stringify(values)],
     );
   }
-  for (const { id, ...details } of inspection.updates || [])
-    await db
-      .prepare("UPDATE participants SET details=? WHERE id=?")
-      .run(JSON.stringify(details), id);
+  const updates = (inspection.updates || []).map(({ id, ...details }) => ({
+    id,
+    details: JSON.stringify(details),
+  }));
+  for (let start = 0; start < updates.length; start += 500)
+    await db.query(
+      "UPDATE glowbb.participants AS p SET details=x.details FROM jsonb_to_recordset($1::jsonb) AS x(id text,details text) WHERE p.id=x.id",
+      [JSON.stringify(updates.slice(start, start + 500))],
+    );
   const observations = [
     ...new Map(
       parsed.rows

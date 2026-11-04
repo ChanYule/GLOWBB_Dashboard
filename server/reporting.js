@@ -16,17 +16,21 @@ export function mountReporting(app, { db, storage, filters }) {
       await dataTransaction(
         db,
         function* (tx) {
-          const state = {
-            data: yield storage.readData(tx),
-            settings: yield storage.getSettings(tx),
-            registry: yield tx.prepare("SELECT * FROM member_registry").all(),
-            profiles: yield tx
-              .prepare("SELECT * FROM participant_profiles")
-              .all(),
-            feedback: yield tx
-              .prepare("SELECT * FROM participant_feedback")
-              .all(),
-          };
+          const state = storage.readPlanningState
+            ? yield storage.readPlanningState(tx)
+            : {
+                data: yield storage.readData(tx),
+                settings: yield storage.getSettings(tx),
+                registry: yield tx
+                  .prepare("SELECT * FROM member_registry")
+                  .all(),
+                profiles: yield tx
+                  .prepare("SELECT * FROM participant_profiles")
+                  .all(),
+                feedback: yield tx
+                  .prepare("SELECT * FROM participant_feedback")
+                  .all(),
+              };
           const selected =
             [
               "programme",
@@ -57,6 +61,8 @@ export function mountReporting(app, { db, storage, filters }) {
             state.registry,
             state.settings,
             f,
+            undefined,
+            true,
           );
           const actions = yield tx
             .prepare("SELECT details FROM needs_actions")

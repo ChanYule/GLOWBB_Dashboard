@@ -89,8 +89,11 @@ test("management overview has six cards and presentation preserves the same figu
     },
     actions: { total: 0, stages: {} },
   };
-  let briefingCalls=0;
-  globalThis.fetch = async () => {briefingCalls++;return Response.json(brief);};
+  let briefingCalls = 0;
+  globalThis.fetch = async () => {
+    briefingCalls++;
+    return Response.json(brief);
+  };
   const filters = {
     from: "2026-10-01",
     to: "2026-10-31",
@@ -152,7 +155,7 @@ test("management overview has six cards and presentation preserves the same figu
       ),
     );
     assert.equal(document.querySelectorAll(".report-slide").length, 6);
-    assert.equal(briefingCalls,1);
+    assert.equal(briefingCalls, 1);
     assert.ok(screen.getByText("100"));
     assert.ok(screen.getAllByText("70").length);
     assert.equal(
@@ -1397,6 +1400,7 @@ test("client registry UI reviews conflicts and requires staff review before conf
 test("client follow-up keeps clinical classifications out of the default table and records sourced voluntary feedback without sending messages", async () => {
   const original = globalThis.fetch;
   let contact;
+  const followupQueries = [];
   const row = {
     id: "client-0",
     memberId: "C0",
@@ -1418,12 +1422,14 @@ test("client follow-up keeps clinical classifications out of the default table a
       return Response.json({ views: [] });
     if (path === "/api/clients/report")
       return Response.json(clientFixtureReport());
-    if (path === "/api/clients/followups")
+    if (path === "/api/clients/followups") {
+      followupQueries.push(JSON.parse(options.body));
       return Response.json({
         rows: [row],
         total: 1,
         notice: "Authorised staff only",
       });
+    }
     if (path.endsWith("/source"))
       return Response.json({
         current: { membershipStatus: "Active", revision: 1, fieldSources: {} },
@@ -1485,6 +1491,21 @@ test("client follow-up keeps clinical classifications out of the default table a
     );
     await waitFor(() =>
       assert.ok(screen.getByRole("button", { name: "Open follow-up" })),
+    );
+    const requestsBeforeSearch = followupQueries.length;
+    const search = screen.getByPlaceholderText("Search saved client records");
+    fireEvent.change(search, { target: { value: "C" } });
+    fireEvent.change(search, { target: { value: "C00" } });
+    fireEvent.change(search, { target: { value: "C0" } });
+    assert.ok(
+      screen.getByRole("button", { name: "Open follow-up" }),
+      "Existing rows should remain visible during search",
+    );
+    await waitFor(() => assert.equal(followupQueries.at(-1).search, "C0"));
+    assert.equal(
+      followupQueries.length,
+      requestsBeforeSearch + 1,
+      "Typing should produce only the final search request",
     );
     assert.equal(screen.queryByRole("columnheader", { name: "CFS" }), null);
     assert.equal(screen.queryByRole("columnheader", { name: "SRF" }), null);

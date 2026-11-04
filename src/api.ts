@@ -1,4 +1,8 @@
 ﻿async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const timeoutMessage =
+    url.split("?")[0] === "/api/client-registry/confirm"
+      ? "The save request timed out. Refresh the dashboard and check whether the registry was saved before trying again. If it was not saved, preview the file again."
+      : "The data service timed out. Refresh the dashboard to check the latest saved data before trying again.";
   let res: Response;
   try {
     res = await fetch(url, {
@@ -23,6 +27,8 @@
     throw Error(
       "This upload is too large. Choose a file smaller than 4 MB and try again.",
     );
+  if (res.status === 504)
+    throw Object.assign(Error(timeoutMessage), { status: res.status });
   if (
     !res.headers
       .get("content-type")
@@ -43,13 +49,25 @@
     );
   }
   if (!res.ok) {
+    const timeout =
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      data.error &&
+      typeof data.error === "object" &&
+      "code" in data.error &&
+      ["FUNCTION_INVOCATION_TIMEOUT", "FUNCTION_RESPONSE_TIMEOUT"].includes(
+        String(data.error.code),
+      );
     const message =
       data &&
       typeof data === "object" &&
       "error" in data &&
       typeof data.error === "string"
         ? data.error
-        : "Unable to complete request.";
+        : timeout
+          ? timeoutMessage
+          : `The data service could not complete this request (HTTP ${res.status}). Please try again.`;
     throw Object.assign(Error(message), { status: res.status });
   }
   return data as T;

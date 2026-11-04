@@ -4,6 +4,32 @@ import { createServer } from "node:http";
 import { tsImport } from "tsx/esm/api";
 import { createProxy } from "../api/index.js";
 const { api } = await tsImport("../src/api.ts", import.meta.url);
+test("client gives actionable timeout errors for hosted JSON envelopes and plain gateway errors without leaking server details", async () => {
+  for (const response of [
+    Response.json(
+      {
+        error: {
+          code: "FUNCTION_INVOCATION_TIMEOUT",
+          message: "PRIVATE PROVIDER DETAIL",
+        },
+      },
+      { status: 500 },
+    ),
+    new Response("PRIVATE PROVIDER DETAIL", { status: 504 }),
+  ]) {
+    await withFetch(
+      async () => response,
+      async () =>
+        assert.rejects(
+          api("/api/client-registry/confirm", { method: "POST" }),
+          (e) =>
+            /timed out.*check whether the registry was saved/i.test(
+              e.message,
+            ) && !e.message.includes("PRIVATE PROVIDER DETAIL"),
+        ),
+    );
+  }
+});
 test("GET coalescing lasts only while pending, mutation invalidates it, and aborts remain distinguishable", async () => {
   const original = globalThis.fetch;
   let calls = 0,

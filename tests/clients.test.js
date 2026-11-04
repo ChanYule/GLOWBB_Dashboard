@@ -11,6 +11,7 @@ import {
   defaults,
   hash,
   inspectImport,
+  readMatrix,
   readFile as parseFile,
 } from "../server/domain.js";
 import {
@@ -72,6 +73,7 @@ const upload = (matrix) => {
   return f;
 };
 async function fixture(engine = "SQLite") {
+  const stats = { queries: 0, failObservations: false };
   let db;
   if (engine === "PostgreSQL") {
     const pg = new PGlite();
@@ -83,6 +85,16 @@ async function fixture(engine = "SQLite") {
       ),
     );
     const query = async (sql, values) => {
+      stats.queries++;
+      if (
+        stats.failObservations &&
+        sql.startsWith("INSERT INTO glowbb.profile_observations")
+      ) {
+        stats.failObservations = false;
+        throw Object.assign(Error("Injected bulk failure"), {
+          code: "TEST_FAILURE",
+        });
+      }
       const r = values?.length
         ? await pg.query(sql, values)
         : (await pg.exec(sql)).at(-1);
@@ -175,6 +187,7 @@ async function fixture(engine = "SQLite") {
   };
   return {
     db,
+    stats,
     request,
     actor,
     save,
@@ -192,6 +205,130 @@ const registryPath =
 const attendancePath =
   process.env.NEEDS_REFERENCE_WORKBOOK ||
   "C:/Users/CHANYULE/Downloads/member_attendances_20261103110958.xlsx";
+
+test("PostgreSQL: large attendance merges, reviewed deletion and recovery stay bounded and preserve exact records", async (t) => {
+  const f = await fixture("PostgreSQL");
+  try {
+    await f.importAttendance([
+      HEADERS,
+      ...Array.from({ length: 620 }, (_, i) => attendance("performance-" + i)),
+    ]);
+    const rows = Array.from({ length: 620 }, (_, i) => {
+      const row = attendance("performance-" + i);
+      row[2] = "76";
+      return row;
+    });
+    const preview = await f.request(
+      "/api/import/preview?mode=merge",
+      upload([HEADERS, ...rows]),
+    );
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    f.stats.queries = 0;
+    const merged = await f.request("/api/import/confirm", {
+      id: preview.body.id,
+    });
+    assert.equal(merged.status, 200, JSON.stringify(merged.body));
+    const mergeCalls = f.stats.queries;
+    assert.ok(mergeCalls < 50, `${mergeCalls} calls for merge`);
+    const data = await f.db.storage.readData(f.db);
+    assert.equal(data.attendance.length, 620);
+    assert.ok(data.participants.every((p) => p.age === 76));
+    const normalize = (data) =>
+      Object.fromEntries(
+        Object.entries(data).map(([key, rows]) => [
+          key,
+          [...rows].sort((a, b) => a.id.localeCompare(b.id)),
+        ]),
+      );
+    const before = normalize(data);
+    const deletion = await f.request("/api/data-management/preview", {
+      scope: "all-attendance",
+    });
+    assert.equal(deletion.status, 200, JSON.stringify(deletion.body));
+    f.stats.queries = 0;
+    const deleted = await f.request("/api/data-management/confirm", {
+      id: deletion.body.id,
+      confirmation: "DELETE ATTENDANCE",
+    });
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+    const deleteCalls = f.stats.queries;
+    assert.ok(deleteCalls < 100, `${deleteCalls} calls for deletion`);
+    assert.equal(await f.count("attendance"), 0);
+    assert.equal(await f.count("participants"), 620);
+    const recovery = await f.request("/api/data-management/preview", {
+      operation: "restore",
+      backupId: deleted.body.backupId,
+    });
+    assert.equal(recovery.status, 200, JSON.stringify(recovery.body));
+    f.stats.queries = 0;
+    const restored = await f.request("/api/data-management/confirm", {
+      id: recovery.body.id,
+      confirmation: "RESTORE DATA",
+    });
+    assert.equal(restored.status, 200, JSON.stringify(restored.body));
+    const restoreCalls = f.stats.queries;
+    assert.ok(restoreCalls < 150, `${restoreCalls} calls for recovery`);
+    assert.deepEqual(normalize(await f.db.storage.readData(f.db)), before);
+    t.diagnostic(
+      `620-record merge: ${mergeCalls} calls; reviewed deletion: ${deleteCalls}; full recovery: ${restoreCalls}. No saved workspace data used.`,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("PostgreSQL: full-sized registry confirmation uses bounded bulk writes and a failed batch remains retryable", async (t) => {
+  const f = await fixture("PostgreSQL");
+  try {
+    const matrix = existsSync(registryPath)
+      ? await readMatrix(readFileSync(registryPath), registryPath, [
+          ["Member ID", "Name/Member ID"],
+        ])
+      : registry(
+          ...Array.from({ length: 1473 }, (_, i) => registryRow("bulk-" + i)),
+        );
+    const p = await f.request("/api/client-registry/preview", upload(matrix));
+    assert.equal(p.status, 200, JSON.stringify(p.body));
+    f.stats.queries = 0;
+    f.stats.failObservations = true;
+    const body = { id: p.body.id, complete: true, asOf: "2026-11-04" };
+    const failed = await f.request("/api/client-registry/confirm", body);
+    assert.equal(failed.status, 503);
+    assert.equal(await f.count("participants"), 0);
+    assert.equal(await f.count("member_registry"), 0);
+    assert.equal(await f.count("profile_observations"), 0);
+    assert.equal(await f.count("import_previews"), 1);
+    f.stats.queries = 0;
+    const start = performance.now();
+    const saved = await f.request("/api/client-registry/confirm", body);
+    const queries = f.stats.queries;
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.created, p.body.rows);
+    assert.ok(
+      queries < 100,
+      `Expected fewer than 100 database round trips, received ${queries}`,
+    );
+    assert.equal(await f.count("participants"), p.body.rows);
+    assert.equal(await f.count("member_registry"), p.body.rows * 2);
+    assert.equal(await f.count("attendance"), 0);
+    assert.equal(await f.count("import_previews"), 0);
+    t.diagnostic(
+      `${p.body.rows} clients saved with ${queries} database calls; local in-process PostgreSQL elapsed ${Math.round(performance.now() - start)} ms. Source workbook and saved workspace database unchanged.`,
+    );
+    f.stats.queries = 0;
+    const state = await f.db.storage.readPlanningState(f.db);
+    assert.equal(
+      f.stats.queries,
+      3,
+      "Planning state should require BEGIN, one snapshot statement and COMMIT",
+    );
+    assert.equal(state.data.participants.length, p.body.rows);
+    assert.equal(state.registry.length, p.body.rows * 2);
+    assert.deepEqual(state.data, await f.db.storage.readData(f.db));
+  } finally {
+    await f.close();
+  }
+});
 test(
   "the supplied registry and attendance reconcile independently, including client denominators and literal SRF codes",
   { skip: !existsSync(registryPath) || !existsSync(attendancePath) },

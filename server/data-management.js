@@ -109,8 +109,15 @@ function transaction(db, work, readOnly = false, writeTables) {
 }
 function* snapshot(db) {
   const data = {};
+  const bundled = db.storage
+    ? (yield db.query(
+        `SELECT ${names.map((name) => `(SELECT COALESCE(json_agg(t),'[]'::json) FROM glowbb.${name} t) AS ${name}`).join(",")}, (SELECT value FROM glowbb.settings WHERE id=1) AS settings`,
+      )).rows[0]
+    : null;
   for (const name of names) {
-    const rows = yield db.prepare(`SELECT * FROM ${name}`).all();
+    const rows = bundled
+      ? bundled[name]
+      : yield db.prepare(`SELECT * FROM ${name}`).all();
     data[name] = rows
       .map((row) =>
         Object.fromEntries(tables[name].map((key) => [key, row[key] ?? null])),
@@ -118,7 +125,9 @@ function* snapshot(db) {
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
   const settings = JSON.parse(
-    (yield db.prepare("SELECT value FROM settings WHERE id=1").get()).value,
+    bundled
+      ? bundled.settings
+      : (yield db.prepare("SELECT value FROM settings WHERE id=1").get()).value,
   );
   return {
     kind: backupKind,
@@ -416,21 +425,37 @@ export function mountDataManagement(app, { db }) {
           for (const name of reversed)
             yield tx.prepare(`DELETE FROM ${name}`).run();
           if (restoreState)
-            for (const name of names)
-              for (const row of restoreState.tables[name])
+            for (const name of names) {
+              const rows = restoreState.tables[name],
+                columns = tables[name],
+                size = tx.storage ? 500 : 100;
+              for (let start = 0; start < rows.length; start += size) {
+                const chunk = rows.slice(start, start + size);
                 yield tx
                   .prepare(
-                    `INSERT INTO ${name}(${tables[name].join(",")}) VALUES(${tables[name].map(() => "?").join(",")})`,
+                    `INSERT INTO ${name}(${columns.join(",")}) VALUES ${chunk.map(() => `(${columns.map(() => "?").join(",")})`).join(",")}`,
                   )
-                  .run(...tables[name].map((key) => row[key]));
+                  .run(
+                    ...chunk.flatMap((row) => columns.map((key) => row[key])),
+                  );
+              }
+            }
           yield* registrySetting(tx, restoreState?.registry);
         } else {
           const change = affected(state, p.selection);
           counts = change.counts;
-          for (const row of change.rows)
-            yield tx.prepare("DELETE FROM attendance WHERE id=?").run(row.id);
-          for (const id of change.removedSessions)
-            yield tx.prepare("DELETE FROM sessions WHERE id=?").run(id);
+          for (const [table, ids] of [
+            ["attendance", change.rows.map((row) => row.id)],
+            ["sessions", change.removedSessions],
+          ])
+            for (let start = 0; start < ids.length; start += 500) {
+              const chunk = ids.slice(start, start + 500);
+              yield tx
+                .prepare(
+                  `DELETE FROM ${table} WHERE id IN (${chunk.map(() => "?").join(",")})`,
+                )
+                .run(...chunk);
+            }
         }
         // Stale import/registry previews must never repopulate data after a reset.
         yield tx.prepare("DELETE FROM import_previews").run();

@@ -183,6 +183,7 @@ export function needsAnalysis(
   configured = {},
   filters = {},
   now = todaySG(),
+  briefingOnly = false,
 ) {
   const settings = { ...defaults, ...configured },
     effective = materializeProfiles(data, profiles),
@@ -213,9 +214,11 @@ export function needsAnalysis(
   const responseScope = registryKnown
     ? "Senior members in the attested registry snapshot, including those without recorded attendance"
     : "Known senior profiles with recorded or staff-reviewed information; complete centre membership is not established";
-  const report = analytics(effective, settings, filters, now),
+  const report = briefingOnly
+      ? null
+      : analytics(effective, settings, filters, now),
     sessions = new Map(effective.sessions.map((s) => [s.id, s]));
-  const allowedProgrammes = new Set(report.programmes.map((p) => p.id));
+  const allowedProgrammes = new Set(report?.programmes.map((p) => p.id) || []);
   // Reuse the same eligibility pass once, including every legacy filter.
   const selectedIds = analytics(effective, settings, filters, now, true, true);
   const allSelected = effective.participants.filter((p) =>
@@ -501,6 +504,18 @@ export function needsAnalysis(
     interestResponses.map(([id, r]) => [id, r.preferences.interests || []]),
     interestResponses.length,
   );
+  // The management brief uses the exact same protected response aggregation,
+  // then stops before building profiles, histories and programme comparisons.
+  if (briefingOnly)
+    return {
+      generatedAt: new Date().toISOString(),
+      responses: {
+        respondents: sensitive ? null : responseMembers.length,
+        eligible: sensitive ? null : responsePopulation.length,
+        note: "Respondent-based percentages use distinct people who answered the relevant question. Multiple selections overlap; missing responses do not indicate no interests or needs.",
+        interests: interestSummary,
+      },
+    };
   const needsRespondents = responseMembers.filter(([, r]) => r.needs.length),
     needsSummary = aggregate(
       needsRespondents.map(([id, r]) => [

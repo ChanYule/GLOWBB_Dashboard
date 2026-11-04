@@ -123,6 +123,7 @@ export function mountAnalysis(app, { db, storage, filters }) {
         .filter((k) => allowed.includes(k))
         .map((k) => [k, report.summary[k]]),
     ];
+    let weeklyReport = f.interval === "week" ? report : null;
     for (const chart of view.charts)
       if (
         allowed.includes(chart.metric) &&
@@ -131,7 +132,10 @@ export function mountAnalysis(app, { db, storage, filters }) {
         rows.push(
           ...exportRows(
             chart.group === "week"
-              ? analytics(data, settings, { ...f, interval: "week" })
+              ? (weeklyReport ||= analytics(data, settings, {
+                  ...f,
+                  interval: "week",
+                }))
               : report,
             chart,
           ),

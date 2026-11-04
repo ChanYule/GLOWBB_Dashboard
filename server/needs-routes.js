@@ -237,6 +237,7 @@ export async function writeTransaction(db, work) {
 }
 export function mountNeeds(app, { db, storage, filters, previews, upload }) {
   const readState = async (connection = db) => {
+    if (storage.readPlanningState) return storage.readPlanningState(connection);
     if (connection.transaction)
       return connection.transaction((tx) => readState(tx), { readOnly: true });
     return {

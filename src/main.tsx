@@ -397,6 +397,8 @@ function App() {
     "Who Are We Serving?",
     "Gaps and Participation Barriers",
     "Data Quality and Administration",
+    "Social Risk Analysis",
+    "Programme Alignment",
   ].includes(tab);
   const reportView = contextOnly
     ? "context"
@@ -408,31 +410,35 @@ function App() {
     let live = true;
     const controller = new AbortController();
     setLoading(true);
-    api<Dashboard>(
-      "/api/dashboard?" + new URLSearchParams({ ...filters, view: reportView }),
-      { signal: controller.signal },
-    )
-      .then((d) => {
-        if (live) {
-          setData(d);
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (live) {
-          if (controller.signal.aborted) return;
-          if (e.status === 401) {
-            setUser(null);
-            setNeedsLogin(true);
+    const timer = setTimeout(() => {
+      api<Dashboard>(
+        "/api/dashboard?" +
+          new URLSearchParams({ ...filters, view: reportView }),
+        { signal: controller.signal },
+      )
+        .then((d) => {
+          if (live) {
+            setData(d);
+            setError("");
           }
-          setError(e.message);
-        }
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
+        })
+        .catch((e) => {
+          if (live) {
+            if (controller.signal.aborted) return;
+            if (e.status === 401) {
+              setUser(null);
+              setNeedsLogin(true);
+            }
+            setError(e.message);
+          }
+        })
+        .finally(() => {
+          if (live) setLoading(false);
+        });
+    }, 100);
     return () => {
       live = false;
+      clearTimeout(timer);
       controller.abort();
     };
   }, [filters, revision, user, reportView]);

@@ -97,3 +97,5 @@ npm.cmd audit
 See [delivery and QA notes](docs/DELIVERY.md) for actual results and limits. Main implementation: `server/domain.js` (parsing/analytics), `server/db.js` (persistence), `server/app.js` (local workspace API), `server/index.js` (app server), `src/main.tsx` / `src/types.ts` / `src/styles.css` (dashboard), `tests` (automated checks). Existing attendance and planning data are preserved.
 
 See [the 4 November redesign report and staff guide](docs/REDESIGN-REPORT.md) for the five main workspaces, Presentation View, performance evidence, registry header compatibility and production access configuration.
+
+See [performance hardening and verification](docs/PERFORMANCE-HARDENING.md) for faster database reads, bulk merges, deletion/recovery and debounced filtering/search.
