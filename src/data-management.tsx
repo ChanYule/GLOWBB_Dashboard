@@ -129,12 +129,14 @@ export function DataManagement({
   onImport,
   onDefinitions,
   onReporting,
+  onClients,
   onChanged,
   version = 0,
 }: {
   onImport: () => void;
   onDefinitions: () => void;
   onReporting: () => void;
+  onClients?: () => void;
   onChanged: (message: string) => void;
   version?: number;
 }) {
@@ -317,6 +319,11 @@ export function DataManagement({
             <button className="button" onClick={onDefinitions}>
               <Settings2 size={17} /> Reporting definitions
             </button>
+            {onClients && (
+              <button className="button" onClick={onClients}>
+                <FileSpreadsheet size={17} /> Client registry & engagement
+              </button>
+            )}
             <button className="text-button" onClick={onReporting}>
               Risk & staff settings <ArrowRight size={15} />
             </button>

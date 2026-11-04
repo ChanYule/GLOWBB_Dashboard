@@ -4,6 +4,48 @@ import { createServer } from "node:http";
 import { tsImport } from "tsx/esm/api";
 import { createProxy } from "../api/index.js";
 const { api } = await tsImport("../src/api.ts", import.meta.url);
+test("GET coalescing lasts only while pending, mutation invalidates it, and aborts remain distinguishable", async () => {
+  const original = globalThis.fetch;
+  let calls = 0,
+    release;
+  globalThis.fetch = () => {
+    calls++;
+    return new Promise((r) => {
+      release = () => r(Response.json({ ok: true }));
+    });
+  };
+  try {
+    const first = api("/coalesce"),
+      second = api("/coalesce");
+    assert.equal(calls, 1);
+    release();
+    await Promise.all([first, second]);
+    const third = api("/coalesce");
+    assert.equal(calls, 2);
+    release();
+    await third;
+    const pending = api("/session-data");
+    const releaseOld = release;
+    globalThis.fetch = async () => Response.json({ ok: true });
+    await api("/api/logout", { method: "POST" });
+    const fresh = await api("/session-data");
+    assert.deepEqual(fresh, { ok: true });
+    releaseOld();
+    await pending;
+    const controller = new AbortController();
+    controller.abort();
+    const abort = new DOMException("Cancelled", "AbortError");
+    globalThis.fetch = async () => {
+      throw abort;
+    };
+    await assert.rejects(
+      api("/cancel", { signal: controller.signal }),
+      (e) => e === abort,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 async function withProxy(options, check) {
   const server = createServer(createProxy(options));
   server.listen(0, "127.0.0.1");
@@ -266,6 +308,8 @@ test("Vercel proxy permits needs management reports and protected-route approved
   for (const [path, type] of [
     ["/api/needs/export/report", "text/html"],
     ["/api/needs/export/csv", "text/csv"],
+    ["/api/clients/export/report", "text/html"],
+    ["/api/clients/export/csv", "text/csv"],
     ["/api/analysis/export?group=programme&metric=unique", "text/csv"],
     ["/api/analysis/view/personal-view/export", "text/csv"],
   ])

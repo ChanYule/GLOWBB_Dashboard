@@ -1,12 +1,19 @@
+import { mountReporting } from "./reporting.js";
 import { readEffectiveData } from "./needs-domain.js";
 import express from "express";
 import { mountIdentity } from "./identity.js";
 import { mountDataManagement } from "./data-management.js";
+import { mountClients } from "./client-routes.js";
 import { mountNeeds } from "./needs-routes.js";
 import { mountAnalysis } from "./analysis-routes.js";
 import multer from "multer";
 import { randomBytes } from "node:crypto";
-import { readFile, inspectImport, analytics } from "./domain.js";
+import {
+  readFile,
+  inspectImport,
+  analytics,
+  analyticsContext,
+} from "./domain.js";
 import { openDb, readData, getSettings, audit } from "./db.js";
 import { sqlitePreviews } from "./previews.js";
 import { mountOperations } from "./operations-routes.js";
@@ -103,40 +110,72 @@ export function createApp(
     const data = await readEffectiveData(db, storage),
       settings = await storage.getSettings(db),
       f = filters(req),
-      report = analytics(data, settings, f);
-    const targets = (await db.prepare("SELECT * FROM targets").all()).map(
-      (t) => {
-        const scoped = analytics(
-          data,
-          settings,
-          {
-            from: t.start,
-            to: t.end,
-            programme: t.programme_id || "",
-          },
-          undefined,
-          false,
-        );
-        const value = scoped.summary[t.metric];
-        const remaining = Math.max(
-          0,
-          Math.ceil(
-            (Date.parse(t.end + "T23:59:59+08:00") - Date.now()) / 86400000,
+      report =
+        f.view === "context"
+          ? analyticsContext(data, settings, f)
+          : analytics(
+              data,
+              settings,
+              f.view === "overview" ? { ...f, interval: "month" } : f,
+              undefined,
+              f.view === "overview" ? "overview" : false,
+            );
+    const scopes = new Map();
+    const targets = (
+      f.view === "context"
+        ? []
+        : await db.prepare("SELECT * FROM targets").all()
+    ).map((t) => {
+      const key = JSON.stringify([t.start, t.end, t.programme_id || ""]);
+      if (!scopes.has(key))
+        scopes.set(
+          key,
+          analytics(
+            data,
+            settings,
+            {
+              from: t.start,
+              to: t.end,
+              programme: t.programme_id || "",
+            },
+            undefined,
+            "compare",
           ),
         );
-        return {
-          ...t,
-          current: value,
-          previousCurrent: scoped.previous?.[t.metric] ?? null,
-          progress: (value / t.value) * 100,
-          gap: Math.max(0, t.value - value),
-          daysRemaining: remaining,
-        };
-      },
-    );
+      const scoped = scopes.get(key);
+      const value = scoped.summary[t.metric];
+      const remaining = Math.max(
+        0,
+        Math.ceil(
+          (Date.parse(t.end + "T23:59:59+08:00") - Date.now()) / 86400000,
+        ),
+      );
+      return {
+        ...t,
+        current: value,
+        previousCurrent: scoped.previous?.[t.metric] ?? null,
+        progress: (value / t.value) * 100,
+        gap: Math.max(0, t.value - value),
+        daysRemaining: remaining,
+      };
+    });
     return {
       ...report,
       metadata: {
+        lastUpdatedAt:
+          [
+            settings.registry?.importedAt,
+            (
+              await db
+                .prepare(
+                  "SELECT MAX(stamp) AS stamp FROM (SELECT MAX(created) AS stamp FROM imports UNION ALL SELECT MAX(updated) AS stamp FROM participant_profiles UNION ALL SELECT MAX(updated) AS stamp FROM needs_actions UNION ALL SELECT MAX(created) AS stamp FROM participant_feedback) AS changes",
+                )
+                .get()
+            )?.stamp,
+          ]
+            .filter(Boolean)
+            .sort()
+            .at(-1) || null,
         lastImportAt:
           (
             await db
@@ -148,7 +187,7 @@ export function createApp(
       settings,
       targets,
       decisions: (
-        await db
+        ["overview", "context"].includes(f.view) ? [] : await db
           .prepare(
             "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
           )
@@ -169,6 +208,7 @@ export function createApp(
     next();
   });
   mountAnalysis(app, { db, storage, filters });
+  mountReporting(app, { db, storage, filters });
   app.get("/api/dashboard", async (req, res) => {
     if (req.query.risk)
       throw error(
@@ -197,6 +237,7 @@ export function createApp(
   }).single("file");
   mountNeeds(app, { db, storage, previews, upload, filters });
   mountOperations(app, { db, storage, previews, upload, filters });
+  mountClients(app, { db, storage, previews, upload });
   app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
     let parsed;

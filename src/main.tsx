@@ -1,15 +1,8 @@
-import { NeedsManagement, NeedsPage } from "./needs-ui";
+import type { Briefing } from "./management";
+import { ImportProgress } from "./import-progress";
 import { api } from "./api";
-import { DataManagement } from "./data-management";
-import {
-  PersonalWorkspace,
-  SocialRisk,
-  RiskSettings,
-  Login,
-  ProgrammeCompare,
-  metrics,
-  reportingFilters,
-} from "./workspace";
+import { metrics, reportingFilters } from "./view-config";
+import { ManagementHome, DomainPortfolio } from "./management";
 import {
   useEffect,
   useRef,
@@ -62,6 +55,37 @@ import type {
 import "./styles.css";
 import "./redesign.css";
 import "./data-management.css";
+import "./design-system.css";
+const NeedsPage = lazy(() =>
+  import("./needs-ui").then((m) => ({ default: m.NeedsPage })),
+);
+const NeedsExperience = lazy(() =>
+  import("./needs-experience").then((m) => ({ default: m.NeedsExperience })),
+);
+const DataManagement = lazy(() =>
+  import("./data-management").then((m) => ({ default: m.DataManagement })),
+);
+const ClientEngagement = lazy(() =>
+  import("./client-ui").then((m) => ({ default: m.ClientEngagement })),
+);
+const PersonalWorkspace = lazy(() =>
+  import("./workspace").then((m) => ({ default: m.PersonalWorkspace })),
+);
+const SocialRisk = lazy(() =>
+  import("./workspace").then((m) => ({ default: m.SocialRisk })),
+);
+const RiskSettings = lazy(() =>
+  import("./workspace").then((m) => ({ default: m.RiskSettings })),
+);
+const Login = lazy(() =>
+  import("./workspace").then((m) => ({ default: m.Login })),
+);
+const ProgrammeCompare = lazy(() =>
+  import("./workspace").then((m) => ({ default: m.ProgrammeCompare })),
+);
+const PresentationView = lazy(() =>
+  import("./presentation").then((m) => ({ default: m.PresentationView })),
+);
 const OperationsPage = lazy(() =>
   import("./operations-ui").then((module) => ({
     default: module.OperationsPage,
@@ -351,6 +375,11 @@ function App() {
         else setAuthError(e.message);
       });
   }, []);
+  const [presentationSnapshot, setPresentationSnapshot] = useState<{
+    data: Dashboard;
+    filters: Filters;
+    briefing: Briefing;
+  } | null>(null);
   const [tab, setTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>(emptyFilters),
     [data, setData] = useState<Dashboard | null>(null),
@@ -361,11 +390,28 @@ function App() {
     [revision, setRevision] = useState(0),
     [toast, setToast] = useState(""),
     [navigationOpen, setNavigationOpen] = useState(false);
+  const contextOnly = [
+    "Client Engagement",
+    "Data management",
+    "Participant Needs & Accessibility",
+    "Who Are We Serving?",
+    "Gaps and Participation Barriers",
+    "Data Quality and Administration",
+  ].includes(tab);
+  const reportView = contextOnly
+    ? "context"
+    : tab === "Overview"
+      ? "overview"
+      : "full";
   useEffect(() => {
     if (!user) return;
     let live = true;
+    const controller = new AbortController();
     setLoading(true);
-    api<Dashboard>("/api/dashboard?" + new URLSearchParams(filters))
+    api<Dashboard>(
+      "/api/dashboard?" + new URLSearchParams({ ...filters, view: reportView }),
+      { signal: controller.signal },
+    )
       .then((d) => {
         if (live) {
           setData(d);
@@ -374,7 +420,7 @@ function App() {
       })
       .catch((e) => {
         if (live) {
-          setData(null);
+          if (controller.signal.aborted) return;
           if (e.status === 401) {
             setUser(null);
             setNeedsLogin(true);
@@ -387,8 +433,9 @@ function App() {
       });
     return () => {
       live = false;
+      controller.abort();
     };
-  }, [filters, revision, user]);
+  }, [filters, revision, user, reportView]);
   useEffect(() => {
     if (!user) return;
     let live = true;
@@ -412,24 +459,32 @@ function App() {
     setToast(message);
   };
   const tabs = [
-    { name: "Who Are We Serving?", icon: Users },
-    { name: "Gaps and Participation Barriers", icon: HeartHandshake },
+    { name: "Programme Performance", icon: BarChart3 },
+    { name: "Participant Needs & Accessibility", icon: HeartHandshake },
     { name: "Programme Planning and Actions", icon: ClipboardList },
     { name: "Overview", icon: LayoutDashboard },
-    { name: "Programme Performance", icon: BarChart3 },
+    { name: "Who Are We Serving?", icon: Users },
+    { name: "Gaps and Participation Barriers", icon: HeartHandshake },
     { name: "Audience & Outreach", icon: Users },
     { name: "Planning & Recommendations", icon: ClipboardList },
     { name: "Operations & Screening", icon: Activity },
     { name: "Social Risk Analysis", icon: ShieldCheck },
-    { name: "Explore the Data", icon: ChartNoAxesCombined },
+    { name: "Custom Analysis", icon: ChartNoAxesCombined },
     { name: "Programme Alignment", icon: BarChart3 },
     { name: "Data Quality and Administration", icon: ShieldCheck },
   ];
-  const title =
-    tab === "Data management"
-      ? "Data management"
-      : tab === "Overview"
-        ? "Management overview"
+  const title = [
+    "Data management",
+    "Client Engagement",
+    "Participant Needs & Accessibility",
+  ].includes(tab)
+    ? tab === "Client Engagement"
+      ? "Client Engagement & Outreach"
+      : tab
+    : tab === "Overview"
+      ? "Management overview"
+      : tab === "Programme Planning and Actions"
+        ? "Planning & Actions"
         : [
               "Who Are We Serving?",
               "Gaps and Participation Barriers",
@@ -440,7 +495,7 @@ function App() {
           ? tab
           : tab === "Programme Performance"
             ? "Programme performance"
-            : tab === "Social Risk Analysis" || tab === "Explore the Data"
+            : tab === "Social Risk Analysis" || tab === "Custom Analysis"
               ? tab
               : tab === "Audience & Outreach"
                 ? "Audience & outreach gaps"
@@ -472,56 +527,57 @@ function App() {
       </main>
     );
   return (
-    <div className={`app${navigationOpen ? " navigation-open" : ""}`}>
-      <aside className="sidebar">
-        <Brand />
-        <div className="workspace-label">STAFF WORKSPACE</div>
-        <button
-          className="navigation-toggle"
-          aria-expanded={navigationOpen}
-          aria-controls="main-navigation"
-          onClick={() => setNavigationOpen((open) => !open)}
-        >
-          <Menu size={18} /> Menu
-        </button>
-        <nav aria-label="Main navigation" id="main-navigation">
+    <Suspense
+      fallback={
+        <div className="panel" role="status">
+          Loading workspace?
+        </div>
+      }
+    >
+      <div className={`app${navigationOpen ? " navigation-open" : ""}`}>
+        <aside className="sidebar">
+          <Brand />
+          <div className="workspace-label">STAFF WORKSPACE</div>
           <button
-            className={tab === "Overview" ? "nav-item active" : "nav-item"}
-            aria-current={tab === "Overview" ? "page" : undefined}
-            onClick={() => {
-              setTab("Overview");
-              setNavigationOpen(false);
-            }}
+            className="navigation-toggle"
+            aria-expanded={navigationOpen}
+            aria-controls="main-navigation"
+            onClick={() => setNavigationOpen((open) => !open)}
           >
-            <LayoutDashboard size={20} />
-            <span>Management Overview</span>
-            {tab === "Overview" && <ChevronRight size={16} />}
+            <Menu size={18} /> Menu
           </button>
-          <div className="nav-section-label">UNDERSTAND · REVIEW · ACT</div>
-          {tabs.slice(0, 3).map((t) => (
+          <a className="skip-link" href="#main">
+            Skip to main content
+          </a>
+          <nav aria-label="Main navigation" id="main-navigation">
             <button
-              key={t.name}
-              className={tab === t.name ? "nav-item active" : "nav-item"}
-              aria-current={tab === t.name ? "page" : undefined}
+              className={tab === "Overview" ? "nav-item active" : "nav-item"}
+              aria-current={tab === "Overview" ? "page" : undefined}
               onClick={() => {
-                setTab(t.name);
+                setTab("Overview");
                 setNavigationOpen(false);
               }}
             >
-              <t.icon size={20} />
-              <span>{t.name}</span>
-              {tab === t.name && <ChevronRight size={16} />}
+              <LayoutDashboard size={20} />
+              <span>Management Overview</span>
+              {tab === "Overview" && <ChevronRight size={16} />}
             </button>
-          ))}
-          <details
-            className="nav-tools"
-            open={tabs.slice(4).some((t) => t.name === tab) || undefined}
-          >
-            <summary>
-              <ChartNoAxesCombined size={19} /> More analysis tools{" "}
-              <ChevronRight size={16} />
-            </summary>
-            {tabs.slice(4).map((t) => (
+            <button
+              className={
+                tab === "Client Engagement" ? "nav-item active" : "nav-item"
+              }
+              aria-current={tab === "Client Engagement" ? "page" : undefined}
+              onClick={() => {
+                setTab("Client Engagement");
+                setNavigationOpen(false);
+              }}
+            >
+              <Users size={20} />
+              <span>Client Engagement & Outreach</span>
+              {tab === "Client Engagement" && <ChevronRight size={16} />}
+            </button>
+            <div className="nav-section-label">UNDERSTAND · REVIEW · ACT</div>
+            {tabs.slice(0, 3).map((t) => (
               <button
                 key={t.name}
                 className={tab === t.name ? "nav-item active" : "nav-item"}
@@ -531,448 +587,599 @@ function App() {
                   setNavigationOpen(false);
                 }}
               >
-                <t.icon size={18} />
-                <span>{t.name}</span>
+                <t.icon size={20} />
+                <span>
+                  {t.name === "Programme Planning and Actions"
+                    ? "Planning & Actions"
+                    : t.name}
+                </span>
+                {tab === t.name && <ChevronRight size={16} />}
               </button>
             ))}
-          </details>
-          {user.role === "admin" && (
-            <button
-              className={
-                tab === "Data management" ? "nav-item active" : "nav-item"
-              }
-              aria-current={tab === "Data management" ? "page" : undefined}
-              onClick={() => {
-                setTab("Data management");
-                setNavigationOpen(false);
-              }}
+            <details
+              className="nav-tools"
+              open={tabs.slice(4).some((t) => t.name === tab) || undefined}
             >
-              <Database size={20} />
-              <span>Data management</span>
-            </button>
-          )}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="privacy-note">
-            <ShieldCheck size={20} />
-            <div>
-              <strong>A trusted staff space</strong>
-              <p>
-                Attendance-led insights.
-                <br />
-                People-first decisions.
-              </p>
-            </div>
-          </div>
-          <div className="staff">
-            <div className="avatar">
-              {user.username.slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <strong>{user.username}</strong>
-              <small>{user.role}</small>
-            </div>
-          </div>
-        </div>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <span>
-            <span className="green-dot" /> Programme intelligence
-          </span>
-          <div>
-            {user.username !== "Local workspace" && (
+              <summary>
+                <ChartNoAxesCombined size={19} /> More Tools{" "}
+                <ChevronRight size={16} />
+              </summary>
+              {tabs.slice(4).map((t) => (
+                <button
+                  key={t.name}
+                  className={tab === t.name ? "nav-item active" : "nav-item"}
+                  aria-current={tab === t.name ? "page" : undefined}
+                  onClick={() => {
+                    setTab(t.name);
+                    setNavigationOpen(false);
+                  }}
+                >
+                  <t.icon size={18} />
+                  <span>
+                    {t.name === "Programme Planning and Actions"
+                      ? "Planning & Actions"
+                      : t.name}
+                  </span>
+                </button>
+              ))}
               <button
-                className="text-button"
-                onClick={async () => {
-                  await api("/api/logout", { method: "POST" });
-                  setData(null);
-                  setUser(null);
-                  setNeedsLogin(true);
+                className="nav-item"
+                onClick={() => {
+                  setModal("dashboard-settings");
+                  setNavigationOpen(false);
                 }}
               >
-                Sign out
+                Dashboard Settings
+              </button>
+            </details>
+            {user.role === "admin" && (
+              <button
+                className={
+                  tab === "Data management" ? "nav-item active" : "nav-item"
+                }
+                aria-current={tab === "Data management" ? "page" : undefined}
+                onClick={() => {
+                  setTab("Data management");
+                  setNavigationOpen(false);
+                }}
+              >
+                <Database size={20} />
+                <span>Data management</span>
               </button>
             )}
-            <span className="restricted">
-              <ShieldCheck size={15} />{" "}
-              {user.username === "Local workspace"
-                ? "Local workspace"
-                : "Staff access"}
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="privacy-note">
+              <ShieldCheck size={20} />
+              <div>
+                <strong>A trusted staff space</strong>
+                <p>
+                  Attendance-led insights.
+                  <br />
+                  People-first decisions.
+                </p>
+              </div>
+            </div>
+            <div className="staff">
+              <div className="avatar">
+                {user.username.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <strong>{user.username}</strong>
+                <small>{user.role}</small>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <div className="main-shell">
+          <header className="topbar">
+            <span>
+              <span className="green-dot" /> Programme intelligence
             </span>
-            <span className="top-date">{pretty(sgToday())}</span>
-          </div>
-        </header>
-        <main id="main">
-          <div className="page-heading">
             <div>
-              <div className="eyebrow">
-                GLOW BUKIT BATOK <span>/</span> PLANNING WITH PURPOSE
-              </div>
-              <h1>{title}</h1>
-              <p className="muted">
-                {tab === "Data management"
-                  ? "Import, review, delete and recover saved records in one place."
-                  : tab === "Overview"
-                    ? "Who participates, what information is missing, and which actions need review."
-                    : tab === "Who Are We Serving?"
-                      ? "Understand current participant profiles and explicitly reported needs."
-                      : tab === "Gaps and Participation Barriers"
-                        ? "Review observed engagement, voluntary feedback and information gaps."
-                        : tab === "Programme Planning and Actions"
-                          ? "Agree next steps using documented needs and transparent evidence."
-                          : tab === "Programme Alignment"
-                            ? "Compare programme supply, unique reach and stated demand."
-                            : tab === "Data Quality and Administration"
-                              ? "Keep source completeness and organisation definitions visible."
-                              : tab === "Programme Performance"
-                                ? "Compare reach and engagement with the right context."
-                                : tab === "Audience & Outreach"
-                                  ? "Explore participation patterns and opportunities to connect."
-                                  : tab === "Operations & Screening"
-                                    ? "Monitor participation, client outreach and reported monthly assessments."
-                                    : "Turn observed participation into thoughtful plans for the next 3–6 months."}
-              </p>
-            </div>
-            <div className="heading-actions">
-              <Button
-                disabled={loading}
-                onClick={() =>
-                  refresh("Dashboard refreshed from saved records.")
-                }
-              >
-                <RefreshCw size={16} />
-                Refresh
-              </Button>
-              {tab !== "Data management" && (
-                <Button onClick={() => setModal("export")}>
-                  <Download size={17} />
-                  Export report
-                </Button>
-              )}
-              {user.role === "admin" && tab !== "Data management" && (
-                <Button primary onClick={() => setModal("import")}>
-                  <Upload size={17} />
-                  Import attendance
-                </Button>
-              )}
-            </div>
-          </div>
-          {tab !== "Data management" && (
-            <FilterBar filters={filters} setFilters={setFilters} data={data} />
-          )}
-          {tab !== "Data management" && (
-            <ActiveFilters
-              filters={filters}
-              data={data}
-              setFilters={setFilters}
-            />
-          )}
-          {error && (
-            <div className="error" role="alert">
-              {error}
-              <Button onClick={() => setRevision((n) => n + 1)}>
-                Try again
-              </Button>
-            </div>
-          )}
-          {loading && (
-            <div className="fetch-status" role="status">
-              <div className="skeleton-lines" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-              </div>
-              <span>Updating dashboard...</span>
-            </div>
-          )}
-          {data && (
-            <div
-              className={
-                loading ? "dashboard-content updating" : "dashboard-content"
-              }
-              aria-busy={loading}
-            >
-              {tab !== "Data management" && (
-                <div className="period-caption">
-                  <span>
-                    <CalendarDays size={15} />
-                    {pretty(data.period.from)} — {pretty(data.period.to)}
-                  </span>
-                  <span>
-                    {data.metadata?.lastImportAt
-                      ? `Last import: ${new Date(data.metadata.lastImportAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
-                      : "Available records - Singapore time"}
-                  </span>
-                </div>
-              )}
-              {tab === "Data management" && user.role === "admin" ? (
-                <DataManagement
-                  version={revision}
-                  onImport={() => setModal("import")}
-                  onDefinitions={() => setModal("settings")}
-                  onReporting={() => setModal("risk-settings")}
-                  onChanged={refresh}
-                />
-              ) : data.coverage.from === null &&
-                ![
-                  "Planning & Recommendations",
-                  "Operations & Screening",
-                  "Explore the Data",
-                  "Social Risk Analysis",
-                  "Who Are We Serving?",
-                  "Gaps and Participation Barriers",
-                  "Programme Planning and Actions",
-                  "Programme Alignment",
-                  "Data Quality and Administration",
-                ].includes(tab) ? (
-                <div className="welcome panel">
-                  <div className="icon-tile">
-                    <ChartNoAxesCombined size={30} />
-                  </div>
-                  <span className="eyebrow">
-                    YOUR NEXT CHAPTER STARTS WITH DATA
-                  </span>
-                  <h2>Make every connection count.</h2>
-                  <p>
-                    Bring your attendance records together to understand your
-                    reach,
-                    <br className="desktop-only" /> discover participation
-                    patterns and plan what comes next.
-                  </p>
-                  {user.role === "admin" ? (
-                    <Button primary onClick={() => setModal("import")}>
-                      <Plus size={18} />
-                      Import your first attendance file
-                    </Button>
-                  ) : (
-                    <p>
-                      Ask an administrator to import the attendance workbook.
-                    </p>
-                  )}
-                  <div className="welcome-steps">
-                    <span>
-                      <b>01</b>Preview your records
-                    </span>
-                    <span>
-                      <b>02</b>Understand your reach
-                    </span>
-                    <span>
-                      <b>03</b>Plan with evidence
-                    </span>
-                  </div>
-                  <Note>
-                    No sample statistics are shown. Your dashboard is calculated
-                    from confirmed, saved attendance.
-                  </Note>
-                </div>
-              ) : data.summary.attendance === 0 &&
-                ![
-                  "Planning & Recommendations",
-                  "Operations & Screening",
-                  "Who Are We Serving?",
-                  "Gaps and Participation Barriers",
-                  "Programme Planning and Actions",
-                  "Programme Alignment",
-                  "Data Quality and Administration",
-                  "Explore the Data",
-                  "Social Risk Analysis",
-                ].includes(tab) ? (
-                <div className="panel empty">
-                  <Search size={28} />
-                  <h2>No attendance matches this view</h2>
-                  <p>Try a wider date range or reset your filters.</p>
-                  <Button onClick={() => setFilters(emptyFilters)}>
-                    Reset filters
-                  </Button>
-                </div>
-              ) : tab === "Operations & Screening" ? (
-                <Suspense
-                  fallback={<p role="status">Loading operational tools…</p>}
+              {user.username !== "Local workspace" && (
+                <button
+                  className="text-button"
+                  onClick={async () => {
+                    await api("/api/logout", { method: "POST" });
+                    setData(null);
+                    setUser(null);
+                    setNeedsLogin(true);
+                  }}
                 >
-                  <OperationsPage
-                    filters={filters}
-                    data={data}
-                    user={user}
-                    onProgramme={setProgramme}
-                  />
-                </Suspense>
-              ) : [
-                  "Who Are We Serving?",
-                  "Gaps and Participation Barriers",
-                  "Programme Planning and Actions",
-                  "Programme Alignment",
-                  "Data Quality and Administration",
-                ].includes(tab) ? (
-                <NeedsPage
-                  level={
-                    tab === "Who Are We Serving?"
-                      ? "profile"
-                      : tab === "Gaps and Participation Barriers"
-                        ? "gaps"
-                        : tab === "Programme Planning and Actions"
-                          ? "actions"
-                          : tab === "Programme Alignment"
-                            ? "alignment"
-                            : "quality"
+                  Sign out
+                </button>
+              )}
+              <span className="restricted">
+                <ShieldCheck size={15} />{" "}
+                {user.username === "Local workspace"
+                  ? "Local workspace"
+                  : "Staff access"}
+              </span>
+              <span className="top-date">{pretty(sgToday())}</span>
+            </div>
+          </header>
+          <main id="main">
+            <div className="page-heading">
+              <div>
+                <div className="eyebrow">
+                  GLOW BUKIT BATOK <span>/</span> PLANNING WITH PURPOSE
+                </div>
+                <h1>{title}</h1>
+                <p className="muted">
+                  {tab === "Client Engagement"
+                    ? "Link your registered population to attendance, investigate gaps and plan reviewed outreach."
+                    : tab === "Data management"
+                      ? "Import, review, delete and recover saved records in one place."
+                      : tab === "Overview"
+                        ? "Who participates, what information is missing, and which actions need review."
+                        : tab === "Who Are We Serving?"
+                          ? "Understand current participant profiles and explicitly reported needs."
+                          : tab === "Gaps and Participation Barriers"
+                            ? "Review observed engagement, voluntary feedback and information gaps."
+                            : tab === "Programme Planning and Actions"
+                              ? "Agree next steps using documented needs and transparent evidence."
+                              : tab === "Programme Alignment"
+                                ? "Compare programme supply, unique reach and stated demand."
+                                : tab === "Data Quality and Administration"
+                                  ? "Keep source completeness and organisation definitions visible."
+                                  : tab === "Programme Performance"
+                                    ? "Compare reach and engagement with the right context."
+                                    : tab === "Audience & Outreach"
+                                      ? "Explore participation patterns and opportunities to connect."
+                                      : tab === "Operations & Screening"
+                                        ? "Monitor participation, client outreach and reported monthly assessments."
+                                        : "Turn observed participation into thoughtful plans for the next 3–6 months."}
+                </p>
+              </div>
+              <div className="heading-actions">
+                <Button
+                  disabled={loading}
+                  onClick={() =>
+                    refresh("Dashboard refreshed from saved records.")
                   }
-                  filters={filters}
-                  user={user}
-                  onRefresh={() => refresh("Reviewed needs data refreshed.")}
-                />
-              ) : tab === "Social Risk Analysis" ? (
-                <SocialRisk user={user} />
-              ) : tab === "Explore the Data" ? (
-                <PersonalWorkspace
-                  data={data}
-                  filters={filters}
-                  setFilters={setFilters}
-                  user={user}
-                  explore
-                  onRisk={() => setTab("Social Risk Analysis")}
-                />
-              ) : tab === "Overview" ? (
-                <NeedsManagement
-                  data={data}
-                  filters={filters}
-                  setFilters={setFilters}
-                  user={user}
-                  onNavigate={setTab}
-                />
-              ) : tab === "Programme Performance" ? (
-                <Programmes data={data} onProgramme={setProgramme} />
-              ) : tab === "Audience & Outreach" ? (
-                <Audience
-                  data={data}
-                  filters={filters}
-                  setFilters={setFilters}
-                />
-              ) : (
-                <Planning
-                  data={data}
-                  user={user}
-                  refresh={refresh}
-                  onTarget={() => setModal("target")}
-                />
-              )}
-              {data.coverage.from !== null && tab !== "Data management" && (
-                <footer className="data-footnote">
-                  <ShieldCheck size={16} />
-                  <p>
-                    Measured within available records:{" "}
-                    {pretty(data.coverage.from!)} – {pretty(data.coverage.to!)}.
-                    Attendance shows participation; it does not establish
-                    programme impact or causation. Unique counts must not be
-                    added across programmes or periods.
-                  </p>
-                </footer>
-              )}
+                >
+                  <RefreshCw size={16} />
+                  Refresh
+                </Button>
+                {!["Data management", "Client Engagement"].includes(tab) && (
+                  <Button onClick={() => setModal("export")}>
+                    <Download size={17} />
+                    Export report
+                  </Button>
+                )}
+                {user.role === "admin" &&
+                  !["Data management", "Client Engagement"].includes(tab) && (
+                    <Button primary onClick={() => setModal("import")}>
+                      <Upload size={17} />
+                      Import attendance
+                    </Button>
+                  )}
+              </div>
             </div>
-          )}
-        </main>
-      </div>
-      {toast && (
-        <div className="toast" role="status">
-          <Check size={18} />
-          {toast}
+            {!["Data management", "Client Engagement"].includes(tab) && (
+              <FilterBar
+                filters={filters}
+                setFilters={setFilters}
+                data={data}
+              />
+            )}
+            {!["Data management", "Client Engagement"].includes(tab) && (
+              <ActiveFilters
+                filters={filters}
+                data={data}
+                setFilters={setFilters}
+              />
+            )}
+            {error && (
+              <div className="error" role="alert">
+                {error}
+                <Button onClick={() => setRevision((n) => n + 1)}>
+                  Try again
+                </Button>
+              </div>
+            )}
+            {loading && (
+              <div className="fetch-status" role="status">
+                <div className="skeleton-lines" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                <span>Updating dashboard...</span>
+              </div>
+            )}
+            {data && (
+              <div
+                className={
+                  loading ? "dashboard-content updating" : "dashboard-content"
+                }
+                aria-busy={loading}
+              >
+                {!["Data management", "Client Engagement"].includes(tab) && (
+                  <div className="period-caption">
+                    <span>
+                      <CalendarDays size={15} />
+                      {pretty(data.period.from)} — {pretty(data.period.to)}
+                    </span>
+                    <span>
+                      {data.metadata?.lastUpdatedAt
+                        ? `Last updated: ${new Date(data.metadata.lastUpdatedAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
+                        : "Available records - Singapore time"}
+                    </span>
+                  </div>
+                )}
+                <Suspense
+                  fallback={
+                    <div className="panel" role="status">
+                      Loading workspace?
+                    </div>
+                  }
+                >
+                  {tab === "Client Engagement" ? (
+                    <ClientEngagement
+                      user={user}
+                      coverageTo={data.coverage.to}
+                      dataRevision={revision}
+                      onImportAttendance={() => setModal("import")}
+                      initialFilters={filters}
+                      onChanged={() =>
+                        refresh(
+                          "Client information saved and linked participation refreshed.",
+                        )
+                      }
+                    />
+                  ) : tab === "Data management" && user.role === "admin" ? (
+                    <DataManagement
+                      version={revision}
+                      onImport={() => setModal("import")}
+                      onDefinitions={() => setModal("settings")}
+                      onReporting={() => setModal("risk-settings")}
+                      onClients={() => setTab("Client Engagement")}
+                      onChanged={refresh}
+                    />
+                  ) : tab === "Participant Needs & Accessibility" ? (
+                    <NeedsExperience
+                      filters={filters}
+                      user={user}
+                      onRefresh={() => refresh()}
+                    />
+                  ) : data.coverage.from === null &&
+                    ![
+                      "Overview",
+                      "Planning & Recommendations",
+                      "Operations & Screening",
+                      "Custom Analysis",
+                      "Social Risk Analysis",
+                      "Who Are We Serving?",
+                      "Gaps and Participation Barriers",
+                      "Programme Planning and Actions",
+                      "Programme Alignment",
+                      "Data Quality and Administration",
+                    ].includes(tab) ? (
+                    <div className="welcome panel">
+                      <div className="icon-tile">
+                        <ChartNoAxesCombined size={30} />
+                      </div>
+                      <span className="eyebrow">
+                        YOUR NEXT CHAPTER STARTS WITH DATA
+                      </span>
+                      <h2>Make every connection count.</h2>
+                      <p>
+                        Bring your attendance records together to understand
+                        your reach,
+                        <br className="desktop-only" /> discover participation
+                        patterns and plan what comes next.
+                      </p>
+                      {user.role === "admin" ? (
+                        <Button primary onClick={() => setModal("import")}>
+                          <Plus size={18} />
+                          Import your first attendance file
+                        </Button>
+                      ) : (
+                        <p>
+                          Ask an administrator to import the attendance
+                          workbook.
+                        </p>
+                      )}
+                      <div className="welcome-steps">
+                        <span>
+                          <b>01</b>Preview your records
+                        </span>
+                        <span>
+                          <b>02</b>Understand your reach
+                        </span>
+                        <span>
+                          <b>03</b>Plan with evidence
+                        </span>
+                      </div>
+                      <Note>
+                        No sample statistics are shown. Your dashboard is
+                        calculated from confirmed, saved attendance.
+                      </Note>
+                    </div>
+                  ) : data.summary.attendance === 0 &&
+                    ![
+                      "Overview",
+                      "Planning & Recommendations",
+                      "Operations & Screening",
+                      "Who Are We Serving?",
+                      "Gaps and Participation Barriers",
+                      "Programme Planning and Actions",
+                      "Programme Alignment",
+                      "Data Quality and Administration",
+                      "Custom Analysis",
+                      "Social Risk Analysis",
+                    ].includes(tab) ? (
+                    <div className="panel empty">
+                      <Search size={28} />
+                      <h2>No attendance matches this view</h2>
+                      <p>Try a wider date range or reset your filters.</p>
+                      <Button onClick={() => setFilters(emptyFilters)}>
+                        Reset filters
+                      </Button>
+                    </div>
+                  ) : tab === "Operations & Screening" ? (
+                    <Suspense
+                      fallback={<p role="status">Loading operational tools…</p>}
+                    >
+                      <OperationsPage
+                        filters={filters}
+                        data={data}
+                        user={user}
+                        onProgramme={setProgramme}
+                      />
+                    </Suspense>
+                  ) : [
+                      "Who Are We Serving?",
+                      "Gaps and Participation Barriers",
+                      "Programme Planning and Actions",
+                      "Programme Alignment",
+                      "Data Quality and Administration",
+                    ].includes(tab) ? (
+                    <>
+                      <NeedsPage
+                        level={
+                          tab === "Who Are We Serving?"
+                            ? "profile"
+                            : tab === "Gaps and Participation Barriers"
+                              ? "gaps"
+                              : tab === "Programme Planning and Actions"
+                                ? "actions"
+                                : tab === "Programme Alignment"
+                                  ? "alignment"
+                                  : "quality"
+                        }
+                        filters={filters}
+                        user={user}
+                        onRefresh={() =>
+                          refresh("Reviewed needs data refreshed.")
+                        }
+                      />
+                      {tab === "Programme Planning and Actions" && (
+                        <Planning
+                          data={data}
+                          user={user}
+                          refresh={refresh}
+                          onTarget={() => setModal("target")}
+                        />
+                      )}
+                    </>
+                  ) : tab === "Social Risk Analysis" ? (
+                    <SocialRisk user={user} />
+                  ) : tab === "Custom Analysis" ? (
+                    <PersonalWorkspace
+                      data={data}
+                      filters={filters}
+                      setFilters={setFilters}
+                      user={user}
+                      explore
+                      onRisk={() => setTab("Social Risk Analysis")}
+                    />
+                  ) : tab === "Overview" ? (
+                    <ManagementHome
+                      updating={loading}
+                      data={data}
+                      filters={filters}
+                      revision={revision}
+                      navigate={setTab}
+                      present={(briefing) => {
+                        setPresentationSnapshot({
+                          data,
+                          filters: { ...filters },
+                          briefing,
+                        });
+                        setModal("presentation");
+                      }}
+                    />
+                  ) : tab === "Programme Performance" ? (
+                    <Programmes data={data} onProgramme={setProgramme} />
+                  ) : tab === "Audience & Outreach" ? (
+                    <Audience
+                      data={data}
+                      filters={filters}
+                      setFilters={setFilters}
+                    />
+                  ) : (
+                    <Planning
+                      data={data}
+                      user={user}
+                      refresh={refresh}
+                      onTarget={() => setModal("target")}
+                    />
+                  )}
+                  {data.coverage.from !== null &&
+                    !["Data management", "Client Engagement"].includes(tab) && (
+                      <footer className="data-footnote">
+                        <ShieldCheck size={16} />
+                        <p>
+                          Measured within available records:{" "}
+                          {pretty(data.coverage.from!)} –{" "}
+                          {pretty(data.coverage.to!)}. Attendance shows
+                          participation; it does not establish programme impact
+                          or causation. Unique counts must not be added across
+                          programmes or periods.
+                        </p>
+                      </footer>
+                    )}
+                </Suspense>
+              </div>
+            )}
+          </main>
         </div>
-      )}
-      {modal === "import" && (
-        <ImportDialog
-          onClose={() => setModal("")}
-          onDone={() => {
-            setModal("");
-            refresh("Import confirmed. Dashboard updated from saved records.");
-          }}
-        />
-      )}
-      {modal === "risk-settings" && user.role === "admin" && (
-        <Modal
-          title="Organisation reporting controls"
-          onClose={() => setModal("")}
-          wide
-        >
-          <RiskSettings
-            onSaved={() => refresh("Organisation definitions saved.")}
+        {toast && (
+          <div className="toast" role="status">
+            <Check size={18} />
+            {toast}
+          </div>
+        )}
+        {modal === "import" && (
+          <ImportDialog
+            onClose={() => setModal("")}
+            onDone={() => {
+              setModal("");
+              refresh(
+                "Import confirmed. Dashboard updated from saved records.",
+              );
+            }}
           />
-        </Modal>
-      )}
-      {modal === "settings" && data && (
-        <SettingsDialog
-          data={data}
-          onClose={() => setModal("")}
-          refresh={refresh}
-        />
-      )}
-      {modal === "target" && data && (
-        <TargetDialog
-          data={data}
-          onClose={() => setModal("")}
-          onDone={() => {
-            setModal("");
-            refresh("Outreach target saved.");
-          }}
-        />
-      )}
-      {modal === "export" && (
-        <Modal title="Export a management report" onClose={() => setModal("")}>
-          <p>
-            Exports include the active period and programme/domain filters.
-            Shared reports omit all demographic breakdowns, target-group counts
-            and staff notes.
-          </p>
-          {sensitive ? (
+        )}
+        {modal === "risk-settings" && user.role === "admin" && (
+          <Modal
+            title="Organisation reporting controls"
+            onClose={() => setModal("")}
+            wide
+          >
+            <RiskSettings
+              onSaved={() => refresh("Organisation definitions saved.")}
+            />
+          </Modal>
+        )}
+        {modal === "dashboard-settings" && (
+          <Modal title="Dashboard Settings" onClose={() => setModal("")}>
+            <section className="panel">
+              <h2>Personal preferences</h2>
+              <p>
+                Save your selected cards, charts and filters in Custom Analysis.
+                Client views are saved separately in Client Engagement &
+                Outreach.
+              </p>
+              <Button
+                onClick={() => {
+                  setModal("");
+                  setTab("Custom Analysis");
+                }}
+              >
+                Open personal dashboard settings
+              </Button>
+            </section>
+            {user.role === "admin" && (
+              <section className="panel">
+                <h2>Organisation settings</h2>
+                <p>
+                  These definitions affect staff reports and target progress.
+                </p>
+                <Button onClick={() => setModal("settings")}>
+                  Demographic and evidence definitions
+                </Button>
+                <Button onClick={() => setModal("risk-settings")}>
+                  Protected reporting controls
+                </Button>
+              </section>
+            )}
+          </Modal>
+        )}
+        {modal === "settings" && data && (
+          <SettingsDialog
+            data={data}
+            onClose={() => setModal("")}
+            refresh={refresh}
+          />
+        )}
+        {modal === "target" && data && (
+          <TargetDialog
+            data={data}
+            onClose={() => setModal("")}
+            onDone={() => {
+              setModal("");
+              refresh("Outreach target saved.");
+            }}
+          />
+        )}
+        {modal === "export" && (
+          <Modal
+            title="Export a management report"
+            onClose={() => setModal("")}
+          >
+            <p>
+              Exports include the active period and programme/domain filters.
+              Shared reports omit all demographic breakdowns, target-group
+              counts and staff notes.
+            </p>
+            {sensitive ? (
+              <Note>
+                Reset audience filters before exporting. This prevents sensitive
+                groups being inferred from filtered totals.
+              </Note>
+            ) : (
+              <div className="export-options">
+                <a
+                  className="export-option"
+                  href={"/api/export/csv?" + new URLSearchParams(filters)}
+                >
+                  <ArrowDownToLine />
+                  <span>
+                    <strong>Programme performance CSV</strong>
+                    <small>
+                      Aggregated reach and engagement, ready for Excel.
+                    </small>
+                  </span>
+                  <ArrowRight size={18} />
+                </a>
+                <a
+                  className="export-option"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={"/api/export/report?" + new URLSearchParams(filters)}
+                >
+                  <ClipboardList />
+                  <span>
+                    <strong>Print-friendly planning summary</strong>
+                    <small>
+                      Trends, findings and recommendations. Print ? Save as PDF.
+                    </small>
+                  </span>
+                  <ArrowRight size={18} />
+                </a>
+              </div>
+            )}
             <Note>
-              Reset audience filters before exporting. This prevents sensitive
-              groups being inferred from filtered totals.
+              Review the report before sharing it under your organisation’s data
+              protection rules.
             </Note>
-          ) : (
-            <div className="export-options">
-              <a
-                className="export-option"
-                href={"/api/export/csv?" + new URLSearchParams(filters)}
-              >
-                <ArrowDownToLine />
-                <span>
-                  <strong>Programme performance CSV</strong>
-                  <small>
-                    Aggregated reach and engagement, ready for Excel.
-                  </small>
-                </span>
-                <ArrowRight size={18} />
-              </a>
-              <a
-                className="export-option"
-                target="_blank"
-                rel="noreferrer"
-                href={"/api/export/report?" + new URLSearchParams(filters)}
-              >
-                <ClipboardList />
-                <span>
-                  <strong>Print-friendly planning summary</strong>
-                  <small>
-                    Trends, findings and recommendations. Print ? Save as PDF.
-                  </small>
-                </span>
-                <ArrowRight size={18} />
-              </a>
-            </div>
-          )}
-          <Note>
-            Review the report before sharing it under your organisation’s data
-            protection rules.
-          </Note>
-        </Modal>
-      )}
-      {programme && data && (
-        <ProgrammeDialog
-          programme={programme}
-          data={data}
-          onClose={() => setProgramme(null)}
-        />
-      )}
-    </div>
+          </Modal>
+        )}
+        {modal === "presentation" && presentationSnapshot && (
+          <PresentationView
+            data={presentationSnapshot.data}
+            filters={presentationSnapshot.filters}
+            revision={revision}
+            briefing={presentationSnapshot.briefing}
+            close={() => setModal("")}
+          />
+        )}
+        {programme && data && (
+          <ProgrammeDialog
+            programme={
+              data.programmes.find((p) => p.id === programme.id) || programme
+            }
+            data={data}
+            onClose={() => setProgramme(null)}
+          />
+        )}
+      </div>
+    </Suspense>
   );
 }
 function FilterBar({
@@ -1057,39 +1264,6 @@ function FilterBar({
             }}
           />
         </label>
-        <Select
-          multiple
-          label="Programme"
-          value={filters.programme}
-          onChange={(v) => update("programme", v)}
-        >
-          <option value="">All programmes</option>
-          {data?.options.programmes.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-        <Select
-          multiple
-          label="AAP domain"
-          value={filters.domain}
-          onChange={(v) => update("domain", v)}
-        >
-          <option value="">All domains</option>
-          {data?.options.domains.map((d) => (
-            <option key={d}>{d}</option>
-          ))}
-        </Select>
-        <Select
-          label="Audience"
-          value={filters.target}
-          onChange={(v) => update("target", v)}
-        >
-          <option value="all">All attendees</option>
-          <option value="male">Male seniors</option>
-          <option value="minority">Minority seniors</option>
-        </Select>
         <button
           className={`button filter-toggle ${advanced ? "selected" : ""}`}
           aria-expanded={advanced}
@@ -1110,6 +1284,40 @@ function FilterBar({
       </div>
       {advanced && (
         <div className="advanced-filters">
+          <Select
+            multiple
+            label="Programme"
+            value={filters.programme}
+            onChange={(v) => update("programme", v)}
+          >
+            <option value="">All programmes</option>
+            {data?.options.programmes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            multiple
+            label="AAP domain"
+            value={filters.domain}
+            onChange={(v) => update("domain", v)}
+          >
+            <option value="">All domains</option>
+            {data?.options.domains.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </Select>
+          <Select
+            label="Audience"
+            value={filters.target}
+            onChange={(v) => update("target", v)}
+          >
+            <option value="all">All attendees</option>
+            <option value="male">Male seniors</option>
+            <option value="minority">Minority seniors</option>
+          </Select>
+
           <Select
             label="Age"
             value={filters.ageBand}
@@ -1473,13 +1681,13 @@ function Programmes({
           | "returning"
         >
       >("unique");
+  const [compareOpen, setCompareOpen] = useState(false);
   const [page, setPage] = useState(0),
     [columns, setColumns] = useState<string[]>([
       "sessions",
       "unique",
       "male",
       "minority",
-      "attendance",
       "average",
     ]),
     [savedMessage, setSavedMessage] = useState("");
@@ -1494,156 +1702,168 @@ function Programmes({
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
   return (
-    <Panel
-      title="A clearer picture of programme performance"
-      subtitle={`${list.length} programmes · senior outreach alongside delivery frequency`}
-    >
-      <div className="table-toolbar">
-        <label className="search-field">
-          <Search size={18} />
-          <input
-            aria-label="Search programme names"
-            placeholder="Search programmes…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-        <Select
-          label="Sort by"
-          value={sort}
-          onChange={(v) => setSort(v as typeof sort)}
-        >
-          {[
-            ["unique", "Unique seniors"],
-            ["male", "Male reach"],
-            ["minority", "Minority reach"],
-            ["sessions", "Sessions"],
-            ["repeat", "Repeat participants"],
-            ["average", "Average attendance"],
-            ["attendance", "Attendance entries"],
-            ["firstObserved", "First observed seniors"],
-            ["returning", "Seniors recorded before period"],
-          ].map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <details>
-        <summary>Choose visible programme columns</summary>
-        <div className="work-checks">
-          {Object.entries(metrics).map(([k, [label]]) => (
-            <label key={k}>
-              <input
-                type="checkbox"
-                checked={columns.includes(k)}
-                onChange={(e) =>
-                  setColumns(
-                    e.target.checked
-                      ? [...columns, k]
-                      : columns.filter((x) => x !== k),
-                  )
-                }
-              />
-              {label}
-            </label>
-          ))}
+    <>
+      <DomainPortfolio data={data} />
+      <Panel
+        title="A clearer picture of programme performance"
+        subtitle={`${list.length} programmes · senior outreach alongside delivery frequency`}
+      >
+        <div className="table-toolbar">
+          <label className="search-field">
+            <Search size={18} />
+            <input
+              aria-label="Search programme names"
+              placeholder="Search programmes…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <Select
+            label="Sort by"
+            value={sort}
+            onChange={(v) => setSort(v as typeof sort)}
+          >
+            {[
+              ["unique", "Unique seniors"],
+              ["male", "Male reach"],
+              ["minority", "Minority reach"],
+              ["sessions", "Sessions"],
+              ["repeat", "Repeat participants"],
+              ["average", "Average attendance"],
+              ["attendance", "Attendance entries"],
+              ["firstObserved", "First observed seniors"],
+              ["returning", "Seniors recorded before period"],
+            ].map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
         </div>
-        <Button
-          onClick={async () => {
-            try {
-              const prefs =
-                await api<Record<string, unknown>>("/api/preferences");
-              await api("/api/preferences", {
-                method: "PUT",
-                body: JSON.stringify({ ...prefs, programmeColumns: columns }),
-              });
-              setSavedMessage("Programme columns saved to your account.");
-            } catch (e) {
-              setSavedMessage((e as Error).message);
-            }
-          }}
-        >
-          Save programme columns
-        </Button>
-        {savedMessage && <p role="status">{savedMessage}</p>}
-      </details>
-      <div className="work-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Programme / AAP domain</th>
-              {columns
-                .filter((k) => metrics[k])
-                .map((k) => (
-                  <th key={k}>{metrics[k][0]}</th>
+        <details>
+          <summary>Choose visible programme columns</summary>
+          <div className="work-checks">
+            {Object.entries(metrics).map(([k, [label]]) => (
+              <label key={k}>
+                <input
+                  type="checkbox"
+                  checked={columns.includes(k)}
+                  onChange={(e) =>
+                    setColumns(
+                      e.target.checked
+                        ? [...columns, k]
+                        : columns.filter((x) => x !== k),
+                    )
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <Button
+            onClick={async () => {
+              try {
+                const prefs =
+                  await api<Record<string, unknown>>("/api/preferences");
+                await api("/api/preferences", {
+                  method: "PUT",
+                  body: JSON.stringify({ ...prefs, programmeColumns: columns }),
+                });
+                setSavedMessage("Programme columns saved to your account.");
+              } catch (e) {
+                setSavedMessage((e as Error).message);
+              }
+            }}
+          >
+            Save programme columns
+          </Button>
+          {savedMessage && <p role="status">{savedMessage}</p>}
+        </details>
+        <div className="work-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Programme / AAP domain</th>
+                {columns
+                  .filter((k) => metrics[k])
+                  .map((k) => (
+                    <th key={k}>{metrics[k][0]}</th>
+                  ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list
+                .slice(
+                  Math.min(page, Math.max(0, Math.ceil(list.length / 20) - 1)) *
+                    20,
+                  (Math.min(
+                    page,
+                    Math.max(0, Math.ceil(list.length / 20) - 1),
+                  ) +
+                    1) *
+                    20,
+                )
+                .map((p) => (
+                  <tr key={p.id}>
+                    <th>
+                      <button
+                        className="text-button"
+                        onClick={() => onProgramme(p)}
+                      >
+                        {p.name}
+                      </button>
+                      <small>{p.domain}</small>
+                    </th>
+                    {columns
+                      .filter((k) => metrics[k])
+                      .map((k) => (
+                        <td key={k}>{number(Number(p[k as keyof Stats]))}</td>
+                      ))}
+                  </tr>
                 ))}
-            </tr>
-          </thead>
-          <tbody>
-            {list
-              .slice(
-                Math.min(page, Math.max(0, Math.ceil(list.length / 20) - 1)) *
-                  20,
-                (Math.min(page, Math.max(0, Math.ceil(list.length / 20) - 1)) +
-                  1) *
-                  20,
-              )
-              .map((p) => (
-                <tr key={p.id}>
-                  <th>
-                    <button
-                      className="text-button"
-                      onClick={() => onProgramme(p)}
-                    >
-                      {p.name}
-                    </button>
-                    <small>{p.domain}</small>
-                  </th>
-                  {columns
-                    .filter((k) => metrics[k])
-                    .map((k) => (
-                      <td key={k}>{number(Number(p[k as keyof Stats]))}</td>
-                    ))}
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="work-actions">
-        <Button
-          disabled={page === 0}
-          onClick={() => setPage(Math.max(0, page - 1))}
-        >
-          Previous page
-        </Button>
-        <span>{list.length} programmes ? 20 per page</span>
-        <Button
-          disabled={(page + 1) * 20 >= list.length}
-          onClick={() => setPage(page + 1)}
-        >
-          Next page
-        </Button>
-      </div>
-      <details>
-        <summary>Compare Programmes ? select 2?4</summary>
-        <ProgrammeCompare
-          data={{ ...data, programmes: list }}
-          onProgramme={onProgramme}
-          columns={columns}
-          setColumns={setColumns}
-        />
-      </details>
-      {list.length === 0 && (
-        <div className="empty">No programmes match your search.</div>
-      )}
-      <Note>
-        One-time workshops and recurring activities have different delivery
-        frequencies. Open a programme for attendance per session, engagement and
-        evidence limitations.
-      </Note>
-    </Panel>
+            </tbody>
+          </table>
+        </div>
+        <div className="work-actions">
+          <Button
+            disabled={page === 0}
+            onClick={() => setPage(Math.max(0, page - 1))}
+          >
+            Previous page
+          </Button>
+          <span>{list.length} programmes ? 20 per page</span>
+          <Button
+            disabled={(page + 1) * 20 >= list.length}
+            onClick={() => setPage(page + 1)}
+          >
+            Next page
+          </Button>
+        </div>
+        <details onToggle={(e) => setCompareOpen(e.currentTarget.open)}>
+          <summary>Compare Programmes ? select 2?4</summary>
+          {compareOpen && (
+            <Suspense
+              fallback={<p role="status">Loading programme comparison?</p>}
+            >
+              <ProgrammeCompare
+                data={{ ...data, programmes: list }}
+                onProgramme={onProgramme}
+                columns={columns}
+                setColumns={setColumns}
+              />
+            </Suspense>
+          )}
+        </details>
+        {list.length === 0 && (
+          <div className="empty">No programmes match your search.</div>
+        )}
+        <Note>
+          One-time workshops and recurring activities have different delivery
+          frequencies. Open a programme for attendance per session, engagement
+          and evidence limitations.
+        </Note>
+      </Panel>
+    </>
   );
 }
 function Audience({
@@ -1793,13 +2013,13 @@ function Audience({
         >
           <div className="missing-fields">
             <span>
-              Venue analysis <b>Not supplied</b>
+              Venue analysis <b>Review programme metadata</b>
             </span>
             <span>
-              Living arrangements <b>Not supplied</b>
+              Living arrangements <b>Protected profile workspace</b>
             </span>
             <span>
-              Language & transport barriers <b>Not supplied</b>
+              Language & transport barriers <b>Review recorded responses</b>
             </span>
           </div>
           <Note>
@@ -2253,6 +2473,44 @@ function ProgrammeDialog({
       </div>
       <h3>Attendance trend · all ages</h3>
       <LineChart rows={p.trend} metric="attendance" />
+      <h3>Programme accessibility and feedback</h3>
+      <div className="work-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Staff-reviewed information</th>
+              <th>Recorded value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ["languages", "Languages"],
+              ["venueAccessibility", "Venue access"],
+              ["seatedOption", "Seated option"],
+              ["mobilityRequirements", "Mobility requirements"],
+            ].map(([key, label]) => (
+              <tr key={key}>
+                <th>{label}</th>
+                <td>
+                  {String(
+                    (
+                      p.optional.accessibility as
+                        Record<string, string> | undefined
+                    )?.[key] || "Data required",
+                  )}
+                </td>
+              </tr>
+            ))}
+            <tr>
+              <th>Programme-specific feedback</th>
+              <td>
+                Data required: participant feedback is not automatically
+                attributed to a programme.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <h3>Recorded session timing</h3>
       <div className="session-list">
         {p.sessionList.map((s) => (
@@ -2629,6 +2887,7 @@ function ImportDialog({
       }}
       wide
     >
+      <ImportProgress step={!preview ? 1 : consent ? 4 : 3} />
       {!preview ? (
         <form onSubmit={upload} className="form-stack">
           <Select label="Import mode" value={mode} onChange={setMode}>

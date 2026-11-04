@@ -230,7 +230,9 @@ export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
   await wb.xlsx.load(buffer);
   const sheets = wb.worksheets.filter((s) =>
     requiredHeaders.every((h) =>
-      s.getRow(1).values.slice(1).map(str).includes(h),
+      (Array.isArray(h) ? h : [h]).some((label) =>
+        s.getRow(1).values.slice(1).map(str).includes(label),
+      ),
     ),
   );
   if (sheets.length !== 1)
@@ -483,6 +485,7 @@ export function analytics(
   filters = {},
   now = todaySG(),
   summaryOnly = false,
+  selectionOnly = false,
 ) {
   settings = { ...defaults, ...settings };
   const pmap = new Map(data.participants.map((p) => [p.id, p]));
@@ -540,6 +543,7 @@ export function analytics(
         (filters.target === "male" && isSenior(a.p) && a.p.gender === "MALE") ||
         (filters.target === "minority" && isSenior(a.p) && isMinority(a.p))),
   );
+  if (selectionOnly) return new Set(base.map((a) => a.p.id));
   function stats(rows, scopeFrom = filters.from, scopeTo = filters.to) {
     const seniors = rows.filter((a) => isSenior(a.p)),
       people = [...new Map(seniors.map((a) => [a.p.id, a.p])).values()];
@@ -621,7 +625,31 @@ export function analytics(
   }
   const summary = stats(base),
     seniors = base.filter((a) => isSenior(a.p));
-  if (summaryOnly) return { summary };
+  const previousFor = () => {
+    let previous = null;
+    if (!filters._noPrevious && filters.from && filters.to) {
+      const from = new Date(filters.from + "T00:00:00Z"),
+        to = new Date((filters.to < now ? filters.to : now) + "T00:00:00Z"),
+        days = Math.round((to - from) / 86400000) + 1;
+      const prevTo = new Date(+from - 86400000).toISOString().slice(0, 10),
+        prevFrom = new Date(+from - days * 86400000).toISOString().slice(0, 10);
+      if (all.some((a) => a.s.date <= prevFrom) && days > 0) {
+        const prior = analytics(
+          data,
+          settings,
+          { ...filters, from: prevFrom, to: prevTo, _noPrevious: true },
+          now,
+          true,
+        );
+        previous = { ...prior.summary, from: prevFrom, to: prevTo };
+      }
+    }
+    return previous;
+  };
+  if (summaryOnly && summaryOnly !== "overview")
+    return summaryOnly === "compare"
+      ? { summary, previous: previousFor() }
+      : { summary };
   const groupedRows = (rows, key) => {
     const map = new Map();
     for (const a of rows) {
@@ -693,12 +721,18 @@ export function analytics(
     .map(([label, r]) => {
       const g = { label, ...stats(r) },
         pg = pgmap.get(g.label),
-        trend = group(r, (a) => a.s.date.slice(0, 7), "month").sort((a, b) =>
-          a.label.localeCompare(b.label),
-        );
-      const sessionList = [
-        ...new Map(r.map((a) => [a.s.id, a.s])).values(),
-      ].sort((a, b) => a.date.localeCompare(b.date));
+        trend =
+          summaryOnly === "overview"
+            ? []
+            : group(r, (a) => a.s.date.slice(0, 7), "month").sort((a, b) =>
+                a.label.localeCompare(b.label),
+              );
+      const sessionList =
+        summaryOnly === "overview"
+          ? []
+          : [...new Map(r.map((a) => [a.s.id, a.s])).values()].sort((a, b) =>
+              a.date.localeCompare(b.date),
+            );
       return {
         ...g,
         id: pg.id,
@@ -711,6 +745,15 @@ export function analytics(
       };
     })
     .sort((a, b) => b.unique - a.unique || a.name.localeCompare(b.name));
+  if (summaryOnly === "overview")
+    return {
+      ...analyticsContext(data, settings, filters, now, summary),
+      contextOnly: false,
+      previous: previousFor(),
+      trends,
+      programmes: programmes.map((p) => ({ ...p, optional: {} })),
+      domains: group(base, (a) => a.pg.domain),
+    };
   const people = [...new Map(seniors.map((a) => [a.p.id, a.p])).values()];
   const breakdown = (fn) =>
     Object.entries(
@@ -840,24 +883,7 @@ export function analytics(
         "Attendance describes participation, not impact or causation. Cost, capacity, feedback and complete centre history are unavailable unless separately recorded.",
     };
   });
-  let previous = null;
-  if (!filters._noPrevious && filters.from && filters.to) {
-    const from = new Date(filters.from + "T00:00:00Z"),
-      to = new Date((filters.to < now ? filters.to : now) + "T00:00:00Z"),
-      days = Math.round((to - from) / 86400000) + 1;
-    const prevTo = new Date(+from - 86400000).toISOString().slice(0, 10),
-      prevFrom = new Date(+from - days * 86400000).toISOString().slice(0, 10);
-    if (all.some((a) => a.s.date <= prevFrom) && days > 0) {
-      const prior = analytics(
-        data,
-        settings,
-        { ...filters, from: prevFrom, to: prevTo, _noPrevious: true },
-        now,
-        true,
-      );
-      previous = { ...prior.summary, from: prevFrom, to: prevTo };
-    }
-  }
+  const previous = previousFor();
   return {
     summary,
     socialRisk: {
@@ -957,6 +983,63 @@ export function analytics(
 }
 
 // Codes are matched as complete strings. Multiple categories require an explicit mapping.
+export function analyticsContext(
+  data,
+  settings = defaults,
+  filters = {},
+  now = todaySG(),
+  summary,
+) {
+  settings = { ...defaults, ...settings };
+  const sessionMap = new Map(data.sessions.map((s) => [s.id, s])),
+    programmeIds = new Set(data.programmes.map((p) => p.id)),
+    personIds = new Set(data.participants.map((p) => p.id));
+  const dates = data.attendance
+    .filter((a) => personIds.has(a.participantId))
+    .map((a) => sessionMap.get(a.sessionId))
+    .filter((s) => s && programmeIds.has(s.programmeId) && s.date <= now)
+    .map((s) => s.date)
+    .sort();
+  return {
+    ...(summary ? { summary } : analytics(data, settings, filters, now, true)),
+    contextOnly: true,
+    previous: null,
+    trends: [],
+    programmes: [],
+    domains: [],
+    gender: [],
+    race: [],
+    ages: [],
+    clients: [],
+    boundary: [],
+    frequency: [],
+    timing: [],
+    duration: [],
+    insights: [],
+    recommendations: [],
+    period: {
+      from: filters.from || dates[0] || "",
+      to: filters.to || now,
+      now,
+    },
+    coverage: { from: dates[0] || null, to: dates.at(-1) || null },
+    quality: {
+      missingAge: data.participants.filter((p) => p.age === null).length,
+      unknownGender: data.participants.filter(
+        (p) => !["MALE", "FEMALE"].includes(p.gender),
+      ).length,
+      unknownRace: data.participants.filter((p) => p.race === "UNKNOWN").length,
+      missingRace: data.participants.filter((p) => p.race === "MISSING").length,
+      futureSessions: data.sessions.filter((s) => s.date > now).length,
+      missingVenue: data.sessions.filter((s) => !s.venue).length,
+    },
+    options: {
+      domains: [...new Set(data.programmes.map((p) => p.domain))].sort(),
+      programmes: data.programmes.map((p) => ({ id: p.id, name: p.name })),
+      races: [...new Set(data.participants.map((p) => p.race))].sort(),
+    },
+  };
+}
 export function riskState(participant, settings = defaults) {
   const raw = participant.riskRaw;
   if (raw === undefined || raw === null || raw === "")

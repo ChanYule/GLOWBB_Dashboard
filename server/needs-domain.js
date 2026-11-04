@@ -50,6 +50,13 @@ export const barrierThemes = {
     "Caregiving responsibilities",
     "Limited programme choices",
   ],
+  "Additional reported access and preferences": [
+    "Does not know how to register",
+    "Prefers a smaller group",
+    "Uncomfortable attending alone",
+    "Health-related participation limitations",
+    "Prefers not to say",
+  ],
   Other: ["Other"],
   Unknown: ["Unknown"],
 };
@@ -107,6 +114,8 @@ export function materializeProfiles(data, profiles = []) {
             "race",
             "preferredLanguage",
             "registrationDate",
+            "livingRaw",
+            "blockRaw",
             "client",
             "boundary",
           ].includes(key)
@@ -121,11 +130,17 @@ export function participantHistory(
   id,
   now = todaySG(),
   bands = [30, 60, 90],
+  index,
 ) {
-  const sessions = new Map(data.sessions.map((s) => [s.id, s])),
-    programmes = new Map(data.programmes.map((p) => [p.id, p]));
-  const rows = data.attendance
-    .filter((a) => a.participantId === id)
+  const sessions =
+      index?.sessions || new Map(data.sessions.map((s) => [s.id, s])),
+    programmes =
+      index?.programmes || new Map(data.programmes.map((p) => [p.id, p]));
+  const rows = (
+    index
+      ? index.attendance.get(id) || []
+      : data.attendance.filter((a) => a.participantId === id)
+  )
     .map((a) => ({ ...a, session: sessions.get(a.sessionId) }))
     .filter((a) => a.session && a.session.date <= now)
     .map((a) => ({ ...a, programme: programmes.get(a.session.programmeId) }))
@@ -184,6 +199,8 @@ export function needsAnalysis(
     .filter(
       (r) =>
         pmap.has(r.participant_id) &&
+        r.membershipStatus !== "Archived" &&
+        (settings.registry?.type !== "clients" || r.client === true) &&
         (!r.registrationDate || r.registrationDate <= now),
     );
   const memberIds = new Set(members.map((r) => r.participant_id));
@@ -199,31 +216,10 @@ export function needsAnalysis(
   const report = analytics(effective, settings, filters, now),
     sessions = new Map(effective.sessions.map((s) => [s.id, s]));
   const allowedProgrammes = new Set(report.programmes.map((p) => p.id));
-  const selectedIds = new Set(
-    effective.attendance
-      .filter((a) => {
-        const s = sessions.get(a.sessionId);
-        return (
-          s &&
-          s.date <= now &&
-          (!filters.from || s.date >= filters.from) &&
-          (!filters.to || s.date <= filters.to) &&
-          allowedProgrammes.has(s.programmeId)
-        );
-      })
-      .map((a) => a.participantId),
-  );
-  // Ask analytics for exact participant eligibility instead of reproducing its filter logic.
-  const allSelected = effective.participants.filter(
-    (p) =>
-      selectedIds.has(p.id) &&
-      analytics(
-        { ...effective, participants: [p] },
-        settings,
-        filters,
-        now,
-        true,
-      ).summary.allAges > 0,
+  // Reuse the same eligibility pass once, including every legacy filter.
+  const selectedIds = analytics(effective, settings, filters, now, true, true);
+  const allSelected = effective.participants.filter((p) =>
+    selectedIds.has(p.id),
   );
   const selected = allSelected.filter(
     (p) => p.age != null && p.age >= settings.seniorAge,
@@ -342,6 +338,7 @@ export function needsAnalysis(
     cfs: "CFS",
     riskRaw: "Social Risk Factor (raw code coverage)",
     livingRaw: "Living arrangement",
+    blockRaw: "Residential block",
     maritalRaw: "Marital status",
     preferredLanguage: "Preferred language",
   };
@@ -518,14 +515,15 @@ export function needsAnalysis(
       ]),
       needsRespondents.length,
     );
-  const barrierRespondents = responseMembers.filter(
-      ([, r]) => r.barriers.length,
+  const barrierRespondents = responseMembers.filter(([, r]) =>
+      r.barriers.some((b) => b.category !== "Prefers not to say"),
     ),
     reported = (r) =>
       r.barriers.filter(
         (b) =>
           ["Reported", "Assessed"].includes(b.status) &&
-          ["Participant-reported", "Caregiver-reported"].includes(b.source),
+          ["Participant-reported", "Caregiver-reported"].includes(b.source) &&
+          b.category !== "Prefers not to say",
       );
   const barrierSummary = aggregate(
     barrierRespondents.map(([id, r]) => [
@@ -624,9 +622,25 @@ export function needsAnalysis(
           null,
     });
   }
+  const historyIndex = {
+    sessions,
+    programmes: new Map(effective.programmes.map((p) => [p.id, p])),
+    attendance: new Map(),
+  };
+  for (const a of effective.attendance) {
+    if (!historyIndex.attendance.has(a.participantId))
+      historyIndex.attendance.set(a.participantId, []);
+    historyIndex.attendance.get(a.participantId).push(a);
+  }
   const histories = effective.participants.map((p) => ({
     p,
-    history: participantHistory(effective, p.id, now, settings.inactivityBands),
+    history: participantHistory(
+      effective,
+      p.id,
+      now,
+      settings.inactivityBands,
+      historyIndex,
+    ),
   }));
   const observedHistories = histories.filter(({ p, history }) =>
     registryKnown ? memberIds.has(p.id) : history.last,
@@ -879,7 +893,9 @@ export function needsAnalysis(
     findings,
     limitations: [
       "Current/latest-known profiles are used; no historical assessments are inferred.",
-      "No ActivityHub integration, complete membership registry, assessment codebook or verified programme capacity/cost data was supplied.",
+      registryKnown
+        ? "Registry completeness is staff-attested. Historical membership, assessment codebooks and verified programme capacity/cost are not inferred."
+        : "No complete membership registry is attested. Historical membership, assessment codebooks and verified programme capacity/cost are not inferred.",
       "Living alone does not establish loneliness. CFS and social risk codes do not establish diagnoses or programme eligibility.",
     ],
   };

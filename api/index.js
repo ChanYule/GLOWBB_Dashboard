@@ -93,11 +93,11 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
         signal: AbortSignal.timeout(55000),
       });
       const type = upstream.headers.get("content-type") || "";
-      const report = /^\/api\/(?:export|needs\/export)\/report$/.test(
+      const report = /^\/api\/(?:export|needs\/export|clients\/export)\/report$/.test(
         incoming.pathname,
       );
       const csv =
-        /^\/api\/(?:export\/csv|needs\/export\/csv|analysis\/export|analysis\/view\/[^/]+\/export)$/.test(
+        /^\/api\/(?:export\/csv|needs\/export\/csv|clients\/export\/csv|analysis\/export|analysis\/view\/[^/]+\/export)$/.test(
           incoming.pathname,
         );
       if (upstream.status >= 300 && upstream.status < 400)

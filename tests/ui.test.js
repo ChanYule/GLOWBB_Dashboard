@@ -13,6 +13,7 @@ import {
 } from "../server/domain.js";
 import { openDb, readData, saveImport, passwordHash } from "../server/db.js";
 import { operationsReport } from "../server/operations.js";
+import { clientReport, CLIENT_SNAPSHOT } from "../server/client-domain.js";
 registerHooks({
   load(url, context, next) {
     if (new URL(url).pathname.endsWith(".css"))
@@ -56,6 +57,141 @@ const { OperationsPage, ActivityScreening } = await tsImport(
 );
 const { DataManagement } = await tsImport(
   "../src/data-management.tsx",
+  import.meta.url,
+);
+const { ClientEngagement } = await tsImport(
+  "../src/client-ui.tsx",
+  import.meta.url,
+);
+const { ManagementHome } = await tsImport(
+  "../src/management.tsx",
+  import.meta.url,
+);
+const { PresentationView } = await tsImport(
+  "../src/presentation.tsx",
+  import.meta.url,
+);
+
+test("management overview has six cards and presentation preserves the same figures without private records", async () => {
+  const original = globalThis.fetch;
+  const brief = {
+    clients: {
+      available: true,
+      attendanceAvailable: true,
+      summary: { registered: 100, attending: 30, noAttendance: 70, rate: 30 },
+      populationNote: "Current registered clients",
+    },
+    needs: {
+      respondents: 0,
+      eligible: 100,
+      note: "Missing responses remain unknown",
+      interests: { suppressed: false, values: [], denominator: 0 },
+    },
+    actions: { total: 0, stages: {} },
+  };
+  let briefingCalls=0;
+  globalThis.fetch = async () => {briefingCalls++;return Response.json(brief);};
+  const filters = {
+    from: "2026-10-01",
+    to: "2026-10-31",
+    domain: "",
+    programme: "",
+    target: "all",
+    interval: "month",
+    gender: "",
+    race: "",
+    client: "",
+    boundary: "",
+    ageBand: "",
+  };
+  try {
+    render(
+      React.createElement(ManagementHome, {
+        data: dashboard(),
+        filters,
+        revision: 0,
+        navigate: () => {},
+        present: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector(".management-kpis").dataset.ready,
+        "true",
+      ),
+    );
+    assert.equal(document.querySelectorAll(".management-kpi").length, 6);
+    assert.equal(
+      document.querySelectorAll(".management-findings article").length,
+      3,
+    );
+    assert.ok(screen.getByRole("button", { name: "Presentation View" }));
+    cleanup();
+    let closed = false;
+    const privateData = {
+      ...dashboard(),
+      decisions: [
+        { id: "private-id", notes: "PRIVATE NOTE", assigned: "PRIVATE OWNER" },
+      ],
+    };
+    render(
+      React.createElement(PresentationView, {
+        data: privateData,
+        briefing: brief,
+        filters,
+        revision: 0,
+        close: () => {
+          closed = true;
+        },
+      }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        screen.getByRole("button", { name: "Print / Save as PDF" }).disabled,
+        false,
+      ),
+    );
+    assert.equal(document.querySelectorAll(".report-slide").length, 6);
+    assert.equal(briefingCalls,1);
+    assert.ok(screen.getByText("100"));
+    assert.ok(screen.getAllByText("70").length);
+    assert.equal(
+      document
+        .querySelector(".presentation")
+        .textContent.includes("PRIVATE NOTE"),
+      false,
+    );
+    assert.equal(
+      document
+        .querySelector(".presentation")
+        .textContent.includes("PRIVATE OWNER"),
+      false,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    assert.equal(closed, true);
+    cleanup();
+    assert.equal(document.body.classList.contains("presenting"), false);
+    render(
+      React.createElement(PresentationView, {
+        data: dashboard(),
+        filters: { ...filters, gender: "MALE" },
+        revision: 0,
+        close: () => {},
+      }),
+    );
+    await waitFor(() => assert.ok(screen.getByText(/Reset audience filters/)));
+    assert.equal(document.querySelectorAll(".report-slide").length, 0);
+    assert.equal(
+      screen.getByRole("button", { name: "Print / Save as PDF" }).disabled,
+      true,
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+const { ClientRegistryImport } = await tsImport(
+  "../src/client-import.tsx",
   import.meta.url,
 );
 const db = openDb(":memory:");
@@ -253,7 +389,7 @@ test("authenticated administrator sees imports, settings, planning and sign out"
     assert.ok(screen.getByRole("button", { name: "Data management" }));
     assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
     assert.ok(screen.getByRole("button", { name: "Sign out" }));
-    fireEvent.click(screen.getByText("More analysis tools"));
+    fireEvent.click(screen.getByText("More Tools"));
     fireEvent.click(
       screen.getByRole("button", { name: "Planning & Recommendations" }),
     );
@@ -532,7 +668,7 @@ test("the integrated operations tab remains reachable when attendance is empty",
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    fireEvent.click(screen.getByText("More analysis tools"));
+    fireEvent.click(screen.getByText("More Tools"));
     fireEvent.click(
       screen.getByRole("button", { name: "Operations & Screening" }),
     );
@@ -741,11 +877,11 @@ test("the needs dashboard restricts viewer access and makes the three analysis l
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    fireEvent.click(screen.getByText("More analysis tools"));
+    fireEvent.click(screen.getByText("More Tools"));
     for (const label of [
       "Who Are We Serving?",
       "Gaps and Participation Barriers",
-      "Programme Planning and Actions",
+      "Planning & Actions",
       "Programme Alignment",
       "Data Quality and Administration",
     ])
@@ -1058,6 +1194,320 @@ test("data management shows an empty state and requires a separate confirmation 
     );
     await waitFor(() => assert.ok(deletion));
     assert.equal(deletion.confirmation, "DELETE BACKUP");
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+function clientFixtureReport() {
+  const people = Array.from({ length: 20 }, (_, i) => ({
+    id: "client-" + i,
+    memberId: "C" + i,
+    age: 75,
+    gender: "MALE",
+    race: "MALAY",
+    cfs: "1-3",
+    riskRaw: "0",
+    livingRaw: "Alone",
+    blockRaw: "101",
+    client: true,
+    membershipStatus: "Active",
+  }));
+  return clientReport(
+    {
+      data: {
+        participants: people,
+        programmes: [],
+        sessions: [],
+        attendance: [],
+      },
+      profiles: [],
+      feedback: [],
+      registry: people.map((p) => ({
+        participant_id: p.id,
+        snapshot: CLIENT_SNAPSHOT,
+        details: JSON.stringify(p),
+      })),
+      settings: {
+        ...defaults,
+        registry: {
+          type: "clients",
+          complete: true,
+          snapshot: CLIENT_SNAPSHOT,
+          asOf: "2026-11-03",
+        },
+      },
+    },
+    {},
+    "2026-11-03",
+  );
+}
+test("client engagement denies viewers without requesting client data and saves selected cards and comparisons independently", async () => {
+  const original = globalThis.fetch;
+  let requests = 0,
+    reportRequests = 0,
+    saved;
+  globalThis.fetch = async (url, options) => {
+    requests++;
+    if (String(url) === "/api/clients/preferences") {
+      if (options?.method === "PUT") {
+        saved = JSON.parse(options.body);
+        return Response.json({ ok: true });
+      }
+      return Response.json({ views: [], sharedTemplates: [] });
+    }
+    if (String(url) === "/api/clients/report") {
+      reportRequests++;
+      return Response.json(clientFixtureReport());
+    }
+    throw Error("Unexpected request " + url);
+  };
+  try {
+    const viewer = render(
+      React.createElement(ClientEngagement, {
+        user: { username: "viewer", role: "viewer" },
+        initialFilters: filters,
+        onChanged: () => {},
+      }),
+    );
+    assert.ok(screen.getByText(/restricted to authorised planners/));
+    assert.equal(requests, 0);
+    viewer.unmount();
+    const planner = render(
+      React.createElement(ClientEngagement, {
+        user: { username: "planner", role: "planner" },
+        initialFilters: filters,
+        onChanged: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getAllByText("Registered clients").length > 0),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Customise client view" }),
+    );
+    fireEvent.change(screen.getByLabelText("Ready-made client view"), {
+      target: { value: "Living Arrangement Analysis" },
+    });
+    fireEvent.change(screen.getByLabelText("New client view name"), {
+      target: { value: "Weekly living review" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save as new client view" }),
+    );
+    await waitFor(() => assert.ok(saved));
+    assert.equal(saved.views[0].name, "Weekly living review");
+    assert.deepEqual(saved.views[0].charts, ["living"]);
+    assert.ok(saved.views[0].kpis.includes("livingAloneNoAttendance"));
+    await waitFor(() =>
+      assert.equal(
+        screen.queryByText("Calculating linked client participation…"),
+        null,
+      ),
+    );
+    const beforeRefresh = reportRequests;
+    planner.rerender(
+      React.createElement(ClientEngagement, {
+        user: { username: "planner", role: "planner" },
+        initialFilters: filters,
+        dataRevision: 1,
+        onChanged: () => {},
+      }),
+    );
+    await waitFor(() => assert.ok(reportRequests > beforeRefresh));
+    assert.equal(
+      screen.queryByRole("button", {
+        name: "Share administrator client template",
+      }),
+      null,
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("client registry UI reviews conflicts and requires staff review before confirmation", async () => {
+  const original = globalThis.fetch,
+    originalFormData = globalThis.FormData;
+  let confirmed;
+  globalThis.FormData = dom.window.FormData;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).endsWith("/preview"))
+      return Response.json({
+        id: "registry-preview",
+        rows: 2,
+        matched: 1,
+        newProfiles: 1,
+        clients: 2,
+        withinBoundary: 2,
+        missingLiving: 0,
+        enrichments: 1,
+        omitted: 1,
+        duplicates: 0,
+        issues: [],
+        conflicts: [
+          {
+            key: "gender-key",
+            memberId: "C1",
+            label: "Gender",
+            existing: "MALE",
+            incoming: "FEMALE",
+            protectedReview: false,
+            source: "Attendance profile",
+          },
+        ],
+        note: "Attendance preserved",
+      });
+    confirmed = JSON.parse(options.body);
+    return Response.json({ created: 1, changed: 1, conflictsKept: 0 });
+  };
+  try {
+    render(React.createElement(ClientRegistryImport, { onSaved: () => {} }));
+    const file = new dom.window.File(["fixture"], "registry.xlsx");
+    fireEvent.change(screen.getByLabelText("Client registry file"), {
+      target: { files: [file] },
+    });
+    fireEvent.submit(
+      screen.getByLabelText("Client registry file").closest("form"),
+    );
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("button", { name: "Confirm client registry" }),
+      ),
+    );
+    assert.equal(
+      screen.getByRole("button", { name: "Confirm client registry" }).disabled,
+      true,
+    );
+    assert.ok(screen.getByText(/previously registered clients are absent/));
+    fireEvent.click(screen.getByLabelText("Approve Gender for C1"));
+    fireEvent.click(screen.getByLabelText(/I reviewed the matches/));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm client registry" }),
+    );
+    await waitFor(() => assert.ok(confirmed));
+    assert.deepEqual(confirmed.approvedFields, ["gender-key"]);
+    assert.equal(confirmed.complete, false);
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+    globalThis.FormData = originalFormData;
+  }
+});
+test("client follow-up keeps clinical classifications out of the default table and records sourced voluntary feedback without sending messages", async () => {
+  const original = globalThis.fetch;
+  let contact;
+  const row = {
+    id: "client-0",
+    memberId: "C0",
+    age: 75,
+    living: "Alone",
+    block: "101",
+    last: null,
+    status: "no-history",
+    attendance: 0,
+    followUp: "Not contacted",
+    assigned: "",
+    lastContact: null,
+    profileRevision: 0,
+    membershipRevision: 1,
+  };
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path === "/api/clients/preferences")
+      return Response.json({ views: [] });
+    if (path === "/api/clients/report")
+      return Response.json(clientFixtureReport());
+    if (path === "/api/clients/followups")
+      return Response.json({
+        rows: [row],
+        total: 1,
+        notice: "Authorised staff only",
+      });
+    if (path.endsWith("/source"))
+      return Response.json({
+        current: { membershipStatus: "Active", revision: 1, fieldSources: {} },
+        contacts: [],
+      });
+    if (path === "/api/needs/catalogue")
+      return Response.json({
+        interests: [],
+        needs: [],
+        barriers: [],
+        informationSources: ["Staff-observed", "Participant-reported"],
+        needStates: [],
+        actionStates: [],
+      });
+    if (path === "/api/participants/client-0")
+      return Response.json({
+        base: {
+          id: row.id,
+          age: 75,
+          gender: "MALE",
+          race: "MALAY",
+          client: true,
+          boundary: true,
+        },
+        current: {},
+        details: {},
+        revision: 0,
+        history: {
+          attendance: 0,
+          programmes: 0,
+          domains: 0,
+          sessions: 0,
+          first: null,
+          last: null,
+          status: "No recorded attendance",
+          rows: [],
+        },
+        feedback: [],
+      });
+    if (path.endsWith("/contact")) {
+      contact = JSON.parse(options.body);
+      return Response.json({ ok: true });
+    }
+    throw Error("Unexpected request " + path);
+  };
+  try {
+    render(
+      React.createElement(ClientEngagement, {
+        user: { username: "planner", role: "planner" },
+        initialFilters: filters,
+        onChanged: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getAllByText("Registered clients").length > 0),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Client follow-up list" }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getByRole("button", { name: "Open follow-up" })),
+    );
+    assert.equal(screen.queryByRole("columnheader", { name: "CFS" }), null);
+    assert.equal(screen.queryByRole("columnheader", { name: "SRF" }), null);
+    fireEvent.click(screen.getByRole("button", { name: "Open follow-up" }));
+    await waitFor(() =>
+      assert.ok(screen.getByRole("dialog", { name: "Client follow-up · C0" })),
+    );
+    fireEvent.change(screen.getByLabelText("Contact outcome"), {
+      target: { value: "Follow-up required" },
+    });
+    fireEvent.change(screen.getByLabelText("Information source"), {
+      target: { value: "Participant-reported" },
+    });
+    fireEvent.click(screen.getByLabelText("Lack of programme awareness"));
+    fireEvent.click(screen.getByLabelText(/I have permission to record/));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save reviewed contact" }),
+    );
+    await waitFor(() => assert.ok(contact));
+    assert.equal(contact.source, "Participant-reported");
+    assert.deepEqual(contact.barriers, ["Lack of programme awareness"]);
+    assert.equal(contact.profileRevision, 0);
+    assert.equal(contact.permission, true);
   } finally {
     cleanup();
     globalThis.fetch = original;

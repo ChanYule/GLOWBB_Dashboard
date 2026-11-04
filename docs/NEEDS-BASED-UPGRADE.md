@@ -6,6 +6,8 @@ Temporary access update: staff sign-in is disabled by default in development and
 
 Latest interface update: use **Data management** for imports, definitions, deletion and recovery. Secondary reports are grouped under **More analysis tools**; phone navigation opens through **Menu**. See [Managing and deleting saved data](DATA-MANAGEMENT.md).
 
+Latest client integration: [Client registry and attendance integration](CLIENT-REGISTRY-INTEGRATION.md) adds the supplied ten-column client workbook, population-based engagement, authorised follow-up and shared client views. Source limitations below describe the earlier release where no registry had yet been supplied.
+
 ## Source reconciliation
 
 The supplied `member_attendances_20261103110958.xlsx` matches the reference figures through independent raw-row aggregation and application parsing:

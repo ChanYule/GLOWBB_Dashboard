@@ -125,7 +125,7 @@ export type Dashboard = {
   timing: Trend[];
   duration: Trend[];
   insights: Insight[];
-  metadata?: { lastImportAt: string | null; generatedAt: string };
+  metadata?: { lastImportAt: string | null; lastUpdatedAt?: string | null; generatedAt: string };
   recommendations: Recommendation[];
   period: { from: string; to: string; now: string };
   coverage: { from: string | null; to: string | null };

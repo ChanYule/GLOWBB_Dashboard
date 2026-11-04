@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useCallback, useRef } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api } from "./api";
+import { ClientRegistryImport } from "./client-import";
 import type { Dashboard, Filters, User } from "./types";
 import { AnalysisGraphic, PersonalWorkspace } from "./workspace";
 import "./needs.css";
@@ -132,6 +133,8 @@ type Profile = {
     race?: string;
     preferredLanguage?: string;
     registrationDate?: string;
+    livingRaw?: string;
+    blockRaw?: string;
     client?: boolean | null;
     boundary?: boolean | null;
   };
@@ -221,6 +224,12 @@ type Detail = {
     preferences?: Profile["preferences"];
     barriers?: Evidence[];
     followUpNeeded?: boolean;
+    contact?: {
+      outcome: string;
+      assigned: string;
+      notes: string;
+      nextDate: string | null;
+    };
   }[];
 };
 type Action = {
@@ -264,7 +273,7 @@ const fmt = (n: number | null | undefined) =>
   n == null
     ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(n);
-const blankAction = (
+export const blankAction = (
   kind: "action" | "outreach" = "action",
   f?: Finding,
 ): Action => ({
@@ -900,7 +909,7 @@ export function NeedsPage({
                 </button>
               </div>
               <div className="needs-insight-grid">
-                {report.findings.map((f) => (
+                {report.findings.slice(0, 5).map((f) => (
                   <article className="panel" key={f.id}>
                     <span className="badge soft">
                       {f.category} · {f.priority} priority
@@ -936,6 +945,7 @@ export function NeedsPage({
                   </article>
                 ))}
               </div>
+              {report.findings.length > 5 && <details><summary>More evidence to review ({report.findings.length - 5})</summary>{report.findings.slice(5).map(f => <article className="panel" key={f.id}><h3>{f.title}</h3><p>{f.finding}</p><p><b>Evidence:</b> {f.evidence}</p><p><b>Next step:</b> {f.action}</p></article>)}</details>}
               {!report.findings.length && (
                 <p className="panel">
                   No additional evidence-supported needs recommendations in this
@@ -1169,8 +1179,16 @@ function NeedsCoverage({ report }: { report: NeedsReport }) {
     </Panel>
   );
 }
-export function ParticipantEditor({ onSaved }: { onSaved: () => void }) {
-  const [memberId, setMemberId] = useState(""),
+export function ParticipantEditor({
+  onSaved,
+  initialId,
+  initialMemberId,
+}: {
+  onSaved: () => void;
+  initialId?: string;
+  initialMemberId?: string;
+}) {
+  const [memberId, setMemberId] = useState(initialMemberId || ""),
     [detail, setDetail] = useState<Detail | null>(null),
     [profile, setProfile] = useState<Profile>({}),
     [tab, setTab] = useState("Basic Information"),
@@ -1186,14 +1204,18 @@ export function ParticipantEditor({ onSaved }: { onSaved: () => void }) {
       .then(setCatalogue)
       .catch((e) => setMessage(e.message));
   }, []);
-  const load = async (id: string) => {
+  const load = useCallback(async (id: string) => {
     const d = await api<Detail>("/api/participants/" + id);
     setDetail(d);
     setProfile(d.details);
     setSource(d.provenance?.source || "Unconfirmed");
     setEffectiveDate(d.provenance?.effectiveDate || "");
     setMessage("");
-  };
+  }, []);
+  useEffect(() => {
+    if (initialId)
+      void load(initialId).catch((e: Error) => setMessage(e.message));
+  }, [initialId, load]);
   const lookup = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -1457,9 +1479,23 @@ export function ParticipantEditor({ onSaved }: { onSaved: () => void }) {
                 <p className="note">
                   Living alone does not establish loneliness or social
                   isolation. Raw social risk codes require approved mappings.
-                  Correct imported circumstances through a reviewed source
-                  import.
+                  Imported values are retained. A sourced staff correction can
+                  be recorded below; leave it blank to use the imported value.
                 </p>
+                <Field
+                  label="Reviewed living arrangement"
+                  value={profile.basic?.livingRaw || ""}
+                  onChange={(v) =>
+                    update("basic", { ...profile.basic, livingRaw: v })
+                  }
+                />
+                <Field
+                  label="Reviewed residential block"
+                  value={profile.basic?.blockRaw || ""}
+                  onChange={(v) =>
+                    update("basic", { ...profile.basic, blockRaw: v })
+                  }
+                />
                 {[
                   ["regularContact", "Regular social contact"],
                   [
@@ -1679,6 +1715,13 @@ export function ParticipantEditor({ onSaved }: { onSaved: () => void }) {
                 </h4>
                 <p>{f.comments}</p>
                 <p>{f.suggestedImprovement}</p>
+                {f.contact && (
+                  <p>
+                    Contact outcome: {f.contact.outcome}. Assigned staff:{" "}
+                    {f.contact.assigned || "Unassigned"}. Next contact:{" "}
+                    {f.contact.nextDate || "Not set"}. {f.contact.notes}
+                  </p>
+                )}
                 <p>
                   Stated interests:{" "}
                   {f.preferences?.interests?.join(", ") ||
@@ -2151,7 +2194,7 @@ function ActionTracker({
     </Panel>
   );
 }
-function ActionEditor({
+export function ActionEditor({
   value,
   onClose,
   onSaved,
@@ -2756,150 +2799,5 @@ function NeedsSettings({ onSaved }: { onSaved: () => void }) {
   );
 }
 function RegistryImport({ onSaved }: { onSaved: () => void }) {
-  type Preview = {
-    id: string;
-    rows: number;
-    matched: number;
-    newProfiles: number;
-    duplicates: number;
-    issues: { row: number; message: string }[];
-    note: string;
-  };
-  const [p, setPreview] = useState<Preview | null>(null),
-    [complete, setComplete] = useState(false),
-    [historyComplete, setHistoryComplete] = useState(false),
-    [asOf, setAsOf] = useState(today()),
-    [consent, setConsent] = useState(false),
-    [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false);
-  return (
-    <Panel title="Verified member registry import · administrator">
-      <p>
-        An attendance export is not a member registry. Upload a verified
-        registry with Name/Member ID and optional Gender, Name/Age, Name/Race
-        and Registration Date. This creates membership evidence without
-        attendance. Previous snapshots remain stored.
-      </p>
-      {!p ? (
-        <form
-          className="form-stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            try {
-              setPreview(
-                await api<Preview>("/api/registry/preview", {
-                  method: "POST",
-                  body: new FormData(e.currentTarget),
-                }),
-              );
-              setMessage("");
-            } catch (e) {
-              setMessage((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <input
-            name="file"
-            type="file"
-            aria-label="Verified member registry file"
-            accept=".xlsx,.csv"
-            required
-          />
-          <button className="button" disabled={busy}>
-            Preview member registry
-          </button>
-        </form>
-      ) : (
-        <div className="form-stack">
-          <p>
-            {p.rows} valid members · {p.matched} existing profiles ·{" "}
-            {p.newProfiles} new profiles · {p.duplicates} duplicates
-          </p>
-          {p.issues.map((i, n) => (
-            <p key={n}>
-              Row {i.row}: {i.message}
-            </p>
-          ))}
-          <p className="note">{p.note}</p>
-          <Field
-            label="Registry snapshot date"
-            type="date"
-            value={asOf}
-            onChange={setAsOf}
-          />
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={complete}
-              onChange={(e) => setComplete(e.target.checked)}
-            />
-            I have verified this is the complete membership population as of the
-            snapshot date
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={historyComplete}
-              onChange={(e) => setHistoryComplete(e.target.checked)}
-            />
-            The available attendance history has separately been verified
-            complete for these members (required to label never attended)
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-            />
-            I reviewed this registry preview and the declared completeness
-          </label>
-          <button
-            className="button primary"
-            disabled={!consent || busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await api("/api/registry/confirm", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    id: p.id,
-                    complete,
-                    historyComplete,
-                    asOf,
-                  }),
-                });
-                setPreview(null);
-                setConsent(false);
-                setMessage(
-                  "Registry snapshot saved. Historical attendance was preserved.",
-                );
-                onSaved();
-              } catch (e) {
-                setMessage((e as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Confirm member registry
-          </button>
-          <button
-            className="button"
-            onClick={() => {
-              void api("/api/import/preview/" + p.id, {
-                method: "DELETE",
-              }).catch(() => {});
-              setPreview(null);
-            }}
-          >
-            Discard registry preview
-          </button>
-        </div>
-      )}
-      {message && <p role="status">{message}</p>}
-    </Panel>
-  );
+  return <ClientRegistryImport onSaved={onSaved} />;
 }

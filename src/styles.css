@@ -1,9 +1,9 @@
 :root {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
-  color: #203d46;
-  background: #f5f7f8;
+  color: var(--ink);
+  background: var(--bg);
   font-synthesis: none;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.55;
   font-weight: 400;
 }
@@ -2240,7 +2240,7 @@ dialog::backdrop {
   body {
     background: white;
   }
-  .app:before {
+  body:not(.presenting) .app:before {
     content: "Internal staff view — use Export report for a shareable summary.";
     display: block;
     font-size: 12px;

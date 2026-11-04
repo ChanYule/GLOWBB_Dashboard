@@ -1,14 +1,8 @@
 /* Shared design tokens and analytics components. Existing workflow styles live in styles.css. */
 :root {
-  --ink: #202c48;
-  --muted: #65718a;
-  --primary: #514dca;
-  --teal: #087f78;
-  --border: #e1e6f0;
-  --surface: #fff;
   color: var(--ink);
-  background: #f3f5fb;
-  font-size: 14px;
+  background: var(--bg);
+  font-size: 15px;
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }

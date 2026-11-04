@@ -1,3 +1,4 @@
+import { dataTransaction } from "./data-management.js";
 import { readEffectiveData } from "./needs-domain.js";
 import { protectedRiskReport } from "./risk-report.js";
 import { analytics, defaults } from "./domain.js";
@@ -166,11 +167,26 @@ export function mountAnalysis(app, { db, storage, filters }) {
       JSON.stringify(value).length > 50000
     )
       throw fail(400, "Save up to 30 personal views within 50 KB.");
-    await db
-      .prepare(
-        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
-      )
-      .run(req.user.id, JSON.stringify(value));
+    await dataTransaction(
+      db,
+      function* (tx) {
+        const previous = yield tx
+          .prepare("SELECT value FROM staff_preferences WHERE user_id=?")
+          .get(req.user.id);
+        const saved = previous ? JSON.parse(previous.value) : {};
+        const next = {
+          ...value,
+          ...(saved.clients ? { clients: saved.clients } : {}),
+        };
+        yield tx
+          .prepare(
+            "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+          )
+          .run(req.user.id, JSON.stringify(next));
+      },
+      false,
+      ["staff_preferences"],
+    );
     res.json({ ok: true });
   });
   app.get("/api/risk-configuration", async (req, res) => {

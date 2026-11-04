@@ -75,16 +75,17 @@ const tables = {
 const names = Object.keys(tables);
 const reversed = [...names].reverse();
 const backupKind = "workspace-data-v1";
+export { transaction as dataTransaction };
 // SQLite executes the whole generator synchronously, so another request cannot
 // accidentally write inside its transaction. PostgreSQL awaits each statement.
-function transaction(db, work, readOnly = false) {
+function transaction(db, work, readOnly = false, writeTables) {
   if (db.transaction)
     return db.transaction(
       async (tx) => {
         if (!readOnly)
           await tx
             .prepare(
-              `LOCK TABLE ${[...names, "settings", "import_previews", "attendance_backups"].join(",")} IN SHARE ROW EXCLUSIVE MODE`,
+              `LOCK TABLE ${(writeTables || [...names, "settings", "import_previews", "attendance_backups", "staff_preferences"]).join(",")} IN SHARE ROW EXCLUSIVE MODE`,
             )
             .run();
         const iterator = work(tx);

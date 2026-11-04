@@ -1,3 +1,5 @@
+> **Client registry integration:** [Linked client participation, safe registry imports, follow-up, source validation and staff guide](docs/CLIENT-REGISTRY-INTEGRATION.md). Client Engagement extends the existing three-level dashboard. No additional SQL is needed after migrations 001 through 004.
+
 > **Data management update:** Review imports, delete selected attendance or reset programme data, and recover from automatic backups. Secondary reports are under **More analysis tools**; mobile navigation opens through **Menu**. [Staff guide](docs/DATA-MANAGEMENT.md). No new SQL migration is required beyond 001 through 004.
 
 > **Latest 13-column needs-based upgrade:** [Features, actual workbook reconciliation, migration 004 and staff workflows](docs/NEEDS-BASED-UPGRADE.md). The three analysis levels, profile/feedback collection, registry attestations and action tracking extend the existing dashboard.
@@ -93,3 +95,5 @@ npm.cmd audit
 ```
 
 See [delivery and QA notes](docs/DELIVERY.md) for actual results and limits. Main implementation: `server/domain.js` (parsing/analytics), `server/db.js` (persistence), `server/app.js` (local workspace API), `server/index.js` (app server), `src/main.tsx` / `src/types.ts` / `src/styles.css` (dashboard), `tests` (automated checks). Existing attendance and planning data are preserved.
+
+See [the 4 November redesign report and staff guide](docs/REDESIGN-REPORT.md) for the five main workspaces, Presentation View, performance evidence, registry header compatibility and production access configuration.

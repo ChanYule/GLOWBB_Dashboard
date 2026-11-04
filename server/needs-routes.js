@@ -1,4 +1,5 @@
 ﻿import { randomUUID } from "node:crypto";
+import { clientReport } from "./client-domain.js";
 import { hash, readMatrix, todaySG } from "./domain.js";
 import {
   needsAnalysis,
@@ -66,6 +67,8 @@ export function validateProfile(d) {
           "race",
           "preferredLanguage",
           "registrationDate",
+          "livingRaw",
+          "blockRaw",
           "client",
           "boundary",
         ].includes(k),
@@ -78,7 +81,9 @@ export function validateProfile(d) {
     ["client", "boundary"].some(
       (k) => k in b && ![true, false, null].includes(b[k]),
     ) ||
-    ["race", "preferredLanguage"].some((k) => k in b && !optionalString(b[k]))
+    ["race", "preferredLanguage", "livingRaw", "blockRaw"].some(
+      (k) => k in b && !optionalString(b[k]),
+    )
   )
     throw fail(400, "Check basic profile values and dates.");
   const h = d.health || {};
@@ -264,7 +269,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
         "Sensitive segments are available only in fixed protected aggregate views.",
       );
     const s = await readState();
-    return needsAnalysis(
+    const result = needsAnalysis(
       s.data,
       s.profiles,
       s.feedback,
@@ -272,6 +277,41 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
       s.settings,
       f,
     );
+    if (
+      s.settings.registry?.type === "clients" &&
+      ![
+        "programme",
+        "domain",
+        "gender",
+        "race",
+        "ageBand",
+        "client",
+        "boundary",
+        "observed",
+      ].some((k) => f[k]) &&
+      (!f.target || f.target === "all")
+    ) {
+      const clients = clientReport(s, {
+        from: f.from || "",
+        to: f.to || "",
+        asOf: todaySG(),
+      });
+      result.findings.push(
+        ...clients.findings.map((f) => ({
+          id: f.id,
+          category: "Targeted Outreach",
+          title: f.title,
+          finding: f.finding,
+          explanation: f.why + " Investigate: " + f.investigate,
+          action: f.action,
+          target: f.target,
+          evidence: f.evidence,
+          priority: f.priority,
+          next: f.next,
+        })),
+      );
+    }
+    return result;
   };
   app.get("/api/needs/catalogue", (_req, res) =>
     res.json({
@@ -1030,6 +1070,11 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
       const parsed = JSON.parse(preview.payload);
       if (parsed.kind !== "member-registry")
         throw fail(400, "Choose a registry preview.");
+      if ((await storage.getSettings(tx)).registry?.type === "clients")
+        throw fail(
+          409,
+          "Use the client registry importer to update this client population without replacing its membership history.",
+        );
       if (complete && (parsed.issues.length || parsed.duplicates))
         throw fail(
           400,
