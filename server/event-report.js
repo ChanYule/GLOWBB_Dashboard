@@ -75,7 +75,7 @@ export function validateEventQuery(input = {}) {
 export function eventTypeReport(state, input = {}, now = todaySG()) {
   const q = validateEventQuery(input),
     settings = { ...defaults, ...state.settings },
-    minimum = Math.max(5, settings.privacyMinimum || 5);
+    minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);
   const data = materializeProfiles(state.data, state.profiles || []);
   const clients = clientPopulation(
     {
@@ -178,7 +178,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
   // Full-history characteristic atoms prevent differencing through overlapping
   // labels, arbitrary dates and successive sensitive comparison requests.
   const atoms = new Map();
-  if (sensitive)
+  if (sensitive && !settings.staffAnalysisFull)
     for (const p of base) {
       const key = JSON.stringify(
         ["age", "gender", "race", "cfs", "risk", "living", "block"]
@@ -392,8 +392,9 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     ])
       totalStats[key] = null;
   const findings = [];
+  const evidenceMinimum=Math.max(5,settings.minParticipants||5);
   const strongest = [...types]
-    .filter((t) => t.unique >= minimum)
+    .filter((t) => t.unique >= evidenceMinimum)
     .sort((a, b) => b.unique - a.unique)[0];
   if (strongest)
     findings.push({
@@ -406,7 +407,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       action: "Review resources and interest before considering another cycle.",
     });
   const recurring = [...types]
-    .filter((t) => t.repeat >= minimum && t.opportunity >= minimum)
+    .filter((t) => t.repeat >= evidenceMinimum && t.opportunity >= evidenceMinimum)
     .sort((a, b) => b.repeatRate - a.repeatRate)[0];
   if (recurring)
     findings.push({
@@ -542,7 +543,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       "Repeat means at least two distinct sessions of the same programme; opportunity requires at least two delivered sessions of that programme.",
       "Programme counts and sessions describe supply, even when no selected-group attendance is recorded.",
       "A label is not proof of health, learning or social outcomes; popularity is not programme effectiveness.",
-      "Current recorded profiles are used. Small sensitive groups and reconstructable comparisons are withheld.",
+      settings.staffAnalysisFull?'Current recorded profiles are used. Staff analysis displays all recorded group counts.':'Current recorded profiles are used. Small sensitive groups and reconstructable comparisons are withheld.',
       "A non-attender has no inferred Event Type preference.",
     ],
   };

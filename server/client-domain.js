@@ -590,7 +590,7 @@ export function clientReport(
 ) {
   const ctx = clientContext(state, input, now),
     { settings, q, members, selected } = ctx,
-    minimum = Math.max(5, settings.privacyMinimum);
+    minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum);
   const filteredKeys = Object.keys(q).filter(
     (k) =>
       !["from", "to", "asOf", "programme", "domain"].includes(k) &&
@@ -798,7 +798,7 @@ export function clientReport(
       priority: "Medium",
       next: "Review existing contact records and seek voluntary feedback.",
     });
-  if (alone?.noAttendance >= minimum)
+  if (alone?.noAttendance >= Math.max(5,settings.minParticipants||5))
     add(
       "client-alone",
       "Clients living alone",
@@ -954,7 +954,7 @@ export function clientReport(
     summary: metrics,
     suppressed,
     minimum,
-    privacyNote: suppressed
+    privacyNote: settings.staffAnalysisFull?'Staff analysis displays all recorded group counts. Unknown fields and unavailable attendance history are identified separately.':suppressed
       ? "Combined or programme-filtered aggregate results are withheld because the available cohorts do not meet the privacy rule. Authorised staff can use the separate audited follow-up workspace."
       : "Small rows and a complementary category are withheld together. Identifiable follow-up is a separate authorised workflow; exports exclude sensitive breakdowns.",
     populationNote:

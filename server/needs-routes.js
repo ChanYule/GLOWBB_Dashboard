@@ -1,5 +1,6 @@
 ﻿import { randomUUID } from "node:crypto";
 import { clientReport } from "./client-domain.js";
+import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
 import {
   needsAnalysis,
@@ -271,7 +272,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
         403,
         "Sensitive segments are available only in fixed protected aggregate views.",
       );
-    const s = await readState();
+    const s = staffAnalysisState(await readState(),req.user);
     const result = needsAnalysis(
       s.data,
       s.profiles,

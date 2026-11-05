@@ -76,7 +76,7 @@ test('PostgreSQL session Event Types survive reviewed duplicate-only merges, bac
     const form=new FormData();form.append('file',new Blob([[...HEADERS,'Activity Name/Event Type'].map(v=>JSON.stringify(v)).join(',')+'\r\n'+['test-member','MALE','65','MALAY','','YES','YES','Movement','Physical','2026-05-04, 09:00 AM - 09:45 AM','Social & Cognitive, Learning'].map(v=>JSON.stringify(v)).join(',')]),'new.csv');
     const preview=await json(await app.request('/api/import/preview?mode=merge','POST',form));assert.equal(preview.ready,0);assert.equal(preview.updatedSessions,1);const saved=await json(await app.request('/api/import/confirm','POST',{id:preview.id}));assert.equal(saved.updatedSessions,1);assert.equal((await db.prepare('SELECT count(*)::integer n FROM attendance').get()).n,1);
     const session=await db.prepare('SELECT optional FROM sessions').get();assert.deepEqual(JSON.parse(session.optional).eventTypes,['Social & Cognitive','Learning']);
-    const report=await json(await app.request('/api/event-types/report'));assert.equal(report.types.find(t=>t.label==='Learning').sessions,1);assert.equal(report.types.find(t=>t.label==='Learning').unique,null);
+    const report=await json(await app.request('/api/event-types/report'));assert.equal(report.types.find(t=>t.label==='Learning').sessions,1);assert.equal(report.types.find(t=>t.label==='Learning').unique,1);
     const mapping=await json(await app.request('/api/event-types/mappings/preview','POST',{rows:[{raw:'Learning',label:'Reviewed Learning',parent:'Education',secondary:''}]}));await json(await app.request('/api/event-types/mappings/confirm','POST',{id:mapping.id,reviewed:true}));assert.equal(JSON.parse((await db.prepare('SELECT optional FROM sessions').get()).optional).eventTypeRaw,'Social & Cognitive, Learning');
     const current=await json(await app.request('/api/event-types/report'));assert.equal(current.types.some(t=>t.label==='Reviewed Learning'),true);
     const management=await json(await app.request('/api/data-management'));assert.equal(management.counts.attendance,1);
@@ -757,7 +757,7 @@ test("PostgreSQL needs profiles, voluntary feedback, accessibility reviews and a
     );
     const report = await json(await app.request("/api/needs/overview"));
     assert.equal(report.registry.available, false);
-    assert.equal(report.responses.interests.suppressed, true);
+    assert.equal(report.responses.interests.suppressed, false);
     assert.equal(report.summary.unique, 1);
     assert.equal(
       (

@@ -1,5 +1,6 @@
 import { dataTransaction } from "./data-management.js";
 import { readEffectiveData } from "./needs-domain.js";
+import {staffAnalysisSettings} from './staff-analysis.js';
 import { protectedRiskReport } from "./risk-report.js";
 import { analytics, defaults } from "./domain.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
@@ -315,7 +316,7 @@ export function mountAnalysis(app, { db, storage, filters }) {
       );
     const data = await readEffectiveData(db, storage),
       settings = await storage.getSettings(db);
-    res.json(protectedRiskReport(data, settings));
+    res.json(protectedRiskReport(data, staffAnalysisSettings(settings,req.user)));
   });
   app.get("/api/backups/:id", async (req, res) => {
     admin(req);

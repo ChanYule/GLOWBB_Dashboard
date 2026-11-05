@@ -346,8 +346,8 @@ test("staff sessions enforce roles, isolate preferences and restrict raw risk de
     const risk = await (
       await app.request("/api/social-risk", "GET", null, planner)
     ).json();
-    assert.equal(risk.suppressed, true);
-    assert.deepEqual(risk.states, []);
+    assert.equal(risk.suppressed, false);
+    assert.ok(risk.states.length>0);
     assert.equal(
       (await app.request("/api/social-risk?gender=MALE", "GET", null, planner))
         .status,

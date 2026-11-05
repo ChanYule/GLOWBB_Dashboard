@@ -336,7 +336,7 @@ export function needsAnalysis(
     ) ||
     (filters.target && filters.target !== "all");
   const protectedDistribution = (...args) =>
-    sensitive
+    sensitive && !settings.staffAnalysisFull
       ? {
           suppressed: true,
           denominator: null,

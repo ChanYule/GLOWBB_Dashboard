@@ -1,5 +1,6 @@
 import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
+import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
 import { ensureOperations } from "./operations-routes.js";
@@ -381,7 +382,7 @@ export function mountClients(app, { db, storage, upload }) {
       await dataTransaction(
         db,
         function* (tx) {
-          return clientReport(yield* readState(tx, storage), req.body || {});
+          return clientReport(staffAnalysisState(yield* readState(tx, storage),req.user), req.body || {});
         },
         true,
       ),
@@ -847,7 +848,7 @@ export function mountClients(app, { db, storage, upload }) {
     const r = await dataTransaction(
       db,
       function* (tx) {
-        return clientReport(yield* readState(tx, storage), req.query);
+        return clientReport(staffAnalysisState(yield* readState(tx, storage),req.user), req.query);
       },
       true,
     );

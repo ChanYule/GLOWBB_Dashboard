@@ -61,7 +61,7 @@ export type EventReport = {
 };
 const fmt = (v: number | null | undefined) =>
   v == null
-    ? "Withheld / unavailable"
+    ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(v);
 const factors = {
   age: "Age Group",
@@ -341,8 +341,8 @@ export function EventTypeInsights({
             <p className="note">
               Event Types overlap: one session, programme or person can appear
               under several labels. Category totals and percentages must not be
-              added. Combined labels containing &amp; stay intact. Withheld
-              participant values are not zero.
+              added. Combined labels containing &amp; stay intact. Missing
+              participant information is not zero.
             </p>
           </section>
           <section className="panel">

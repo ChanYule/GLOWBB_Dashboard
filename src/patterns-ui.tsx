@@ -142,7 +142,7 @@ export type Report = {
 };
 const fmt = (n: number | null | undefined, suffix = "") =>
   n == null
-    ? "Unavailable / withheld"
+    ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(n) +
       suffix;
 const denied =
@@ -706,10 +706,9 @@ export function ParticipationPatterns({
                     <thead>
                       <tr>
                         <th>Group</th>
-                        <th>Registered</th>
+                        {report.scope==='clients'&&<th>Registered</th>}
                         <th>Participating</th>
-                        <th>No recorded attendance</th>
-                        <th>Rate (%)</th>
+                        {report.scope==='clients'&&<><th>No recorded attendance</th><th>Rate (%)</th></>}
                         <th>Entries</th>
                         <th>Programmes</th>
                         <th>Domains</th>
@@ -722,10 +721,9 @@ export function ParticipationPatterns({
                         <tr key={g.label}>
                           <th>{g.label}</th>
                           {[
-                            g.registered,
+                            ...(report.scope==='clients'?[g.registered]:[]),
                             g.unique,
-                            g.noAttendance,
-                            g.rate,
+                            ...(report.scope==='clients'?[g.noAttendance,g.rate]:[]),
                             g.attendance,
                             g.programmes,
                             g.domains,
@@ -775,8 +773,7 @@ export function ParticipationPatterns({
                 </label>
               </div>
               <p className="muted">
-                Only privacy-safe programme results are shown. Withheld cells
-                are not zero.
+                Recorded programme results for this group. Missing values are not zero.
               </p>
               <Ranking
                 report={report}

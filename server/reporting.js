@@ -1,5 +1,6 @@
 import { dataTransaction } from "./data-management.js";
 import { ensureOperations } from "./operations-routes.js";
+import {staffAnalysisSettings} from './staff-analysis.js';
 import { clientReport } from "./client-domain.js";
 import { needsAnalysis } from "./needs-domain.js";
 import { materializeProfiles } from "./needs-domain.js";
@@ -67,6 +68,7 @@ export function mountReporting(app, { db, storage, filters }) {
                   .prepare("SELECT * FROM participant_feedback")
                   .all(),
               };
+          state.settings=staffAnalysisSettings(state.settings,req.user);
           const selected =
             [
               "programme",

@@ -1,4 +1,5 @@
 import { participationPatterns } from "./patterns.js";
+import {staffAnalysisState} from './staff-analysis.js';
 import { dataTransaction } from "./data-management.js";
 import { todaySG } from "./domain.js";
 import { ensureLocations, locationRow } from "./location-store.js";
@@ -13,7 +14,7 @@ export function mountPatterns(app, { db, storage }) {
         { status: 403 },
       );
   };
-  const report = async (query) => {
+  const report = async (query,user) => {
     if (query.dimension === "eventType" || query.second === "eventType")
       throw Object.assign(
         Error(
@@ -55,14 +56,14 @@ export function mountPatterns(app, { db, storage }) {
           )
         )
           state.locations = decodeLocations(yield locationRow(tx));
-        return participationPatterns(state, query);
+        return participationPatterns(staffAnalysisState(state,user), query);
       },
       true,
     );
   };
   app.get("/api/participation-patterns", async (req, res) => {
     allowed(req);
-    res.json(await report(req.query));
+    res.json(await report(req.query,req.user));
   });
   // Shared preferences table; partial updates preserve other staff workspaces.
   app.put("/api/participation-patterns/preferences", async (req, res) => {
@@ -104,7 +105,7 @@ export function mountPatterns(app, { db, storage }) {
         ),
         { status: 403 },
       );
-    const value = await report(req.query);
+    const value = await report(req.query,req.user);
     if (value.location) {
       value.location.destinations = [];
       value.location.blockRows = null;

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import {staffAnalysisState} from './staff-analysis.js';
 import { dataTransaction } from "./data-management.js";
 import { hash } from "./domain.js";
 import { eventTypeInventory } from "./event-types.js";
@@ -14,7 +15,7 @@ export function mountEventTypes(app, { db, storage }) {
         "Programme type analysis is restricted to authorised staff.",
       );
   };
-  async function report(query) {
+  async function report(query,user) {
     validateEventQuery(query);
     if (query.factor === "distance") await ensureLocations(db);
     return dataTransaction(
@@ -35,14 +36,14 @@ export function mountEventTypes(app, { db, storage }) {
             };
         if (query.factor === "distance")
           state.locations = decodeLocations(yield locationRow(tx));
-        return eventTypeReport(state, query);
+        return eventTypeReport(staffAnalysisState(state,user), query);
       },
       true,
     );
   }
   app.get("/api/event-types/report", async (req, res) => {
     allowed(req);
-    res.json(await report(req.query));
+    res.json(await report(req.query,req.user));
   });
   app.put("/api/event-types/preferences", async (req, res) => {
     allowed(req);
@@ -86,7 +87,7 @@ export function mountEventTypes(app, { db, storage }) {
         403,
         "Reset sensitive participant comparisons before sharing a programme-mix report.",
       );
-    res.json(await report(req.query));
+    res.json(await report(req.query,req.user));
   });
   app.get("/api/event-types/mappings", async (req, res) => {
     if (req.user.role !== "admin")

@@ -1,5 +1,7 @@
 # Participation analysis fix and compact interface
 
+**Updated staff visibility:** [Full recorded values in staff analysis](STAFF-ANALYSIS-VALUES.md) supersedes the earlier small-group withholding policy described below. Authorised staff now see recorded small-group counts and related totals; genuinely missing or inapplicable metrics remain unavailable.
+
 ## Diagnosis and evidence
 
 **Follow-up screenshot: `path` identified.** The subsequent screenshot explicitly reports the rejected key as `path`. Reproduction confirmed that the old hosted fix removed Vercel's own `req.query` property but did not remove a `path` value embedded in the request URL itself. Express then parsed that reserved routing value as an analytical filter and rejected it. The shared request-boundary normalizer now strips only the reserved `path` query key from hosted, proxy and direct-server requests. The actual endpoint pathname and all legitimate analytical filters remain unchanged. Unknown audience filters and invalid dates still fail their existing checks. Hosted regression tests cover URL metadata plus an own query property, repeated path keys, preserved dates/population, programme-type analysis and proxy forwarding. No data or metric substitution is involved. The earlier saved-preference issue below remains separately fixed.

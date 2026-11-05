@@ -178,7 +178,7 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
 export function participationPatterns(state, input = {}, now = todaySG()) {
   const q = validatePatternQuery(input, now),
     settings = { ...defaults, ...state.settings };
-  const minimum = Math.max(5, settings.privacyMinimum || 5);
+  const minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);
   const locationMode = [q.dimension, q.second].some((d) =>
     ["distance", "locationBlock", "block"].includes(d),
   );
@@ -345,7 +345,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       now,
     ).length !== clients.length;
   let sliceBlocked=false;
-  if(custom||registrationSlice){
+  if(!settings.staffAnalysisFull&&(custom||registrationSlice)){
     const atoms=new Map();
     const atomDimensions=Object.keys(patternDimensions).filter(d=>d!=='eventType'&&(locationMode||!['distance','locationBlock','participation'].includes(d)));
     for(const p of people){const signature=JSON.stringify([atomDimensions.map(d=>patternLabel(p,d,settings)),(histories.get(p.id)||[]).map(s=>s.id).sort(),p.registrationDate||'']);atoms.set(signature,(atoms.get(signature)||0)+1);}
@@ -1109,7 +1109,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         ? "Only staff profile snapshots with an effective date at or before period end are used. Undated or unavailable historical attributes are missing."
         : "Current recorded attributes are used consistently, including for historical attendance. They do not establish age, CFS, SRF or living arrangement at each past session. Dates of birth are not available for age-at-attendance calculation.",
       "SRF raw values and approved labels are retained. No ordered SRF risk scale is assumed. Living alone is not evidence of loneliness, and race does not establish language or preference.",
-      `Small cells and their complementary groups below ${minimum} are withheld. Custom slices and combined comparisons require safe full-history cohorts; broaden the view if suppressed.`,
+      settings.staffAnalysisFull?'Staff analysis displays all recorded group counts without small-group suppression. Missing fields and invalid denominators remain unavailable.':`Small cells and their complementary groups below ${minimum} are withheld. Custom slices and combined comparisons require safe full-history cohorts; broaden the view if suppressed.`,
       "Unique participants are deduplicated by stored Member ID; duplicate person-session records count once. Repeat requires two distinct sessions of the same programme. One-session programmes have repeat rate Not applicable.",
       "Group repeat rate uses people attending at least one multi-session programme as its opportunity denominator. Programme repeat rate uses that programme's unique participants. First observed means first in available history, not new to the centre.",
       "Reported barriers include sourced participant/caregiver feedback only; attendance is not evidence of a reason or programme suitability.",

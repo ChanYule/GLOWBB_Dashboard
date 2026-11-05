@@ -53,7 +53,7 @@ export function protectedRiskReport(
   const limited = [...byPerson.keys()].every((id) =>
     ["missing", "unmapped"].includes(riskState(people.get(id), settings).state),
   );
-  const note =
+  const note = settings.staffAnalysisFull?'Staff analysis includes all recorded group counts in the available delivered-attendance cohort. Categories can overlap and are not additive. Unknown codes require source review; classifications are not historical assessments.':
     "Latest-known profile classifications across the full available delivered-attendance cohort. Global filters do not apply. Categories may overlap and must not be added. All protected tables are withheld together unless each group sharing recorded profile fields and exact attendance membership meets the privacy minimum. Arbitrary risk queries and downloads are restricted. Updated imports can change this snapshot; this is not historical assessment data.";
   const base = {
     suppressed,

@@ -124,7 +124,7 @@ const today = () =>
   }).format(new Date());
 const fmt = (value: Metric | undefined, rate = false) =>
   value == null
-    ? "Withheld"
+    ? "Unavailable"
     : new Intl.NumberFormat("en-SG", {
         maximumFractionDigits: rate ? 1 : 0,
       }).format(value) + (rate ? "%" : "");
