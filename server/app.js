@@ -1,4 +1,5 @@
 import { mountReporting } from "./reporting.js";
+import {withoutRoutingQuery} from './request-url.js';
 import { mountPatterns } from "./pattern-routes.js";
 import { mountEventTypes } from './event-routes.js';
 import { mountLocations } from "./location-routes.js";
@@ -46,6 +47,7 @@ export function createApp(
     previews = db.previews || sqlitePreviews(db);
   const storage = db.storage || { readData, getSettings, audit };
   app.disable("x-powered-by");
+  app.use((req,_res,next)=>{req.url=withoutRoutingQuery(req.url);next();});
   app.use(express.json({ limit: "64kb" }));
   app.use((req, res, next) => {
     res.set({

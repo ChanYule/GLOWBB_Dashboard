@@ -2,7 +2,11 @@
 
 ## Diagnosis and evidence
 
+**Follow-up screenshot: `path` identified.** The subsequent screenshot explicitly reports the rejected key as `path`. Reproduction confirmed that the old hosted fix removed Vercel's own `req.query` property but did not remove a `path` value embedded in the request URL itself. Express then parsed that reserved routing value as an analytical filter and rejected it. The shared request-boundary normalizer now strips only the reserved `path` query key from hosted, proxy and direct-server requests. The actual endpoint pathname and all legitimate analytical filters remain unchanged. Unknown audience filters and invalid dates still fail their existing checks. Hosted regression tests cover URL metadata plus an own query property, repeated path keys, preserved dates/population, programme-type analysis and proxy forwarding. No data or metric substitution is involved. The earlier saved-preference issue below remains separately fixed.
+
 The exact combination **Overall Programme Planning → All attendance participants → Age Group → 4 May–5 November 2026** is valid. It is not a registry-only dimension, a date-format error or an unsupported population.
+
+The routing follow-up passed the full **187-test suite**, lint, type checking and production build. It requires deployment of the updated API/backend; no SQL migration, data reset or preference reset is required.
 
 The old generic message came from the API's strict parameter-shape guard: an unsupported key, a non-string value or an oversized value caused rejection before calculation. The frontend copied the entire stored `patterns` preference object into its API query without validating it. A saved view containing obsolete `preset`, `metric` or routing metadata reproduces the failure even though its visible selectors are valid. Saved scope/dimension/ranking values could also become incompatible. The frontend now normalizes legacy preferences before constructing a request; the save endpoint uses the same normalizer. Valid dates and supported analysis choices are retained, and staff receive an explanatory notice. Normalization updates the loaded view; saving persists the repaired preferences without replacing other workspaces.
 

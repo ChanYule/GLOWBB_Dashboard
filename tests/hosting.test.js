@@ -42,13 +42,13 @@ test("hosted client summary exports use URL filters without platform routing met
     for (const query of [
       "living=Alone",
       "gender=MALE",
-      "path=clients/export/csv",
     ]) {
       assert.equal(
         (await fetch(base + "/api/clients/export/csv?" + query)).status,
         403,
       );
     }
+    assert.equal((await fetch(base+'/api/clients/export/csv?path=clients/export/csv&to=2026-11-04&asOf=2026-11-04')).status,200);
     assert.equal(
       (await fetch(base + "/api/clients/export/csv?asOf=bad-date")).status,
       400,
@@ -57,6 +57,24 @@ test("hosted client summary exports use URL filters without platform routing met
     await new Promise((resolve) => server.close(resolve));
     db.close();
   }
+});
+test('hosted participation strips URL rewrite path as well as own query metadata without accepting unsupported audience filters',async()=>{
+  const db=openDb(':memory:'),app=createApp(db,{authRequired:false}),handler=createHostedHandler({databaseUrl:'test',loadApp:async()=>app});
+  const server=createServer((req,res)=>{req.query={path:['participation-patterns'],...Object.fromEntries(new URL(req.url,'http://test').searchParams)};handler(req,res);});
+  server.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+  try{
+    for(const path of ['participation-patterns','api/participation-patterns','one&two']){
+      const params=new URLSearchParams({path,dimension:'age',scope:'overall',from:'2026-05-04',to:'2026-11-05'});params.append('path','second-rewrite-value');
+      const response=await fetch(base+'/api/participation-patterns?'+params);const report=await response.json();assert.equal(response.status,200,JSON.stringify(report));assert.equal(report.scope,'overall');assert.equal(report.dimension,'age');assert.deepEqual(report.period,{from:'2026-05-04',to:'2026-11-05'});assert.equal(report.ratesAvailable,false);
+    }
+    assert.equal((await fetch(base+'/api/participation-patterns?path=participation-patterns&living=Alone')).status,403);
+    assert.equal((await fetch(base+'/api/participation-patterns?path=participation-patterns&from=invalid')).status,400);
+    assert.equal((await fetch(base+'/api/event-types/report?path=event-types/report')).status,200);
+  }finally{await new Promise(r=>server.close(r));db.close();}
+});
+test('proxy strips reserved rewrite path from the forwarded URL and preserves actual analytical filters',async()=>{
+ let target;
+ await withProxy({backendUrl:'https://backend.example',fetchImpl:async url=>{target=new URL(url);return Response.json({ok:true});}},async base=>{const response=await fetch(base+'/api/participation-patterns?path=participation-patterns&scope=overall&dimension=age&from=2026-05-04&to=2026-11-05');assert.equal(response.status,200);assert.equal(target.pathname,'/api/participation-patterns');assert.equal(target.searchParams.has('path'),false);assert.equal(target.searchParams.get('scope'),'overall');assert.equal(target.searchParams.get('to'),'2026-11-05');});
 });
 test("client gives actionable timeout errors for hosted JSON envelopes and plain gateway errors without leaking server details", async () => {
   for (const response of [

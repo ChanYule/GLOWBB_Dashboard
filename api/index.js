@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import {withoutRoutingQuery} from '../server/request-url.js';
 
 const methods = new Set(["GET", "HEAD", "POST", "PUT", "DELETE"]);
 const maxBody = 4 * 1024 * 1024;
@@ -37,7 +38,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
         "The dashboard backend address is not configured correctly.",
       );
     }
-    const incoming = new URL(req.url, "https://dashboard.invalid");
+    const incoming = new URL(withoutRoutingQuery(req.url), "https://dashboard.invalid");
     if (!incoming.pathname.startsWith("/api/"))
       return json(res, 404, "Endpoint not found.");
     if (!methods.has(req.method)) return json(res, 405, "Method not allowed.");
@@ -152,6 +153,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
 export function createHostedHandler({ databaseUrl, backendUrl, loadApp } = {}) {
   let application;
   return async (req, res) => {
+    req.url=withoutRoutingQuery(req.url);
     if (!databaseUrl) {
       if (backendUrl) return createProxy({ backendUrl })(req, res);
       return json(
@@ -171,8 +173,8 @@ export function createHostedHandler({ databaseUrl, backendUrl, loadApp } = {}) {
             return createApp(openPostgres(databaseUrl), { production: true });
           })();
       const app = await application;
-      // Vercel supplies an own query property with rewrite metadata. Express 5
-      // must parse the original URL itself so routing keys are not user filters.
+      // Rewrite metadata can exist in both the URL and Vercel's own property.
+      // Strip the reserved URL key above, then let Express parse actual filters.
       if (Object.hasOwn(req, "query")) delete req.query;
       return app(req, res);
     } catch {
