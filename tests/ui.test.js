@@ -81,6 +81,11 @@ const { LocationAdmin } = await tsImport(
   import.meta.url,
 );
 const {EventTypeInsights}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
+test('legacy Overall Programme Planning preferences normalize and display age attendance for the exact reported dates',async()=>{
+ const original=globalThis.fetch,state=locationFixture(),requests=[];globalThis.fetch=async(input)=>{const url=String(input);if(url==='/api/preferences')return Response.json({patterns:{preset:'overall',scope:'overall',dimension:'age',metric:'rate',from:'2026-05-04',to:'2026-11-05',path:['api','participation-patterns']}});const q=Object.fromEntries(new URL(url,'http://local').searchParams);requests.push(q);return Response.json(participationPatterns(state,q,'2026-11-05'));};
+ try{render(React.createElement(ParticipationPatterns,{user:{username:'Planner',role:'planner'},revision:0}));await waitFor(()=>assert.equal(document.querySelector('.patterns-page')?.getAttribute('aria-busy'),'false'));assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.equal(screen.getByLabelText('Analyse by').value,'age');assert.equal(requests[0].from,'2026-05-04');assert.equal(requests[0].to,'2026-11-05');assert.equal(Object.hasOwn(requests[0],'metric'),false);assert.equal(Object.hasOwn(requests[0],'path'),false);assert.equal(screen.queryByRole('alert')===null,true);assert.ok(screen.getByText(/saved view was updated/));fireEvent.click(screen.getByRole('button',{name:'More filters'}));assert.equal(screen.getByLabelText('Patterns from').value,'2026-05-04');fireEvent.change(screen.getByLabelText('Patterns to'),{target:{value:'2026-11-04'}});assert.equal(screen.getByLabelText('Analyse by').value,'age');}finally{cleanup();globalThis.fetch=original;}
+});
+test('participation API failures offer retry without discarding selected population or dates',async()=>{const original=globalThis.fetch;let calls=0;const state=locationFixture();globalThis.fetch=async input=>{if(String(input)==='/api/preferences')return Response.json({patterns:{scope:'overall',dimension:'gender',from:'2026-11-01',to:'2026-11-05'}});if(++calls===1)return Response.json({error:'Temporary database connection unavailable'},{status:503});return Response.json(participationPatterns(state,Object.fromEntries(new URL(String(input),'http://local').searchParams),'2026-11-05'));};try{render(React.createElement(ParticipationPatterns,{user:{role:'planner'},revision:0}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Participation data could not be loaded'})));fireEvent.click(screen.getByRole('button',{name:'Retry participation analysis'}));await waitFor(()=>assert.equal(screen.queryByRole('alert')===null,true));assert.equal(screen.getByLabelText('Analyse by').value,'gender');assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.ok(document.querySelector('.patterns-main-grid'));assert.equal(calls,2);}finally{cleanup();globalThis.fetch=original;}});
 test('programme mix keeps secondary analysis collapsed, switches measures and saves reviewed view preferences',async()=>{
  const original=globalThis.fetch,s=locationFixture();for(const session of s.data.sessions)session.optional={eventTypeRaw:'Learning, Social & Cognitive',eventTypes:['Learning','Social & Cognitive']};const queries=[];let saved;
  globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/event-types/report?')){queries.push(url);return Response.json(eventTypeReport(s,Object.fromEntries(new URL(url,'http://local').searchParams)));}if(url==='/api/event-types/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
@@ -200,6 +205,7 @@ test("location analysis separates distance measures, supports CFS strata and ope
       screen.queryByText("Administrator location verification"),
       null,
     );
+    fireEvent.click(screen.getByRole('button',{name:'More filters'}));
     assert.equal(screen.getByLabelText("Distance measure").value, "walking");
     fireEvent.change(screen.getByLabelText("Distance measure"), {
       target: { value: "straight" },
@@ -347,7 +353,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     );
     assert.equal(document.querySelectorAll(".patterns-kpis article").length, 4);
     assert.equal(document.querySelector(".patterns-page details").open, false);
-    fireEvent.click(screen.getByRole("button", { name: "CFS", exact: true }));
+    fireEvent.change(screen.getByLabelText('Analyse by'),{target:{value:'cfs'}});
     await waitFor(() =>
       assert.ok(calls.some((url) => url.includes("dimension=cfs"))),
     );
@@ -357,9 +363,8 @@ test("participation patterns loads one dimension, saves the staff view and print
         "false",
       ),
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save preferred view" }),
-    );
+    fireEvent.click(screen.getByRole('button',{name:'More filters'}));
+    fireEvent.click(screen.getByRole("button", { name: "Save preferred view" }));
     await waitFor(() => assert.equal(saved.dimension, "cfs"));
     fireEvent.click(screen.getByRole("button", { name: "Presentation / PDF" }));
     await waitFor(() =>

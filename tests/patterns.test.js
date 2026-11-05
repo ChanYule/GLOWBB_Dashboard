@@ -10,6 +10,7 @@ import { defaults } from "../server/domain.js";
 import { CLIENT_SNAPSHOT } from "../server/client-domain.js";
 import { createApp } from "../server/app.js";
 import { openDb } from "../server/db.js";
+import {normalizePatternPreferences,compatibleAnalysis,populations,analysisDimensions} from '../shared/participation-compat.js';
 
 function fixture() {
   const state = {
@@ -71,6 +72,18 @@ function fixture() {
 }
 const now = "2026-11-05",
   query = { from: "2026-11-01", to: "2026-11-03" };
+test('exact Overall Programme Planning scenario accepts all ages and releases canonical age aggregates even with distinct profile histories',()=>{
+ const s=fixture();s.data.sessions.find(session=>session.id==='prior').date='2026-05-04';s.data.participants.push({id:'one-more',age:75,gender:'FEMALE',race:'CHINESE',cfs:'unknown'});s.data.attendance.push({participantId:'one-more',sessionId:'a1'});
+ const q={scope:'overall',dimension:'age',from:'2026-05-04',to:'2026-11-05'};
+ assert.doesNotThrow(()=>validatePatternQuery(q,now));const r=participationPatterns(s,q,now);assert.equal(r.population,41);assert.equal(r.ratesAvailable,false);assert.equal(r.comparisonSuppressed,false);assert.equal(r.groups.find(g=>g.label==='70 to 79').unique,11);assert.equal(r.groups[0].label,'Below 60');assert.ok(r.groups.every(g=>g.rate==null));
+ const custom=participationPatterns(s,{...q,from:'2026-10-01'},now);assert.equal(custom.comparisonSuppressed,true,'custom slices retain differencing protection');
+});
+test('all four populations use explicit attendance or complete-registry denominators',()=>{const s=fixture();const all=participationPatterns(s,{scope:'overall'},now),clients=participationPatterns(s,{scope:'clients'},now),attending=participationPatterns(s,{scope:'attendingClients'},now),seniors=participationPatterns(s,{scope:'seniors'},now);assert.equal(all.population,40);assert.equal(clients.population,80);assert.equal(attending.population,40);assert.equal(seniors.population,30);assert.equal(clients.ratesAvailable,true);for(const r of [all,attending,seniors]){assert.equal(r.ratesAvailable,false);assert.ok(r.groups.every(g=>g.registered==null&&g.rate==null));}assert.equal(seniors.groups.some(g=>g.label==='Below 60'),false);assert.equal(attending.groups.some(g=>g.label==='Below 60'),true);});
+test('shared compatibility and legacy preference migration cover every staff analysis without forwarding obsolete fields',()=>{
+ for(const scope of Object.keys(populations))for(const dimension of Object.keys(analysisDimensions)){const compatible=compatibleAnalysis(scope,dimension,'rate');const q=normalizePatternPreferences({scope,dimension,from:'2026-05-04',to:'2026-11-05',preset:'retired',metric:'rate',path:['api','participation-patterns'],ranking:'obsolete'},now).query;assert.equal(q.scope,compatible.scope);assert.doesNotThrow(()=>validatePatternQuery(q,now));assert.equal('metric'in q,false);assert.equal('path'in q,false);assert.equal(q.dimension,dimension);if(!populations[scope].rates)assert.equal(compatible.metric,'unique');}
+ const normalized=normalizePatternPreferences({dimension:'retired',scope:'wrong',page:'99999',to:'2026-02-30',basis:'broken'},now);assert.equal(normalized.changed,true);assert.equal(normalized.query.dimension,'age');assert.equal(normalized.query.page,undefined);assert.equal(normalized.query.to,undefined);assert.doesNotThrow(()=>validatePatternQuery(normalized.query,now));
+});
+test('each demographic dimension works across relevant populations; empty periods and missing records are explicit',()=>{for(const scope of Object.keys(populations))for(const dimension of ['age','cfs','risk','race','gender','living']){const r=participationPatterns(fixture(),{scope,dimension},now);assert.equal(r.dimension,dimension);assert.ok(r.groups.length>0);assert.ok(r.rankings.rows.length<=5);}const empty=participationPatterns(fixture(),{scope:'overall',from:'2026-09-01',to:'2026-09-30'},now);assert.equal(empty.population,0);assert.equal(empty.groups.reduce((n,g)=>n+(g.unique||0),0),0);});
 test("exact age bands, invalid and missing ages, source CFS and approved SRF/living mappings remain distinct", () => {
   for (const [age, expected] of [
     [59, "Below 60"],

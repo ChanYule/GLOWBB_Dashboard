@@ -1,4 +1,5 @@
 import { defaults, todaySG } from "./domain.js";
+import {populations} from '../shared/participation-compat.js';
 import { clientPopulation, validDay } from "./client-domain.js";
 import { materializeProfiles } from "./needs-domain.js";
 import { patternLabel } from "./patterns.js";
@@ -39,7 +40,7 @@ export function validateEventQuery(input = {}) {
   if (q.from && q.to && q.from > q.to)
     throw fail("Reporting dates are reversed.");
   if (
-    !["overall", "clients"].includes(q.scope) ||
+    !Object.hasOwn(populations,q.scope) ||
     !["senior", "all", "male", "minority"].includes(q.target) ||
     !["unique", "attendance", "repeat", "average"].includes(q.ranking)
   )
@@ -133,7 +134,9 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
           ? "With recorded attendance"
           : "No recorded attendance"
         : patternLabel(p, q.factor || "age", settings);
-  const base = q.scope === "clients" ? clients : [...people.values()];
+  let base = ['clients','attendingClients'].includes(q.scope) ? clients : [...people.values()];
+  if(q.scope==='attendingClients')base=base.filter(p=>attendees.has(p.id));
+  if(q.scope==='seniors')base=base.filter(p=>typeof p.age==='number'&&p.age>=60);
   const audience = (p) => {
     if (q.target !== "all" && !(p.age >= settings.seniorAge)) return false;
     if ((q.target === "male" || q.gender === "MALE") && p.gender !== "MALE")

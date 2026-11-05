@@ -3,10 +3,19 @@ import { api } from "./api";
 import { ReportBars } from "./management";
 import type { User } from "./types";
 import "./patterns.css";
+import { PatternControls } from "./pattern-controls";
+import {
+  compatibleAnalysis,
+  normalizePatternPreferences,
+  populations,
+  analysisDimensions,
+} from "../shared/participation-compat.js";
 const LocationAdmin = lazy(() =>
   import("./location-admin").then((m) => ({ default: m.LocationAdmin })),
 );
-const EventTypeInsights=lazy(()=>import('./event-types-ui').then(m=>({default:m.EventTypeInsights})));
+const EventTypeInsights = lazy(() =>
+  import("./event-types-ui").then((m) => ({ default: m.EventTypeInsights })),
+);
 const LocationBlocks = lazy(() =>
   import("./location-ui").then((m) => ({ default: m.LocationBlocks })),
 );
@@ -17,17 +26,7 @@ type ActionDraft = ReturnType<typeof import("./needs-ui").blankAction>;
 const PresentationFrame = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationFrame })),
 );
-const dimensions = {
-  age: "Age Group",
-  cfs: "CFS",
-  risk: "Social Risk Factor",
-  race: "Race",
-  gender: "Gender",
-  living: "Living Arrangement",
-  block: "Residential block",
-  distance: "Location & Distance",
-  eventType: 'Event Type',
-};
+const dimensions = analysisDimensions;
 type Query = Record<string, string>;
 type Group = {
   label: string;
@@ -146,18 +145,6 @@ const fmt = (n: number | null | undefined, suffix = "") =>
     ? "Unavailable / withheld"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(n) +
       suffix;
-const presets = [
-  ["age", "Age and Programme Participation"],
-  ["cfs", "CFS Participation Patterns"],
-  ["risk", "SRF Participation Patterns"],
-  ["race", "Race and Minority Outreach"],
-  ["living", "Living Arrangement Participation"],
-  ["repeat", "Repeat Programme Engagement"],
-  ["overall", "Overall Programme Planning"],
-  ["gender", "Gender Participation"],
-  ["block", "Residential Participation"],
-  ["distance", "Location and Participation"],
-];
 const denied =
   "Small groups or this filter combination are protected. Try the full available period without a domain filter. Missing and withheld values are not zero.";
 
@@ -171,6 +158,48 @@ function Ranking({
   printing?: boolean;
 }) {
   if (report.rankings.suppressed) return <p className="note">{denied}</p>;
+  if (!printing && report.rankings.rows.length)
+    return (
+      <ol
+        className="patterns-ranking-list"
+        aria-label={`Programme rankings for ${report.group}`}
+      >
+        {report.rankings.rows.map((p, i) => (
+          <li key={p.id}>
+            <span className="patterns-rank-number">
+              {report.rankings.page * report.rankings.limit + i + 1}
+            </span>
+            <div>
+              <button
+                className="text-button"
+                onClick={() => onProgramme?.(p.id)}
+              >
+                {p.name}
+              </button>
+              <small>{p.domain}</small>
+              <dl>
+                <div>
+                  <dt>Unique</dt>
+                  <dd>{fmt(p.unique)}</dd>
+                </div>
+                <div>
+                  <dt>Sessions</dt>
+                  <dd>{fmt(p.sessions)}</dd>
+                </div>
+                <div>
+                  <dt>Repeat</dt>
+                  <dd>{fmt(p.repeat)}</dd>
+                </div>
+                <div>
+                  <dt>Entries</dt>
+                  <dd>{fmt(p.attendance)}</dd>
+                </div>
+              </dl>
+            </div>
+          </li>
+        ))}
+      </ol>
+    );
   return report.rankings.rows.length ? (
     <div className="work-table patterns-programmes">
       <table>
@@ -237,11 +266,15 @@ export function ParticipationPatterns({
 }) {
   const [q, setQ] = useState<Query>({
     dimension: initialDimension || "age",
-    scope: "clients",
+    scope:
+      initialDimension === "distance" || initialDimension === "block"
+        ? "clients"
+        : "overall",
     ranking: "unique",
     basis: "current",
   });
   const [adminOpen, setAdminOpen] = useState(false),
+    [retry, setRetry] = useState(0),
     [locationRevision, setLocationRevision] = useState(0),
     [actionDraft, setActionDraft] = useState<ActionDraft | null>(null);
   const [report, setReport] = useState<Report | null>(null),
@@ -257,9 +290,22 @@ export function ParticipationPatterns({
     const c = new AbortController();
     api<{ patterns?: Query }>("/api/preferences", { signal: c.signal })
       .then((p) => {
-        if (p.patterns)
+        if (p.patterns) {
+          const normalized = normalizePatternPreferences(
+            p.patterns,
+            new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Singapore",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date()),
+          );
+          if (normalized.changed)
+            setMessage(
+              "Your saved view was updated to compatible settings. Valid dates and analysis choices were retained.",
+            );
           setQ({
-            ...p.patterns,
+            ...normalized.query,
             ...(initialDimension
               ? {
                   dimension: initialDimension,
@@ -269,6 +315,7 @@ export function ParticipationPatterns({
                 }
               : {}),
           });
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -281,7 +328,7 @@ export function ParticipationPatterns({
     ...(!advanced ? { second: "" } : {}),
   }).toString();
   useEffect(() => {
-    if (user.role === "viewer" || !ready || q.dimension==='eventType') return;
+    if (user.role === "viewer" || !ready || q.dimension === "eventType") return;
     const c = new AbortController();
     setLoading(true);
     const timer = setTimeout(() => {
@@ -303,7 +350,7 @@ export function ParticipationPatterns({
       clearTimeout(timer);
       c.abort();
     };
-  }, [query, revision, locationRevision, user.role, ready, q.dimension]);
+  }, [query, revision, locationRevision, user.role, ready, q.dimension, retry]);
   if (user.role === "viewer")
     return (
       <section className="panel">
@@ -318,25 +365,14 @@ export function ParticipationPatterns({
     setQ((old) => ({
       ...old,
       [key]: value,
+      ...(key === "second" && value
+        ? { scope: compatibleAnalysis(old.scope, value).scope }
+        : {}),
       ...(key !== "page" ? { page: "0" } : {}),
       ...(["dimension", "scope", "from", "to", "domain", "basis"].includes(key)
         ? { group: "", programme: "" }
         : {}),
     }));
-  if(q.dimension==='eventType')return <><div className="patterns-dimensions" role="group" aria-label="Participant characteristic">{Object.entries(dimensions).map(([key,label])=><button key={key} aria-pressed={key==='eventType'} onClick={()=>setQ(old=>({...old,dimension:key,group:'',second:''}))}>{label}</button>)}</div><div className="patterns-filter-grid"><label>From<input aria-label="Event patterns from" type="date" value={q.from||''} onChange={e=>update('from',e.target.value)}/></label><label>To<input aria-label="Event patterns to" type="date" value={q.to||''} onChange={e=>update('to',e.target.value)}/></label></div><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={{from:q.from||'',to:q.to||''}} patterns/></Suspense></>;
-  const chooseDimension = (dimension: string) => {
-    setAdvanced(false);
-    setQ((old) => ({
-      ...old,
-      dimension,
-      scope: dimension === "distance" ? "clients" : old.scope,
-      group: "",
-      programme: "",
-      second: "",
-      page: "0",
-      all: "",
-    }));
-  };
   const selected = report?.groups.find((g) => g.label === report.group);
   const comparisonMetric =
     !report?.ratesAvailable && metric === "rate" ? "unique" : metric;
@@ -351,186 +387,86 @@ export function ParticipationPatterns({
       setMessage((e as Error).message);
     }
   };
+  const reset = () => {
+    setAdvanced(false);
+    setError("");
+    setQ({
+      dimension: "age",
+      scope: "overall",
+      ranking: "unique",
+      basis: "current",
+    });
+  };
+  const save = async () => {
+    try {
+      const {
+        second: _second,
+        programme: _programme,
+        page: _page,
+        all: _all,
+        ...saved
+      } = q;
+      void _second;
+      void _programme;
+      void _page;
+      void _all;
+      await api("/api/participation-patterns/preferences", {
+        method: "PUT",
+        body: JSON.stringify(saved),
+      });
+      setMessage("Preferred analytical view saved.");
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  };
+  const controls = (
+    <PatternControls
+      query={q}
+      onNotice={setMessage}
+      destinations={report?.location?.destinations}
+      onChange={(next) => {
+        const adjusted = compatibleAnalysis(next.scope, next.dimension, metric);
+        setQ(next);
+        setMetric(adjusted.metric);
+        if (adjusted.notice) setMessage(adjusted.notice);
+        setAdvanced(false);
+      }}
+      onPresent={q.dimension === "eventType" ? undefined : takeReport}
+      presentDisabled={!!error || !report}
+      onSave={save}
+      onReset={reset}
+      onRefresh={() => setRetry((n) => n + 1)}
+      loading={q.dimension === "eventType" ? false : loading}
+    />
+  );
+  if (q.dimension === "eventType")
+    return (
+      <div className="patterns-page">
+        {controls}
+        {message && <p role="status">{message}</p>}
+        <Suspense fallback={<p>Loading programme classifications…</p>}>
+          <EventTypeInsights
+            user={user}
+            revision={revision + retry}
+            initial={{
+              from: q.from || "",
+              to: q.to || "",
+              scope: q.scope,
+              target: q.scope === "seniors" ? "senior" : "all",
+            }}
+            patterns
+          />
+        </Suspense>
+      </div>
+    );
   return (
     <div className="patterns-page" aria-busy={loading}>
-      <p className="muted">
-        Understand how participant groups engage with programmes and identify
-        opportunities for future planning.
-      </p>
-      <section className="panel patterns-controls">
-        <div className="patterns-filter-grid">
-          <label>
-            Analysis preset
-            <select
-              aria-label="Analysis preset"
-              value={
-                q.dimension === "distance"
-                  ? "distance"
-                  : q.ranking === "repeat"
-                    ? "repeat"
-                    : q.scope === "overall"
-                      ? "overall"
-                      : q.dimension
-              }
-              onChange={(e) => {
-                const v = e.target.value;
-                setAdvanced(false);
-                setQ({
-                  ...q,
-                  dimension: ["repeat", "overall"].includes(v) ? "age" : v,
-                  scope: v === "overall" ? "overall" : "clients",
-                  ranking: v === "repeat" ? "repeat" : "unique",
-                  group: "",
-                  second: "",
-                  programme: "",
-                  page: "0",
-                });
-              }}
-            >
-              {presets.map(([v, label]) => (
-                <option key={v} value={v}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Population
-            <select
-              aria-label="Analysis population"
-              value={q.scope}
-              onChange={(e) => update("scope", e.target.value)}
-            >
-              <option value="clients">Registered clients (all ages)</option>
-              <option value="overall" disabled={q.dimension === "distance"}>
-                All attendance participants (all ages)
-              </option>
-            </select>
-          </label>
-          <label>
-            From
-            <input
-              aria-label="Patterns from"
-              type="date"
-              value={q.from || ""}
-              onChange={(e) => update("from", e.target.value)}
-            />
-          </label>
-          <label>
-            To
-            <input
-              aria-label="Patterns to"
-              type="date"
-              value={q.to || ""}
-              onChange={(e) => update("to", e.target.value)}
-            />
-          </label>
-        </div>
-        <div
-          className="patterns-dimensions"
-          role="group"
-          aria-label="Participant characteristic"
-        >
-          {Object.entries(dimensions).map(([key, label]) => (
-            <button
-              key={key}
-              aria-pressed={q.dimension === key}
-              onClick={() => chooseDimension(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {q.dimension === "distance" && (
-          <div className="patterns-filter-grid">
-            <label>
-              Distance measure
-              <select
-                aria-label="Distance measure"
-                value={q.distanceMetric || "walking"}
-                onChange={(e) => update("distanceMetric", e.target.value)}
-              >
-                <option value="walking">Walking-route distance</option>
-                <option value="time">Estimated walking-route time</option>
-                <option value="straight">
-                  Straight-line distance (not walking)
-                </option>
-              </select>
-            </label>
-            <label>
-              Distance destination
-              <select
-                aria-label="Distance destination"
-                value={q.destination || "centre"}
-                onChange={(e) => update("destination", e.target.value)}
-              >
-                {(
-                  report?.location?.destinations || [
-                    { id: "centre", label: "Main GLOW BB centre" },
-                  ]
-                ).map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-        <div className="work-actions patterns-actions">
-          <button
-            className="button"
-            onClick={async () => {
-              try {
-                const {
-                  second: _second,
-                  programme: _programme,
-                  page: _page,
-                  all: _all,
-                  ...saved
-                } = q;
-                void _second;
-                void _programme;
-                void _page;
-                void _all;
-                await api("/api/participation-patterns/preferences", {
-                  method: "PUT",
-                  body: JSON.stringify(saved),
-                });
-                setMessage(
-                  "Preferred analytical view saved to your staff account.",
-                );
-              } catch (e) {
-                setMessage((e as Error).message);
-              }
-            }}
-          >
-            Save preferred view
-          </button>
-          <button
-            className="button"
-            onClick={() => {
-              setAdvanced(false);
-              setQ({
-                dimension: "age",
-                scope: "clients",
-                ranking: "unique",
-                basis: "current",
-              });
-            }}
-          >
-            Reset analysis
-          </button>
-          <button
-            className="button primary"
-            disabled={loading || !!error || !report}
-            onClick={takeReport}
-          >
-            Presentation / PDF
-          </button>
-        </div>
-        {message && <p role="status">{message}</p>}
-      </section>
+      {controls}
+      {message && (
+        <p role="status" className="patterns-notice">
+          {message}
+        </p>
+      )}
       {q.dimension === "distance" && user.role === "admin" && (
         <details
           className="panel"
@@ -547,9 +483,18 @@ export function ParticipationPatterns({
         </details>
       )}
       {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
+        <section role="alert" className="panel patterns-error">
+          <h2>Participation data could not be loaded</h2>
+          <p>{error}</p>
+          <div className="work-actions">
+            <button className="button" onClick={() => setRetry((n) => n + 1)}>
+              Retry participation analysis
+            </button>
+            <button className="button" onClick={reset}>
+              Reset filters
+            </button>
+          </div>
+        </section>
       )}
       {loading && (
         <p role="status" className="muted">
@@ -565,9 +510,13 @@ export function ParticipationPatterns({
           <p className="patterns-basis">
             {report.period.from || "No delivered history"} to{" "}
             {report.period.to || "—"} ·{" "}
-            {report.scope === "clients"
-              ? "Current registered-client population"
-              : "All recorded attendees; no registered-client rate denominator"}{" "}
+            {populations[report.scope]?.label || report.scope}
+            {report.scope === "attendingClients"
+              ? " · Subset attending in this period"
+              : ""}
+            {report.scope !== "clients"
+              ? " · Attendance-based metrics; no registered-client rate denominator"
+              : ""}{" "}
             ·{" "}
             {report.basis === "dated"
               ? "Dated profile snapshots"
@@ -597,26 +546,87 @@ export function ParticipationPatterns({
                       : "Unique participants",
                     fmt(report.population),
                   ],
-                  ["Selected group", report.group || "No group"],
                   [
-                    report.scope === "clients"
+                    "Selected group participants",
+                    selected?.suppressed ? "Withheld" : fmt(selected?.unique),
+                  ],
+                  [
+                    report.ratesAvailable
                       ? "Group participation rate"
-                      : "Group unique reach",
+                      : "Programmes attended by group",
                     selected?.suppressed
                       ? "Withheld"
-                      : report.scope === "clients"
+                      : report.ratesAvailable
                         ? fmt(selected?.rate, "%")
-                        : fmt(selected?.unique),
+                        : fmt(selected?.programmes),
                   ],
-                  ["Known characteristic", fmt(report.completeness, "%")],
+                  [
+                    selected?.averageSessions==null?'Known characteristic':'Average sessions / participant',
+                    selected?.suppressed
+                      ? "Withheld"
+                      : selected?.averageSessions==null?fmt(report.completeness,'%'):fmt(selected?.averageSessions),
+                  ],
                 ]
             ).map(([label, value]) => (
               <article className="panel" key={label}>
                 <span>{label}</span>
-                <strong>{value}</strong>
+                <strong title={String(value)}>
+                  {value === "Unavailable / withheld" ? "Unavailable" : value}
+                </strong>
               </article>
             ))}
           </div>
+          {!report.registryComplete && q.scope === "clients" && (
+            <section className="panel patterns-prerequisite">
+              <h2>
+                Registered-client participation rates require client registry
+                data
+              </h2>
+              <p>
+                Import and verify the client registry in Client Engagement, or
+                analyse attendance participants.
+              </p>
+              <button
+                className="button"
+                onClick={() =>
+                  setQ((old) => ({
+                    ...old,
+                    scope: "overall",
+                    dimension: ["block", "distance"].includes(old.dimension)
+                      ? "age"
+                      : old.dimension,
+                    group: "",
+                    second: "",
+                  }))
+                }
+              >
+                Use all attendance participants
+              </button>
+            </section>
+          )}
+          {report.population === 0 && (
+            <section className="panel">
+              <h2>No attendance records match this date range</h2>
+              <button className="button" onClick={reset}>
+                Reset filters
+              </button>
+            </section>
+          )}
+          {["block", "distance"].includes(q.dimension) &&
+            report.location?.locationCompleteness === 0 && (
+              <p className="note">
+                Distance analysis requires verified residential addresses.
+                Review locations below or select Age Group to continue other
+                participation analysis.
+              </p>
+            )}
+          {q.dimension === "risk" && (
+            <p className="note">
+              Recorded SRF codes are retained. Values without an approved
+              administrator mapping remain raw/unmapped; they do not establish a
+              level of need.
+            </p>
+          )}
           {report.dimension === "distance" && report.location && (
             <p className="note">
               Verified residential location coverage:{" "}
@@ -627,108 +637,212 @@ export function ParticipationPatterns({
               {report.location.note} Unknown distances remain in the population.
             </p>
           )}
-          <section className="panel">
-            <div className="report-section-heading">
-              <h2>
-                {report.dimension === "distance"
-                  ? "Participation by Distance"
-                  : "Participant group comparison"}
-              </h2>
-              <label>
-                Compare
-                <select
-                  aria-label="Group comparison metric"
-                  value={comparisonMetric}
-                  onChange={(e) => setMetric(e.target.value)}
-                >
-                  {report.scope === "clients" && (
-                    <option value="rate" disabled={!report.ratesAvailable}>
-                      Client participation rate (%)
-                    </option>
-                  )}
-                  <option value="unique">Unique participating people</option>
-                  <option value="averageSessions">Average sessions</option>
-                  <option value="repeatRate">Repeat engagement (%)</option>
-                </select>
-              </label>
-            </div>
-            {!report.coverage.from ? (
-              <p>
-                Import and review attendance to compare participation.
-                Registered clients without attendance remain in the population.
-              </p>
-            ) : report.comparisonSuppressed ? (
-              <p className="note">{denied}</p>
-            ) : (
-              <>
-                <ReportBars
-                  maxValue={
-                    ["rate", "repeatRate"].includes(comparisonMetric)
-                      ? 100
-                      : undefined
-                  }
-                  rows={report.groups
-                    .filter((g) => g[comparisonMetric as keyof Group] != null)
-                    .map((g) => ({
-                      label: g.label,
-                      value: Number(g[comparisonMetric as keyof Group]),
-                      detail: `${fmt(g.unique)} participating${g.registered == null ? "" : ` / ${fmt(g.registered)} registered`} · ${fmt(g.rate, "%")} client rate`,
-                    }))}
-                />
-                {!report.ratesAvailable && report.scope === "clients" && (
-                  <p className="note">
-                    A complete, verified client registry and delivered
-                    attendance are required before participation rates can be
-                    shown.
-                  </p>
-                )}
-              </>
-            )}
-            <details>
-              <summary>View group figures and definitions</summary>
-              <div className="work-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Group</th>
-                      <th>Registered</th>
-                      <th>Participating</th>
-                      <th>No recorded attendance</th>
-                      <th>Rate (%)</th>
-                      <th>Entries</th>
-                      <th>Programmes</th>
-                      <th>Domains</th>
-                      <th>Average sessions</th>
-                      <th>Repeat (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.groups.map((g) => (
-                      <tr key={g.label}>
-                        <th>{g.label}</th>
-                        {[
-                          g.registered,
-                          g.unique,
-                          g.noAttendance,
-                          g.rate,
-                          g.attendance,
-                          g.programmes,
-                          g.domains,
-                          g.averageSessions,
-                          g.repeatRate,
-                        ].map((n, i) => (
-                          <td key={i}>{g.suppressed ? "Withheld" : fmt(n)}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="patterns-main-grid">
+            <section className="panel patterns-comparison">
+              <div className="report-section-heading">
+                <h2>
+                  {report.dimension === "distance"
+                    ? "Participation by Distance"
+                    : "Participant group comparison"}
+                </h2>
+                <label>
+                  Compare
+                  <select
+                    aria-label="Group comparison metric"
+                    value={comparisonMetric}
+                    onChange={(e) => setMetric(e.target.value)}
+                  >
+                    {report.scope === "clients" && (
+                      <option value="rate" disabled={!report.ratesAvailable}>
+                        Client participation rate (%)
+                      </option>
+                    )}
+                    <option value="unique">Unique participating people</option>
+                    <option value="attendance">Attendance entries</option>
+                    <option value="averageSessions">Average sessions</option>
+                    <option value="repeatRate">Repeat engagement (%)</option>
+                  </select>
+                </label>
               </div>
-              {Object.values(report.metricsDefinition).map((d) => (
-                <p key={d}>{d}</p>
-              ))}
-            </details>
-          </section>
+              {!report.coverage.from ? (
+                <p>
+                  Import and review attendance to compare participation.
+                  Registered clients without attendance remain in the
+                  population.
+                </p>
+              ) : report.comparisonSuppressed ? (
+                <p className="note">{denied}</p>
+              ) : !report.groups.some(g=>g[comparisonMetric as keyof Group]!=null) ? (
+                <div className="note"><p>This metric is unavailable or withheld for these groups. Unique participant reach remains available where privacy permits.</p><button className="button" onClick={()=>setMetric('unique')}>Show unique participants</button></div>
+              ) : (
+                <>
+                  <ReportBars
+                    maxValue={
+                      ["rate", "repeatRate"].includes(comparisonMetric)
+                        ? 100
+                        : undefined
+                    }
+                    rows={report.groups
+                      .filter((g) => g[comparisonMetric as keyof Group] != null)
+                      .map((g) => ({
+                        label: g.label,
+                        value: Number(g[comparisonMetric as keyof Group]),
+                        detail: `${fmt(g.unique)} participating${g.registered == null ? "" : ` / ${fmt(g.registered)} registered`}${report.ratesAvailable ? ` · ${fmt(g.rate, "%")} client rate` : ""}`,
+                      }))}
+                  />
+                  {!report.ratesAvailable && report.scope === "clients" && (
+                    <p className="note">
+                      A complete, verified client registry and delivered
+                      attendance are required before participation rates can be
+                      shown.
+                    </p>
+                  )}
+                </>
+              )}
+              <details>
+                <summary>View group figures and definitions</summary>
+                <div className="work-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Group</th>
+                        <th>Registered</th>
+                        <th>Participating</th>
+                        <th>No recorded attendance</th>
+                        <th>Rate (%)</th>
+                        <th>Entries</th>
+                        <th>Programmes</th>
+                        <th>Domains</th>
+                        <th>Average sessions</th>
+                        <th>Repeat (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.groups.map((g) => (
+                        <tr key={g.label}>
+                          <th>{g.label}</th>
+                          {[
+                            g.registered,
+                            g.unique,
+                            g.noAttendance,
+                            g.rate,
+                            g.attendance,
+                            g.programmes,
+                            g.domains,
+                            g.averageSessions,
+                            g.repeatRate,
+                          ].map((n, i) => (
+                            <td key={i}>
+                              {g.suppressed ? "Withheld" : fmt(n)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {Object.values(report.metricsDefinition).map((d) => (
+                  <p key={d}>{d}</p>
+                ))}
+              </details>
+            </section>
+            <section className="panel">
+              <h2>Most Popular Programmes by Participant Group</h2>
+              <div className="patterns-filter-grid">
+                <label>
+                  Specific group
+                  <select
+                    aria-label="Specific participant group"
+                    value={report.group}
+                    onChange={(e) => update("group", e.target.value)}
+                  >
+                    {report.groups.map((g) => (
+                      <option key={g.label}>{g.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Ranking metric
+                  <select
+                    aria-label="Programme ranking metric"
+                    value={q.ranking}
+                    onChange={(e) => update("ranking", e.target.value)}
+                  >
+                    <option value="unique">Unique Reach</option>
+                    <option value="attendance">Attendance Entries</option>
+                    <option value="repeat">Repeat Engagement</option>
+                  </select>
+                </label>
+              </div>
+              <p className="muted">
+                Only privacy-safe programme results are shown. Withheld cells
+                are not zero.
+              </p>
+              <Ranking
+                report={report}
+                onProgramme={(id) => update("programme", id)}
+              />
+              {!report.rankings.suppressed && (
+                <div className="work-actions">
+                  <button
+                    className="button"
+                    onClick={() => update("all", q.all === "1" ? "" : "1")}
+                  >
+                    {q.all === "1" ? "Top five" : "View all programmes"}
+                  </button>
+                  {q.all === "1" && (
+                    <>
+                      <button
+                        className="button"
+                        disabled={!report.rankings.page}
+                        onClick={() =>
+                          update("page", String(report.rankings.page - 1))
+                        }
+                      >
+                        Previous programmes
+                      </button>
+                      <button
+                        className="button"
+                        disabled={
+                          (report.rankings.page + 1) * 20 >=
+                          (report.rankings.total || 0)
+                        }
+                        onClick={() =>
+                          update("page", String(report.rankings.page + 1))
+                        }
+                      >
+                        Next programmes
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {report.programmeDetail && (
+                <details open>
+                  <summary>
+                    Selected programme: {report.programmeDetail.name}
+                  </summary>
+                  {report.programmeDetail.suppressed ? (
+                    <p>{denied}</p>
+                  ) : (
+                    <ReportBars
+                      rows={report.programmeDetail.breakdown.map((g) => ({
+                        label: g.label,
+                        value: g.unique,
+                      }))}
+                    />
+                  )}
+                  <p>
+                    Accessibility fields recorded:{" "}
+                    {report.programmeDetail.accessibilityFields.join(", ") ||
+                      "No supported structured fields recorded"}
+                    . Review the existing programme accessibility workspace for
+                    the full staff assessment.
+                  </p>
+                </details>
+              )}
+            </section>
+          </div>
           {report.dimension === "distance" && (
             <Suspense fallback={<p>Loading residential comparison...</p>}>
               <LocationBlocks
@@ -738,102 +852,6 @@ export function ParticipationPatterns({
               />
             </Suspense>
           )}
-          <section className="panel">
-            <h2>Most Popular Programmes by Participant Group</h2>
-            <div className="patterns-filter-grid">
-              <label>
-                Specific group
-                <select
-                  aria-label="Specific participant group"
-                  value={report.group}
-                  onChange={(e) => update("group", e.target.value)}
-                >
-                  {report.groups.map((g) => (
-                    <option key={g.label}>{g.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Ranking metric
-                <select
-                  aria-label="Programme ranking metric"
-                  value={q.ranking}
-                  onChange={(e) => update("ranking", e.target.value)}
-                >
-                  <option value="unique">Unique Reach</option>
-                  <option value="attendance">Attendance Entries</option>
-                  <option value="repeat">Repeat Engagement</option>
-                </select>
-              </label>
-            </div>
-            <p className="muted">
-              Only privacy-safe programme results are shown. Withheld cells are
-              not zero.
-            </p>
-            <Ranking
-              report={report}
-              onProgramme={(id) => update("programme", id)}
-            />
-            {!report.rankings.suppressed && (
-              <div className="work-actions">
-                <button
-                  className="button"
-                  onClick={() => update("all", q.all === "1" ? "" : "1")}
-                >
-                  {q.all === "1" ? "Top five" : "View all programmes"}
-                </button>
-                {q.all === "1" && (
-                  <>
-                    <button
-                      className="button"
-                      disabled={!report.rankings.page}
-                      onClick={() =>
-                        update("page", String(report.rankings.page - 1))
-                      }
-                    >
-                      Previous programmes
-                    </button>
-                    <button
-                      className="button"
-                      disabled={
-                        (report.rankings.page + 1) * 20 >=
-                        (report.rankings.total || 0)
-                      }
-                      onClick={() =>
-                        update("page", String(report.rankings.page + 1))
-                      }
-                    >
-                      Next programmes
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-            {report.programmeDetail && (
-              <details open>
-                <summary>
-                  Selected programme: {report.programmeDetail.name}
-                </summary>
-                {report.programmeDetail.suppressed ? (
-                  <p>{denied}</p>
-                ) : (
-                  <ReportBars
-                    rows={report.programmeDetail.breakdown.map((g) => ({
-                      label: g.label,
-                      value: g.unique,
-                    }))}
-                  />
-                )}
-                <p>
-                  Accessibility fields recorded:{" "}
-                  {report.programmeDetail.accessibilityFields.join(", ") ||
-                    "No supported structured fields recorded"}
-                  . Review the existing programme accessibility workspace for
-                  the full staff assessment.
-                </p>
-              </details>
-            )}
-          </section>
           <section className="panel">
             <h2>Repeat participation and engagement</h2>
             {selected?.suppressed ? (
@@ -1045,6 +1063,7 @@ export function ParticipationPatterns({
                         .filter(
                           ([key]) =>
                             key !== q.dimension &&
+                            key !== "eventType" &&
                             (q.dimension !== "distance" || key !== "block"),
                         )
                         .map(([key, label]) => (
@@ -1167,17 +1186,15 @@ export function ParticipationPatterns({
               <p>
                 {printReport.period.from} to {printReport.period.to} ·{" "}
                 {dimensions[printReport.dimension]} · {printReport.group} ·{" "}
-                {printReport.scope === "clients"
-                  ? "Registered clients"
-                  : "All attendees"}
+                {populations[printReport.scope]?.label || printReport.scope}
               </p>
               <p>
                 Population: {fmt(printReport.population)} · Selected group
-                participation:{" "}
+                {printReport.ratesAvailable?'participation rate':'unique participants'}:{" "}
                 {fmt(
                   printReport.groups.find((g) => g.label === printReport.group)
-                    ?.rate,
-                  "%",
+                    ?.[printReport.ratesAvailable?'rate':'unique'],
+                  printReport.ratesAvailable?'%':'',
                 )}
               </p>
               {printReport.location && (
@@ -1213,7 +1230,7 @@ export function ParticipationPatterns({
                       label: g.label,
                       value:
                         (printReport.ratesAvailable ? g.rate : g.unique) ?? 0,
-                      detail: `${fmt(g.unique)} participating / ${fmt(g.registered)} registered`,
+                      detail: `${fmt(g.unique)} participating${printReport.ratesAvailable?` / ${fmt(g.registered)} registered`:''}`,
                     }))}
                 />
               )}

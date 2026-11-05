@@ -152,6 +152,7 @@ export type Insight = {
 };
 export type Preview = {
   updatedSessions?: number;
+  sessionChanges?:{programme:string;date:string;before:string;after:string}[];
   id: string;
   mode?: string;
   updatedProfiles?: number;
@@ -176,6 +177,7 @@ export type Preview = {
     start: number;
     end: number;
     warnings: string[];
+    eventType?:string;
   }[];
   reference: Record<string, string | number | null>;
   expectedReference: Record<string, string | number>;

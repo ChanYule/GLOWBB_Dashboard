@@ -3,6 +3,7 @@ import { api } from "./api";
 import { ReportBars } from "./management";
 import type { User } from "./types";
 import "./patterns.css";
+import {populations} from '../shared/participation-compat.js';
 const PresentationFrame = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationFrame })),
 );
@@ -87,8 +88,8 @@ export function EventTypeInsights({
   patterns?: boolean;
 }) {
   const [q, setQ] = useState<Record<string, string>>({
-      scope: patterns ? "clients" : "overall",
-      target: patterns ? "all" : "senior",
+      scope: initial.scope || (patterns ? "clients" : "overall"),
+      target: initial.target || (patterns ? "all" : "senior"),
       ranking: "unique",
     }),
     [report, setReport] = useState<EventReport | null>(null),
@@ -134,6 +135,7 @@ export function EventTypeInsights({
   const query = new URLSearchParams({
     ...JSON.parse(base),
     ...q,
+    ...(patterns?{scope:initial.scope||q.scope,from:initial.from||'',to:initial.to||''}:{}),
     ...(!compare ? { factor: "", group: "" } : {}),
   }).toString();
   useEffect(() => {
@@ -228,17 +230,16 @@ export function EventTypeInsights({
               <option value="minority">Minority seniors</option>
             </select>
           </label>
-          <label>
+          {!patterns&&<label>
             Population
             <select
               aria-label="Event population"
               value={q.scope}
               onChange={(e) => update("scope", e.target.value)}
             >
-              <option value="overall">All attendance participants</option>
-              <option value="clients">Registered clients</option>
+              {Object.entries(populations).map(([v,p])=><option key={v} value={v}>{p.label}</option>)}
             </select>
-          </label>
+          </label>}
         </div>
         <div className="work-actions">
           <button
@@ -329,6 +330,7 @@ export function EventTypeInsights({
                   (r) =>
                     r[measure as "sessions" | "programmes" | "unique"] != null,
                 )
+                .sort((a,b)=>(b[measure as 'sessions'|'programmes'|'unique']||0)-(a[measure as 'sessions'|'programmes'|'unique']||0)||a.label.localeCompare(b.label))
                 .map((r) => ({
                   label: r.label,
                   value:

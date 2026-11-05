@@ -1,4 +1,9 @@
 import { defaults, todaySG } from "./domain.js";
+import {
+  populations,
+  patternKeys,
+  analysisDimensions,
+} from "../shared/participation-compat.js";
 import { clientPopulation, validDay } from "./client-domain.js";
 import { materializeProfiles } from "./needs-domain.js";
 import {
@@ -11,14 +16,7 @@ import {
 } from "./location-model.js";
 
 export const patternDimensions = {
-  age: "Age Group",
-  cfs: "CFS",
-  risk: "Social Risk Factor",
-  race: "Race",
-  gender: "Gender",
-  living: "Living Arrangement",
-  block: "Residential block",
-  distance: "Location & Distance",
+  ...analysisDimensions,
   locationBlock: "Verified residential building",
   participation: "Client Participation Status",
   eventType: "Event Type",
@@ -87,37 +85,25 @@ export function patternLabel(p, dimension, settings = {}) {
   if (dimension === "risk" && settings.riskMappings?.[value]?.label)
     return value + " · " + settings.riskMappings[value].label;
   if (dimension === "living") return settings.livingGroups?.[value] || value;
-  if (dimension === "block") return settings.clientZones?.[value] || value;
+  if (dimension === "block")
+    return p.location?.blockLabel || settings.clientZones?.[value] || value;
   return value;
 }
 export function validatePatternQuery(input = {}, now = todaySG()) {
-  const allowed = [
-    "dimension",
-    "scope",
-    "from",
-    "to",
-    "domain",
-    "group",
-    "ranking",
-    "second",
-    "page",
-    "all",
-    "programme",
-    "basis",
-    "distanceMetric",
-    "destination",
-    "blockPage",
-    "blockSearch",
-    "blockSort",
-    "stratum",
-  ];
+  const allowed = patternKeys;
   if (
     Object.entries(input).some(
       ([k, v]) =>
         !allowed.includes(k) || typeof v !== "string" || v.length > 500,
     )
   )
-    throw fail("Choose supported participation analysis filters.");
+    throw fail(
+      "Participation filters contain unsupported settings. Reset this view or remove outdated saved parameters: " +
+        Object.keys(input)
+          .filter((k) => !allowed.includes(k) || typeof input[k] !== "string")
+          .slice(0, 5)
+          .join(", "),
+    );
   const q = {
     dimension: "age",
     scope: "clients",
@@ -126,9 +112,9 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
     ...input,
   };
   if (
-    !patternDimensions[q.dimension] ||
-    (q.second && (!patternDimensions[q.second] || q.second === q.dimension)) ||
-    !["clients", "overall"].includes(q.scope) ||
+    !Object.hasOwn(patternDimensions,q.dimension) ||
+    (q.second && (!Object.hasOwn(patternDimensions,q.second) || q.second === q.dimension)) ||
+    !Object.hasOwn(populations, q.scope) ||
     !["unique", "attendance", "repeat"].includes(q.ranking) ||
     !["current", "dated"].includes(q.basis)
   )
@@ -143,7 +129,7 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
     );
   if (
     [q.dimension, q.second].some((d) =>
-      ["distance", "locationBlock"].includes(d),
+      ["distance", "locationBlock", "block"].includes(d),
     ) &&
     q.scope !== "clients"
   )
@@ -194,7 +180,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     settings = { ...defaults, ...state.settings };
   const minimum = Math.max(5, settings.privacyMinimum || 5);
   const locationMode = [q.dimension, q.second].some((d) =>
-    ["distance", "locationBlock"].includes(d),
+    ["distance", "locationBlock", "block"].includes(d),
   );
   const locationStore = state.locations || locationDefaults();
   const destination =
@@ -269,10 +255,11 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       )) {
       snapshots.set(row.participant_id, JSON.parse(row.details).after || {});
     }
-  let people =
-    q.scope === "clients"
-      ? clients
-      : [...peopleMap.values()].filter((p) => selected.has(p.id));
+  let people = ["clients", "attendingClients"].includes(q.scope)
+    ? clients
+    : [...peopleMap.values()].filter((p) => selected.has(p.id));
+  if (q.scope === "attendingClients")
+    people = people.filter((p) => selected.has(p.id));
   people = people.map((p) => {
     const profile =
       q.basis === "dated" ? snapshots.get(p.id) || {} : p.profile || {};
@@ -304,6 +291,8 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       profile,
     };
   });
+  if (q.scope === "seniors")
+    people = people.filter((p) => typeof p.age === "number" && p.age >= 60);
   if (locationMode) {
     const locationCache = new Map();
     people = people.map((p) => {
@@ -334,21 +323,6 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
   // Noncanonical slices and cross-characteristic releases require identical
   // full characteristic + attendance atoms, preventing repeated filter queries
   // from subtracting a small identifiable group out of a published total.
-  const atoms = new Map();
-  const atomDimensions = Object.keys(patternDimensions).filter(
-    (d) =>
-      d !== 'eventType' && (locationMode ||
-      !["distance", "locationBlock", "participation"].includes(d)),
-  );
-  for (const p of people) {
-    const signature = JSON.stringify([
-      atomDimensions.map((d) => patternLabel(p, d, settings)),
-      (histories.get(p.id) || []).map((s) => s.id).sort(),
-      p.registrationDate || "",
-    ]);
-    atoms.set(signature, (atoms.get(signature) || 0) + 1);
-  }
-  const atomSafe = [...atoms.values()].every((n) => n >= minimum);
   const custom = Boolean(
     q.domain ||
     (locationMode && q.destination && q.destination !== "centre") ||
@@ -357,9 +331,10 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     (q.from && q.from !== coverage.from) ||
     (q.to && q.to !== coverage.to && q.to !== now),
   );
-  // Overall cohorts can change with date selection, so even canonical overall
-  // releases need safe atoms; registered cohorts retain non-attenders.
+  // Date/domain/combined slices need safe atoms. Full-history single-dimension
+  // attendee distributions retain category and complementary suppression below.
   const registrationSlice =
+    populations[q.scope].registry &&
     q.to &&
     clientPopulation(
       {
@@ -369,8 +344,13 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       },
       now,
     ).length !== clients.length;
-  const sliceBlocked =
-    (custom || registrationSlice || q.scope === "overall") && !atomSafe;
+  let sliceBlocked=false;
+  if(custom||registrationSlice){
+    const atoms=new Map();
+    const atomDimensions=Object.keys(patternDimensions).filter(d=>d!=='eventType'&&(locationMode||!['distance','locationBlock','participation'].includes(d)));
+    for(const p of people){const signature=JSON.stringify([atomDimensions.map(d=>patternLabel(p,d,settings)),(histories.get(p.id)||[]).map(s=>s.id).sort(),p.registrationDate||'']);atoms.set(signature,(atoms.get(signature)||0)+1);}
+    sliceBlocked=[...atoms.values()].some(n=>n<minimum);
+  }
   const stats = (members) => {
     let attendance = 0,
       repeat = 0,
@@ -426,7 +406,8 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
   };
   const buckets = new Map();
   if (q.dimension === "age")
-    for (const label of ageLabels.slice(0, 4)) buckets.set(label, []);
+    for (const label of ageLabels.slice(q.scope === "seniors" ? 1 : 0, 4))
+      buckets.set(label, []);
   if (q.dimension === "distance")
     for (const label of distanceLabels(
       locationStore,
@@ -514,7 +495,9 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     sliceBlocked || (groups.length > 0 && groups.every((r) => r.suppressed));
   const group = labels.includes(q.group)
     ? q.group
-    : groups.find((g) => !g.suppressed && g.unique > 0)?.label ||
+    : [...groups]
+        .filter((g) => !g.suppressed && g.unique > 0)
+        .sort((a, b) => b.unique - a.unique)[0]?.label ||
       groups.find((g) => !g.suppressed && g.registered > 0)?.label ||
       labels[0] ||
       "";

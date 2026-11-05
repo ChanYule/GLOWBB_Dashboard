@@ -343,6 +343,7 @@ export function createApp(
       mode,
       updatedProfiles: inspection.updates.length,
       updatedSessions: inspection.sessionUpdates.length,
+      sessionChanges:inspection.sessionUpdates.slice(0,100).map(s=>{const source=parsed.rows.find(r=>r.session.id===s.id);return {programme:source?.programme.name||'Recorded programme',date:source?.session.date||'',before:s.optional.eventTypeHistory.at(-1)?.raw||'Unclassified / unknown',after:s.optional.eventTypeRaw};}),
       matched: inspection.matched,
       missing: inspection.missing.length,
       resultingAttendance: inspection.resultingAttendance,

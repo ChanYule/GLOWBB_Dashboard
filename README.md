@@ -1,3 +1,7 @@
+> **Participation analysis fix and compact interface:** Compatible populations/metrics, repaired legacy preferences, a compact analysis selector and side-by-side comparison/ranking panels. [Diagnosis, population definitions, staff workflow and validation](docs/PARTICIPATION-REDESIGN.md). No additional SQL migration is required.
+
+> **AAP Domain & Event Types:** Import the new 14-column attendance export, review session classifications and administrator mappings, and compare programme mix, reach and repeat engagement in Programme Analysis and Participation Patterns. Management summaries and PDF reports are integrated. [Staff guide, definitions, data model and validation](docs/EVENT-TYPES.md). This upgrade requires **no additional SQL migration** beyond the existing application setup.
+
 > **Location & Distance:** Reviewed building locations, cached walking routes, participation comparisons and proposed follow-ups are integrated into Participation Patterns and Client Engagement. [Setup, definitions, privacy and validation](docs/LOCATION-PARTICIPATION.md). This upgrade adds private storage in **migration 005**; earlier release notes below describe their own SQL requirements.
 
 > **Participation Patterns & Insights:** Compare participant groups, programme reach and repeat engagement under **Staff Tools**. [Staff guide, definitions, privacy and validation](docs/PARTICIPATION-PATTERNS.md). That release did not require an additional SQL migration.

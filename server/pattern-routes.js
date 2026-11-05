@@ -3,6 +3,7 @@ import { dataTransaction } from "./data-management.js";
 import { todaySG } from "./domain.js";
 import { ensureLocations, locationRow } from "./location-store.js";
 import { decodeLocations } from "./location-model.js";
+import { normalizePatternPreferences } from "../shared/participation-compat.js";
 
 export function mountPatterns(app, { db, storage }) {
   const allowed = (req) => {
@@ -13,10 +14,16 @@ export function mountPatterns(app, { db, storage }) {
       );
   };
   const report = async (query) => {
-    if(query.dimension==='eventType'||query.second==='eventType')throw Object.assign(Error('Use the programme-type aggregate analysis for overlapping Event Types.'),{status:400});
+    if (query.dimension === "eventType" || query.second === "eventType")
+      throw Object.assign(
+        Error(
+          "Use the programme-type aggregate analysis for overlapping Event Types.",
+        ),
+        { status: 400 },
+      );
     if (
       [query.dimension, query.second].some((d) =>
-        ["distance", "locationBlock"].includes(d),
+        ["distance", "locationBlock", "block"].includes(d),
       )
     )
       await ensureLocations(db);
@@ -44,7 +51,7 @@ export function mountPatterns(app, { db, storage }) {
             .all(query.to || todaySG());
         if (
           [query.dimension, query.second].some((d) =>
-            ["distance", "locationBlock"].includes(d),
+            ["distance", "locationBlock", "block"].includes(d),
           )
         )
           state.locations = decodeLocations(yield locationRow(tx));
@@ -61,7 +68,7 @@ export function mountPatterns(app, { db, storage }) {
   app.put("/api/participation-patterns/preferences", async (req, res) => {
     allowed(req);
     const { validatePatternQuery } = await import("./patterns.js");
-    const value = req.body;
+    const value = normalizePatternPreferences(req.body, todaySG()).query;
     validatePatternQuery(value);
     await dataTransaction(
       db,
@@ -98,7 +105,14 @@ export function mountPatterns(app, { db, storage }) {
         { status: 403 },
       );
     const value = await report(req.query);
-    if (value.location) { value.location.destinations=[]; value.location.blockRows=null; value.location.destination=req.query.destination && req.query.destination!=="centre"?"Selected verified programme venue":"Main GLOW BB centre"; }
+    if (value.location) {
+      value.location.destinations = [];
+      value.location.blockRows = null;
+      value.location.destination =
+        req.query.destination && req.query.destination !== "centre"
+          ? "Selected verified programme venue"
+          : "Main GLOW BB centre";
+    }
     // Export exactly the same protected aggregate contract as the screen.
     await storage.audit(db, req.user.id, "patterns.summary.exported", {
       dimension: value.dimension,

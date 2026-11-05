@@ -1,4 +1,4 @@
-﻿// Headless browser QA against an isolated in-memory fixture; never opens a saved dashboard database.
+// Headless browser QA against an isolated in-memory fixture; never opens a saved dashboard database.
 import { spawn } from "node:child_process";
 import {
   mkdirSync,
@@ -41,6 +41,7 @@ saveImport(db, parsed, inspectImport(parsed, readData(db)), actor);
 const sourceAttendanceCount = db
   .prepare("SELECT count(*) n FROM attendance")
   .get().n;
+const sourceParticipantCount=db.prepare('SELECT count(DISTINCT participant_id) n FROM attendance').get().n;
 app.use(express.static("dist"));
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
@@ -425,6 +426,10 @@ try {
             "!!document.querySelector('.patterns-kpis') && document.querySelector('.patterns-page')?.getAttribute('aria-busy') === 'false'",
             "selected participation dimension",
           );
+          const compatibilityCheck=await evaluate("({scope:document.querySelector('[aria-label=\"Analysis population\"]').value,dimension:document.querySelector('[aria-label=\"Analyse by\"]').value,unique:document.querySelector('.patterns-kpis strong').textContent,compact:!!document.querySelector('.patterns-main-grid')})");
+          if(compatibilityCheck.scope!=='overall'||compatibilityCheck.dimension!=='age'||Number(compatibilityCheck.unique.replaceAll(',',''))!==sourceParticipantCount||!compatibilityCheck.compact)throw Error('Attendance population compatibility failed: '+JSON.stringify(compatibilityCheck));
+          results.push({viewport:`${width}x${height}`,page:'All-attendee age compatibility',...compatibilityCheck});
+          if([1440,768,375].includes(width)){await evaluate('scrollTo(0,0)');const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});writeFileSync(join(output,`${width}-Participation-Compact-Header.png`),Buffer.from(shot.data,'base64'));}
           if (width === 1440) {
             for (const label of [
               "CFS",
@@ -433,7 +438,7 @@ try {
               "Age Group",
             ]) {
               await evaluate(
-                `[...document.querySelectorAll('.patterns-dimensions button')].find(b => b.textContent===${JSON.stringify(label)}).click()`,
+                `(()=>{const select=document.querySelector('[aria-label="Analyse by"]');select.value=[...select.options].find(o=>o.textContent===${JSON.stringify(label)}).value;select.dispatchEvent(new Event('change',{bubbles:true}));})()`,
               );
               await pause(200);
               await wait(
@@ -499,13 +504,14 @@ try {
             );
           }
           await evaluate(
-            "[...document.querySelectorAll('.patterns-dimensions button')].find(b => b.textContent==='Location & Distance').click()",
+            "(()=>{const s=document.querySelector('[aria-label=\"Analyse by\"]');s.value='distance';s.dispatchEvent(new Event('change',{bubbles:true}));})()",
           );
           await pause(220);
           await wait(
             "document.querySelector('.patterns-page')?.getAttribute('aria-busy')==='false' && [...document.querySelectorAll('h2')].some(h=>h.textContent==='Participation by Distance')",
             "distance analysis without invented coordinates",
           );
+          await evaluate("(()=>{const b=[...document.querySelectorAll('.patterns-controls button')].find(b=>b.textContent==='More filters');if(b.getAttribute('aria-expanded')==='false')b.click();})()");
           const distanceCheck = await evaluate(
             "({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.innerText),metric:document.querySelector('[aria-label=\"Distance measure\"]').value,verified:document.querySelector('.patterns-kpis article strong').textContent})",
           );
@@ -621,7 +627,7 @@ try {
             );
           }
           await evaluate(
-            "[...document.querySelectorAll('.patterns-dimensions button')].find(b=>b.textContent==='Age Group').click()",
+            "(()=>{const s=document.querySelector('[aria-label=\"Analyse by\"]');s.value='age';s.dispatchEvent(new Event('change',{bubbles:true}));})()",
           );
           await pause(220);
           await wait(
@@ -699,7 +705,7 @@ try {
           );
         }
         if(page==='Programme Analysis'){
-          await wait("!!document.querySelector('.event-insights') && !document.querySelector('.event-insights[aria-busy=true]') && document.querySelector('.event-insights .report-bars')",'Event Type programme mix');
+          await wait("!!document.querySelector('.event-insights') && !document.querySelector('.event-insights[aria-busy=true]') && !!document.querySelector('.event-insights .report-bars')",'Event Type programme mix');
           const check=await evaluate("({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('.event-insights [role=alert]')].map(e=>e.textContent),labels:document.querySelector('.event-insights').innerText.includes('Social & Cognitive')})");
           if(check.scrollWidth>width+1||check.alerts.length||!check.labels)throw Error('Event Type layout/data check failed: '+JSON.stringify(check));
           results.push({viewport:`${width}x${height}`,page:'Event Type programme mix',...check});

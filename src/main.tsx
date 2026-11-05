@@ -707,7 +707,7 @@ function App() {
                 <h1>{title}</h1>
                 <p className="muted">
                   {tab === "Participation Patterns & Insights"
-                    ? "Compare participant groups, repeat engagement and programme reach to inform future planning."
+                    ? "Understand who participates, which programmes attract them and where engagement gaps exist."
                     : tab === "Client Engagement"
                       ? "Link your registered population to attendance, investigate gaps and plan reviewed outreach."
                       : tab === "Data management"
@@ -734,7 +734,7 @@ function App() {
                 </p>
               </div>
               <div className="heading-actions">
-                <Button
+                {tab!=='Participation Patterns & Insights'&&<Button
                   disabled={loading}
                   onClick={() =>
                     refresh("Dashboard refreshed from saved records.")
@@ -742,7 +742,7 @@ function App() {
                 >
                   <RefreshCw size={16} />
                   Refresh
-                </Button>
+                </Button>}
                 {![
                   "Overview",
                   "Data management",
@@ -3232,7 +3232,9 @@ function ImportDialog({
             and preserves blank incoming values; programme-domain conflicts
             remain skipped. Future sessions are stored but excluded from
             delivered attendance until their date.
+            {' '}Merge also applies the previewed session Event Type changes. Older or blank Event Types never erase existing classifications.
           </Note>
+          {!!preview.sessionChanges?.length&&<details><summary>Review session Event Type changes · {preview.updatedSessions}</summary><div className="work-table"><table><thead><tr><th>Programme / date</th><th>Existing source</th><th>Incoming source</th></tr></thead><tbody>{preview.sessionChanges.map((s,i)=><tr key={i}><th>{s.programme} · {s.date}</th><td>{s.before}</td><td>{s.after}</td></tr>)}</tbody></table></div><p>Up to 100 changes shown; all proposed session updates are counted above.</p></details>}
           {preview.variants.length > 0 && (
             <div className="warning">
               <h3>Similar programme names remain separate</h3>
@@ -3274,6 +3276,7 @@ function ImportDialog({
                 <span>Row {r.row}</span>
                 <strong>{r.programme}</strong>
                 <span>{r.domain}</span>
+                {r.eventType&&<span>Event Type: {r.eventType}</span>}
                 <small>
                   {r.date} · {time(r.start)}–{time(r.end)}
                 </small>
@@ -3325,7 +3328,7 @@ function ImportDialog({
               onChange={(e) => setConsent(e.target.checked)}
             />
             <span>
-              I reviewed the preview, mode, profile updates and issue report.
+              I reviewed the preview, mode, profile updates, session Event Types and issue report.
               Apply the displayed changes; skip invalid rows and unresolved
               programme conflicts.
             </span>
