@@ -15,15 +15,12 @@ One audience selector updates both the reach trend and top-five programme rankin
 
 ## Daily and monthly summary
 
-**Attendance summary** provides Daily and Monthly views. The Daily view has a month selector within the active reporting range and shows week, date, programmes, attendances, unique participants, IB, OB, male, minority and inactive counts. The Monthly view shows each month and a deduplicated reporting-period total.
+**Attendance summary** provides Daily and Monthly views. The Daily view has a month selector within the active reporting range and shows week, date, programmes, attendances, unique participants, IB, OB, male and minority counts. The Monthly view shows each month and a deduplicated reporting-period total.
 
 - The sheet and total unique participants card include all recorded ages, subject to the active dashboard filters. Male and minority senior headline cards and the senior charts retain the configured senior age threshold.
 - **IB** means existing clients; **OB** means non-clients. These are the same definitions used by Operations. Unknown client status remains separate and is not guessed into either group.
 - Sheet percentages use the unique participants in that row. Senior headline gender/race percentages retain their labelled known-information denominators.
-- **Inactive (≤2)** follows the requested definition: among people attending in the row, count those who have attended two or fewer distinct programmes across all available attendance history. Repeated sessions in one programme still count as one programme.
-- Inactive history includes programmes outside the active reporting dates and programme/domain filter. All rows use the latest available delivered history; selecting a past month does not reset the programme count. These are current all-history classifications, not historical inactivity snapshots. Future records are excluded.
-- This programme-count measure is separate from the existing time-since-last-attendance classification in Client Engagement/Operations. People without any recorded attendance remain in the separate registry workflow.
-- Monthly and overall totals deduplicate people and programmes. Do not add daily unique or inactive values together. The same person may appear on several days.
+- Monthly and overall totals deduplicate people and programmes. Do not add daily unique values together. The same person may appear on several days.
 - Weeks start on Monday. Empty weekends are omitted; recorded weekend attendance is retained. Future dates and dates outside the selected period or available source coverage show blank cells. Public holidays are not inferred from the example image.
 
 The table scrolls within its own container on smaller screens and keeps column headings and totals visible. Month changes cancel obsolete requests and keep the existing summary visible while refreshing.

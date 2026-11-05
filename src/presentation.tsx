@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
 import { Cards, Coverage, ReportBars, useBriefing } from "./management";
 import { TrendChart } from "./analytics-ui";
 import type { Briefing } from "./management";
@@ -7,29 +9,7 @@ const fmt = (n: number | null | undefined) =>
   n == null
     ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(n);
-export function PresentationView({
-  data,
-  filters,
-  revision,
-  close,
-  briefing,
-}: {
-  data: Dashboard;
-  filters: Filters;
-  revision: number;
-  close: () => void;
-  briefing?: Briefing;
-}) {
-  const fetchRegistry = !!briefing?.registryOmitted;
-  const remote = useBriefing(filters, revision, !briefing || fetchRegistry);
-  // Preserve the displayed outreach/needs/action snapshot. Registry coverage is
-  // requested only when opening the report, rather than on the main dashboard.
-  const value =
-      fetchRegistry && briefing
-        ? { ...briefing, clients: remote.value?.clients || null }
-        : briefing || remote.value,
-    error = !briefing || fetchRegistry ? remote.error : "",
-    pending = !briefing || fetchRegistry ? remote.pending : false;
+function usePresentation(close: () => void) {
   useEffect(() => {
     const old = document.title;
     document.title = "GLOW Bukit Batok — Management report";
@@ -70,6 +50,66 @@ export function PresentationView({
       document.removeEventListener("keydown", key);
     };
   }, [close]);
+}
+export function PresentationFrame({
+  title,
+  close,
+  children,
+}: {
+  title: string;
+  close: () => void;
+  children: ReactNode;
+}) {
+  usePresentation(close);
+  useEffect(() => {
+    document.body.classList.add("patterns-presenting");
+    return () => document.body.classList.remove("patterns-presenting");
+  }, []);
+  return createPortal(
+    <div
+      className="presentation patterns-report"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Presentation View"
+    >
+      <div className="presentation-toolbar">
+        <button className="button" autoFocus onClick={close}>
+          Back to analysis
+        </button>
+        <strong>{title}</strong>
+        <button className="button primary" onClick={() => window.print()}>
+          Print / Save as PDF
+        </button>
+      </div>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+export function PresentationView({
+  data,
+  filters,
+  revision,
+  close,
+  briefing,
+}: {
+  data: Dashboard;
+  filters: Filters;
+  revision: number;
+  close: () => void;
+  briefing?: Briefing;
+}) {
+  const fetchRegistry = !!briefing?.registryOmitted;
+  const remote = useBriefing(filters, revision, !briefing || fetchRegistry);
+  // Preserve the displayed outreach/needs/action snapshot. Registry coverage is
+  // requested only when opening the report, rather than on the main dashboard.
+  const value =
+      fetchRegistry && briefing
+        ? { ...briefing, clients: remote.value?.clients || null }
+        : briefing || remote.value,
+    error = !briefing || fetchRegistry ? remote.error : "",
+    pending = !briefing || fetchRegistry ? remote.pending : false;
+  usePresentation(close);
   const titles = [
     "Executive summary",
     "Client engagement",
@@ -77,6 +117,7 @@ export function PresentationView({
     "Needs and accessibility",
     "Planning and actions",
     "Follow-up plan",
+    ...(value?.programmeMix?['Programme Mix and Engagement Types']:[]),
   ];
   const audience =
     ["gender", "race", "ageBand", "client", "boundary"].some(
@@ -181,6 +222,7 @@ export function PresentationView({
               programme eligibility.
             </p>
           </section>
+          {value?.programmeMix&&<section className="report-slide" id="report-6"><h1>Programme Mix and Engagement Types</h1><h2>Primary AAP Domain distribution</h2><ReportBars rows={value.programmeMix.domains.map(d=>({label:d.label,value:d.sessions,detail:'delivered sessions'}))}/><h2>Selected secondary classifications</h2><p>{value.programmeMix.types.map(t=>`${t.label}: ${fmt(t.sessions)} sessions, ${fmt(t.unique)} unique seniors, ${fmt(t.repeat)} same-programme repeat`).join(' · ')}</p><p>{value.programmeMix.findings[0]?.action}</p><p>{value.programmeMix.note}</p></section>}
           <section className="report-slide" id="report-4">
             <h1>{titles[4]}</h1>
             <p>

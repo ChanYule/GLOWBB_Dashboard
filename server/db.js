@@ -112,6 +112,7 @@ export function saveImport(db, parsed, inspection, user) {
         id,
       );
     const summary = {
+      updatedSessions: inspection.sessionUpdates?.length || 0,
       updatedProfiles: inspection.updates?.length || 0,
       mode: inspection.mode || "add",
       raw: parsed.rawRows,
@@ -147,13 +148,14 @@ export function saveImport(db, parsed, inspection, user) {
         "INSERT OR IGNORE INTO programmes(id,name,domain) VALUES(?,?,?)",
       ).run(r.programme.id, r.programme.name, r.programme.domain);
       db.prepare(
-        "INSERT OR IGNORE INTO sessions(id,programme_id,date,start,end) VALUES(?,?,?,?,?)",
+        "INSERT OR IGNORE INTO sessions(id,programme_id,date,start,end,optional) VALUES(?,?,?,?,?,?)",
       ).run(
         r.session.id,
         r.programme.id,
         r.session.date,
         r.session.start,
         r.session.end,
+        JSON.stringify(r.session.optional || {}),
       );
       db.prepare("INSERT OR IGNORE INTO attendance VALUES(?,?,?,?,?)").run(
         r.id,
@@ -163,6 +165,7 @@ export function saveImport(db, parsed, inspection, user) {
         id,
       );
     }
+    for(const s of inspection.sessionUpdates||[])db.prepare('UPDATE sessions SET optional=? WHERE id=?').run(JSON.stringify(s.optional),s.id);
     for (const { id, ...details } of inspection.updates || [])
       db.prepare("UPDATE participants SET details=? WHERE id=?").run(
         JSON.stringify(details),

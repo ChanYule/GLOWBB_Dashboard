@@ -584,6 +584,7 @@ export function ClientEngagement({
   dataRevision = 0,
   onImportAttendance,
   onChanged,
+  onLocations,
 }: {
   user: User;
   initialFilters: Filters;
@@ -591,6 +592,7 @@ export function ClientEngagement({
   dataRevision?: number;
   onImportAttendance?: () => void;
   onChanged: () => void;
+  onLocations?: () => void;
 }) {
   const initial = {
     from:
@@ -779,6 +781,11 @@ export function ClientEngagement({
         </div>
       </section>
       <div className="client-tabs" aria-label="Client engagement sections">
+        {onLocations && (
+          <button onClick={onLocations}>
+            Location & Participation Insights
+          </button>
+        )}
         {[
           ["analysis", "Client participation"],
           ["explore", "Explore client participation gaps"],

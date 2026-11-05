@@ -81,6 +81,48 @@ if (registrySource) {
       "Registry fixture confirmation failed: " + (await confirmation.text()),
     );
 }
+const patternMeasurements = [];
+for (const dimension of [
+  "age",
+  "cfs",
+  "risk",
+  "race",
+  "gender",
+  "living",
+  "distance",
+]) {
+  const timings = [];
+  let summary;
+  for (let run = 0; run < 5; run++) {
+    const started = performance.now();
+    const response = await fetch(
+      origin + "/api/participation-patterns?dimension=" + dimension,
+    );
+    summary = await response.json();
+    if (!response.ok) throw Error("Pattern benchmark failed: " + dimension);
+    timings.push(performance.now() - started);
+  }
+  timings.sort((a, b) => a - b);
+  patternMeasurements.push({
+    dimension,
+    medianMs: Number(timings[2].toFixed(2)),
+    responseBytes: Buffer.byteLength(JSON.stringify(summary)),
+    visibleGroups: summary.groups.filter((g) => !g.suppressed).length,
+    releasedProgrammes: summary.rankings.rows.length,
+  });
+}
+writeFileSync(
+  join(output, "patterns-performance.json"),
+  JSON.stringify(
+    {
+      sourceAttendanceCount,
+      localOnly: true,
+      measurements: patternMeasurements,
+    },
+    null,
+    2,
+  ),
+);
 const browser = spawn(
   executable,
   [
@@ -307,6 +349,7 @@ try {
       "Main Dashboard",
       ...(registrySource ? ["Client Engagement & Outreach"] : []),
       "Programme Analysis",
+      "Participation Patterns & Insights",
       "Participant Needs & Accessibility",
       "Who Are We Serving?",
       "Gaps and Participation Barriers",
@@ -339,6 +382,13 @@ try {
         "document.querySelector('h1')?.textContent === 'Main dashboard' && document.querySelector('.management-kpis[data-ready=true]') && document.querySelector('.participation-summary table') && !document.querySelector('.fetch-status')",
         "management overview",
       );
+      const eagerPatterns = await evaluate(
+        "performance.getEntriesByType('resource').some(r => r.name.includes('/api/participation-patterns'))",
+      );
+      if (eagerPatterns)
+        throw Error(
+          "Optional participation analysis loaded on the main dashboard",
+        );
       const primary = await evaluate(
         "[...document.querySelectorAll('nav > button')].map(b => b.textContent.trim())",
       );
@@ -368,6 +418,215 @@ try {
           await wait(
             `document.querySelector('h1')?.textContent === ${JSON.stringify(page === "Detailed action tracker" ? "Detailed action tracker" : page === "Programme Analysis" ? "Programme analysis" : page === "Operations & Screening" ? "Operations & health screening" : page === "Audience & Outreach" ? "Audience & outreach gaps" : page === "Planning" ? "Planning" : page)} && !document.body.innerText.includes('Loading needs analysis') && !document.querySelector('.fetch-status')`,
             "page " + page,
+          );
+        }
+        if (page === "Participation Patterns & Insights") {
+          await wait(
+            "!!document.querySelector('.patterns-kpis') && document.querySelector('.patterns-page')?.getAttribute('aria-busy') === 'false'",
+            "selected participation dimension",
+          );
+          if (width === 1440) {
+            for (const label of [
+              "CFS",
+              "Social Risk Factor",
+              "Living Arrangement",
+              "Age Group",
+            ]) {
+              await evaluate(
+                `[...document.querySelectorAll('.patterns-dimensions button')].find(b => b.textContent===${JSON.stringify(label)}).click()`,
+              );
+              await pause(200);
+              await wait(
+                "document.querySelector('.patterns-page')?.getAttribute('aria-busy') === 'false'",
+                "dimension " + label,
+              );
+            }
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page button')].find(b => b.textContent==='Presentation / PDF').click()",
+            );
+            await wait(
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===4",
+              "patterns presentation",
+            );
+            const reportCheck = await evaluate(
+              "({width:innerWidth,scrollWidth:document.querySelector('.presentation').scrollWidth,sections:document.querySelectorAll('.presentation .report-slide').length})",
+            );
+            if (reportCheck.scrollWidth > width + 1)
+              throw Error("Patterns report overflow");
+            results.push({
+              viewport: `${width}x${height}`,
+              page: "Patterns presentation",
+              ...reportCheck,
+            });
+            const interactive = await evaluate(
+              "!document.querySelector('.presentation').closest('[inert]') && !document.querySelector('.presentation').closest('.main-shell')",
+            );
+            if (!interactive)
+              throw Error(
+                "Patterns presentation is inside the disabled workspace",
+              );
+            await command("Emulation.setEmulatedMedia", { media: "print" });
+            const printable = await evaluate(
+              "document.querySelector('.presentation').getBoundingClientRect().width > 0 && getComputedStyle(document.querySelector('.main-shell')).display === 'none' && getComputedStyle(document.querySelector('.presentation-toolbar')).display === 'none'",
+            );
+            if (!printable)
+              throw Error("Patterns report is hidden in print output");
+            const patternPdf = await command("Page.printToPDF", {
+              landscape: true,
+              printBackground: true,
+              preferCSSPageSize: true,
+            });
+            const pdfBytes = Buffer.from(patternPdf.data, "base64");
+            writeFileSync(join(output, "Patterns-report-print.pdf"), pdfBytes);
+            const printedPages = (
+              pdfBytes.toString("latin1").match(/\/Type\s*\/Page\b/g) || []
+            ).length;
+            if (printedPages !== 4)
+              throw Error(
+                "Patterns report should print as four readable pages; found " +
+                  printedPages,
+              );
+            results.push({
+              viewport: `${width}x${height}`,
+              page: "Patterns print",
+              printedPages,
+              printable,
+            });
+            await command("Emulation.setEmulatedMedia", { media: "screen" });
+
+            await evaluate(
+              "[...document.querySelectorAll('.presentation button')].find(b => b.textContent==='Back to analysis').click()",
+            );
+          }
+          await evaluate(
+            "[...document.querySelectorAll('.patterns-dimensions button')].find(b => b.textContent==='Location & Distance').click()",
+          );
+          await pause(220);
+          await wait(
+            "document.querySelector('.patterns-page')?.getAttribute('aria-busy')==='false' && [...document.querySelectorAll('h2')].some(h=>h.textContent==='Participation by Distance')",
+            "distance analysis without invented coordinates",
+          );
+          const distanceCheck = await evaluate(
+            "({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.innerText),metric:document.querySelector('[aria-label=\"Distance measure\"]').value,verified:document.querySelector('.patterns-kpis article strong').textContent})",
+          );
+          if (
+            distanceCheck.scrollWidth > width + 1 ||
+            distanceCheck.alerts.length ||
+            distanceCheck.metric !== "walking" ||
+            distanceCheck.verified !== "0"
+          )
+            throw Error(
+              "Distance layout or verification mismatch: " +
+                JSON.stringify(distanceCheck),
+            );
+          results.push({
+            viewport: `${width}x${height}`,
+            page: "Location & Distance",
+            ...distanceCheck,
+          });
+          if ([1440, 768, 375].includes(width)) {
+            await evaluate("scrollTo(0,0)");
+            const shot = await command("Page.captureScreenshot", {
+              format: "png",
+              captureBeyondViewport: false,
+            });
+            writeFileSync(
+              join(output, `${width}-Location-Insights.png`),
+              Buffer.from(shot.data, "base64"),
+            );
+          }
+          if (width === 1440) {
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page summary')].find(s=>s.textContent==='Administrator location verification').click()",
+            );
+            await wait(
+              "!!document.querySelector('.location-admin')",
+              "location administration",
+            );
+            await evaluate(
+              "[...document.querySelectorAll('.location-admin summary')].find(s=>s.textContent==='Centre coordinates and reporting bands').click()",
+            );
+            await evaluate(
+              "document.querySelector('.location-admin').scrollIntoView({block:'start'})",
+            );
+            const shot = await command("Page.captureScreenshot", {
+              format: "png",
+              captureBeyondViewport: false,
+            });
+            writeFileSync(
+              join(output, "1440-Location-verification.png"),
+              Buffer.from(shot.data, "base64"),
+            );
+            results.push({
+              viewport: `${width}x${height}`,
+              page: "Administrator location review",
+              verifiedCoordinatesInvented: false,
+            });
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page summary')].find(s=>s.textContent==='Administrator location verification').click()",
+            );
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page summary')].find(s=>s.textContent==='Participation by Residential Block').click()",
+            );
+            await wait(
+              "!!document.querySelector('[aria-label=\"Find a residential building\"]') && !document.body.innerText.includes('Updating residential comparison...')",
+              "protected residential block table",
+            );
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page summary')].find(s=>s.textContent==='Explore Distance and Other Factors').click()",
+            );
+            await pause(220);
+            await wait(
+              "document.querySelector('.patterns-page')?.getAttribute('aria-busy')==='false' && document.querySelector('[aria-label=\"Second characteristic\"]')?.value==='cfs'",
+              "default distance and CFS comparison",
+            );
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page summary')].find(s=>s.textContent==='Explore Distance and Other Factors').click()",
+            );
+            await pause(220);
+            await wait(
+              "document.querySelector('.patterns-page')?.getAttribute('aria-busy')==='false'",
+              "distance comparison restored",
+            );
+            await evaluate(
+              "[...document.querySelectorAll('.patterns-page button')].find(b=>b.textContent==='Presentation / PDF').click()",
+            );
+            await wait(
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===4",
+              "location presentation",
+            );
+            await command("Emulation.setEmulatedMedia", { media: "print" });
+            const pdf = await command("Page.printToPDF", {
+              landscape: true,
+              printBackground: true,
+              preferCSSPageSize: true,
+            });
+            const bytes = Buffer.from(pdf.data, "base64"),
+              pages = (
+                bytes.toString("latin1").match(/\/Type\s*\/Page\b/g) || []
+              ).length;
+            writeFileSync(join(output, "Location-report-print.pdf"), bytes);
+            if (pages !== 4)
+              throw Error(
+                "Location report should be four readable pages; found " + pages,
+              );
+            results.push({
+              viewport: `${width}x${height}`,
+              page: "Location print",
+              printedPages: pages,
+            });
+            await command("Emulation.setEmulatedMedia", { media: "screen" });
+            await evaluate(
+              "[...document.querySelectorAll('.presentation button')].find(b=>b.textContent==='Back to analysis').click()",
+            );
+          }
+          await evaluate(
+            "[...document.querySelectorAll('.patterns-dimensions button')].find(b=>b.textContent==='Age Group').click()",
+          );
+          await pause(220);
+          await wait(
+            "document.querySelector('.patterns-page')?.getAttribute('aria-busy')==='false' && [...document.querySelectorAll('h2')].some(h=>h.textContent==='Participant group comparison')",
+            "age view restored",
           );
         }
         if (page === "Data management")
@@ -422,6 +681,7 @@ try {
           [
             "Main Dashboard",
             "Programme Analysis",
+            "Participation Patterns & Insights",
             "Planning",
             "Who Are We Serving?",
             "Detailed action tracker",
@@ -437,6 +697,22 @@ try {
             join(output, `${width}-${page.replace(/[^A-Za-z]+/g, "-")}.png`),
             Buffer.from(screenshot.data, "base64"),
           );
+        }
+        if(page==='Programme Analysis'){
+          await wait("!!document.querySelector('.event-insights') && !document.querySelector('.event-insights[aria-busy=true]') && document.querySelector('.event-insights .report-bars')",'Event Type programme mix');
+          const check=await evaluate("({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('.event-insights [role=alert]')].map(e=>e.textContent),labels:document.querySelector('.event-insights').innerText.includes('Social & Cognitive')})");
+          if(check.scrollWidth>width+1||check.alerts.length||!check.labels)throw Error('Event Type layout/data check failed: '+JSON.stringify(check));
+          results.push({viewport:`${width}x${height}`,page:'Event Type programme mix',...check});
+          const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});writeFileSync(join(output,`${width}-Event-Type-Analysis.png`),Buffer.from(shot.data,'base64'));
+          if(width===1440){
+            await evaluate("[...document.querySelectorAll('.event-insights summary')].find(e=>e.textContent.includes('Additional Engagement Types')).click()");
+            await wait("!!document.querySelector('.event-insights table caption')",'domain and Event Type matrix');
+            const matrix=await evaluate("document.querySelector('.event-insights table caption').closest('table').innerText");if(!matrix.includes('Learning')||!matrix.includes('Physical'))throw Error('Event matrix source labels missing');
+            await evaluate("[...document.querySelectorAll('.event-insights button')].find(e=>e.textContent==='Presentation / PDF').click()");
+            await wait("document.querySelectorAll('.presentation .report-slide').length===3",'Event Type presentation');
+            await command('Emulation.setEmulatedMedia',{media:'print'});const pdf=await command('Page.printToPDF',{landscape:true,printBackground:true,preferCSSPageSize:true});const bytes=Buffer.from(pdf.data,'base64');writeFileSync(join(output,'Event-Type-report-print.pdf'),bytes);const pages=(bytes.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;if(pages!==3)throw Error(`Event Type PDF produced ${pages} pages instead of three`);await command('Emulation.setEmulatedMedia',{media:'screen'});
+            await evaluate("document.querySelector('.presentation-toolbar button').click()");await wait("!document.querySelector('.presentation')",'close Event Type presentation');results.push({viewport:`${width}x${height}`,page:'Event Type matrix and three-page PDF',pages});
+          }
         }
         if (page === "Programme Analysis" && width === 1440) {
           await evaluate(
@@ -472,7 +748,7 @@ try {
             "[...document.querySelectorAll('button')].find(b=>b.textContent==='Print summary').click()",
           );
           await wait(
-            "document.querySelectorAll('.report-slide').length === 6 && !document.querySelector('.presentation-toolbar button:last-child').disabled",
+            "document.querySelectorAll('.report-slide').length >= 6 && !document.querySelector('.presentation-toolbar button:last-child').disabled",
             "six-section presentation",
           );
           const report = await evaluate(

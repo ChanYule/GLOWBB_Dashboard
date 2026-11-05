@@ -129,14 +129,12 @@ export function participationReport(
     summary: count(selected),
     definitions: {
       cohort:
-        "All recorded participants, including ages below the senior threshold and missing ages. Headline senior cards use the configured senior age threshold.",
+        "All recorded participants, including ages below the senior threshold and missing ages. The total unique participants card covers all ages; male and minority senior cards use the configured senior age threshold.",
       ib: "IB: existing clients; OB: non-clients. Unknown client status is excluded from both counts.",
       percentages:
         "IB, OB, male and minority percentages use distinct participants in that row. Unknown values remain in the overall unique denominator.",
-      inactive:
-        "Attending participants with two or fewer distinct programmes across all available history up to the stated cutoff. History includes programmes outside the selected month, reporting dates and programme filters. All rows use the latest available delivered history, not a historical inactivity snapshot. This is not a count of registered clients with no attendance or a time-since-last-attendance measure.",
       totals:
-        "Monthly and period unique counts and programmes are deduplicated; do not add daily or monthly unique counts together. Inactive counts are also deduplicated within each total.",
+        "Monthly and period unique counts and programmes are deduplicated; do not add daily or monthly unique counts together.",
       days: "Blank cells mark future dates, dates outside the selected period, or dates outside available source coverage. Public holidays are not inferred.",
     },
   };

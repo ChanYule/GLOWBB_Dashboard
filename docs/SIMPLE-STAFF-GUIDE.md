@@ -14,6 +14,6 @@ Open **Staff Tools** for **Client Engagement & Outreach**, **Participant Needs &
 
 **Staff Tools → Advanced analysis** retains specialist reports and the **Detailed action tracker**, including previously saved needs-based actions. These actions and saved programme decisions remain separate records; the shared summary counts their recorded stages without exposing owners or notes. No records are automatically merged or removed.
 
-Registered clients and people with no recorded attendance remain in **Client Engagement & Outreach**. The main attendance sheet keeps IB = existing clients, OB = non-clients, and inactive = attending people with two or fewer distinct programmes across all available delivered history. Unique totals deduplicate people.
+Registered clients and people with no recorded attendance remain in **Client Engagement & Outreach**. The main attendance sheet keeps IB = existing clients, OB = non-clients. Unique totals deduplicate people.
 
 Imports, conflict review, deletion confirmation and recovery backups remain available. This interface update needs no additional SQL migration and does not deploy the application.

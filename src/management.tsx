@@ -6,6 +6,7 @@ import type { Dashboard, Filters } from "./types";
 import type { ProtectedSeries } from "./needs-ui";
 
 export type Briefing = {
+  programmeMix?:null|{domains:{label:string;sessions:number}[];types:{label:string;sessions:number;unique:number|null;repeat:number|null}[];findings:{finding:string;evidence:string;implication:string;investigate:string;action:string}[];note:string};
   generatedAt?: string;
   registryOmitted?: boolean;
   clients: null | {
@@ -62,10 +63,12 @@ export function useBriefing(
 }
 export function ReportBars({
   rows,
+  maxValue,
 }: {
   rows: { label: string; value: number; detail?: string }[];
+  maxValue?: number;
 }) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
+  const max = Math.max(maxValue || 1, ...rows.map((r) => r.value));
   return rows.length ? (
     <div className="report-bars">
       {rows.map((r) => (
@@ -336,6 +339,7 @@ export function ManagementHome({
         revision={revision}
         available={!!data.coverage.from}
       />
+      {value?.programmeMix&&<section className="panel"><h2>Programme Mix and Engagement Types</h2><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore programme domains and Event Types</button></section>}
       <section className="panel simple-next-step">
         <h2>Plan the next step</h2>
         <p>

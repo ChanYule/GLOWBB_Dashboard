@@ -1,4 +1,8 @@
 import { participationReport } from "../server/participation.js";
+import { participationPatterns } from "../server/patterns.js";
+import { locationFixture } from "./fixtures/location-state.js";
+import { locationDefaults } from "../server/location-model.js";
+import {eventTypeReport} from '../server/event-report.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
@@ -68,6 +72,326 @@ const { ManagementHome } = await tsImport(
   "../src/management.tsx",
   import.meta.url,
 );
+const { ParticipationPatterns } = await tsImport(
+  "../src/patterns-ui.tsx",
+  import.meta.url,
+);
+const { LocationAdmin } = await tsImport(
+  "../src/location-admin.tsx",
+  import.meta.url,
+);
+const {EventTypeInsights}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
+test('programme mix keeps secondary analysis collapsed, switches measures and saves reviewed view preferences',async()=>{
+ const original=globalThis.fetch,s=locationFixture();for(const session of s.data.sessions)session.optional={eventTypeRaw:'Learning, Social & Cognitive',eventTypes:['Learning','Social & Cognitive']};const queries=[];let saved;
+ globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/event-types/report?')){queries.push(url);return Response.json(eventTypeReport(s,Object.fromEntries(new URL(url,'http://local').searchParams)));}if(url==='/api/event-types/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
+ try{render(React.createElement(EventTypeInsights,{user:{username:'Planner',role:'planner'},initial:{from:'2026-11-01',to:'2026-11-03'}}));await waitFor(()=>assert.equal(screen.queryAllByText('How Is Our Programme Mix Distributed?').length,1));assert.equal(document.querySelector('details').open,false);assert.equal(document.querySelector('table caption')===null,true);fireEvent.change(screen.getByLabelText('Programme mix view'),{target:{value:'domain'}});fireEvent.change(screen.getByLabelText('Programme mix measure'),{target:{value:'unique'}});fireEvent.change(screen.getByLabelText('Event programme ranking'),{target:{value:'average'}});await waitFor(()=>assert.ok(queries.some(q=>q.includes('ranking=average'))));fireEvent.click(screen.getByText('Save programme-type view'));await waitFor(()=>assert.equal(saved.ranking,'average'));assert.equal(saved.from,'2026-11-01');assert.equal(screen.queryByText('Administrator Event Type label review')===null,true);assert.equal(JSON.stringify(queries).includes('factor=cfs'),false);}finally{cleanup();globalThis.fetch=original;}
+});
+test('Event Type viewer never requests protected analysis',()=>{const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('No request expected');};try{render(React.createElement(EventTypeInsights,{user:{username:'Viewer',role:'viewer'}}));assert.equal(calls,0);assert.ok(screen.getByText(/require authorised staff access/));}finally{cleanup();globalThis.fetch=original;}});
+test("administrator candidate review requires confirmation and uses the refreshed cache revision", async () => {
+  const original = globalThis.fetch;
+  let store = {
+      ...locationDefaults(),
+      revision: 0,
+      serviceConfigured: true,
+      sessionVenues: [],
+    },
+    saved,
+    changed = 0;
+  const candidate = {
+    block: "212",
+    street: "BUKIT BATOK STREET 21",
+    postal: "650212",
+    address: "212 BUKIT BATOK STREET 21 SINGAPORE 650212",
+    lat: 1.35,
+    lon: 103.75,
+    source: "Synthetic OneMap candidate",
+    status: "Awaiting verification",
+  };
+  globalThis.fetch = async (url, options) => {
+    if (url === "/api/locations" && !options?.method)
+      return Response.json(store);
+    if (url === "/api/locations/search") {
+      store = { ...store, revision: 1 };
+      return Response.json({
+        revision: 1,
+        status: "Awaiting verification",
+        candidates: [candidate],
+      });
+    }
+    if (url === "/api/locations/settings") {
+      saved = JSON.parse(options.body);
+      store = { ...store, revision: 2, centre: saved.centre };
+      return Response.json({ ok: true, revision: 2 });
+    }
+    return Response.json({ rows: [], total: 0, revision: store.revision });
+  };
+  try {
+    render(React.createElement(LocationAdmin, { onChanged: () => changed++ }));
+    await waitFor(() =>
+      assert.ok(screen.getByText("Centre coordinates and reporting bands")),
+    );
+    fireEvent.click(screen.getByText("Centre coordinates and reporting bands"));
+    const form = screen.getByLabelText("Building latitude").closest("form");
+    fireEvent.change(
+      within(form).getByLabelText("Location verification status"),
+      { target: { value: "Verified" } },
+    );
+    assert.equal(
+      within(form).getByRole("button", { name: "Save reviewed location" })
+        .disabled,
+      true,
+    );
+    fireEvent.click(
+      within(form).getByRole("button", { name: "Find building candidates" }),
+    );
+    await waitFor(() =>
+      assert.ok(screen.getByRole("button", { name: "Review this candidate" })),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review this candidate" }),
+    );
+    fireEvent.change(
+      within(form).getByLabelText("Location verification status"),
+      { target: { value: "Verified" } },
+    );
+    fireEvent.click(within(form).getByRole("checkbox"));
+    fireEvent.click(
+      within(form).getByRole("button", { name: "Save reviewed location" }),
+    );
+    await waitFor(() => assert.equal(changed, 1));
+    assert.equal(saved.revision, 1);
+    assert.equal(saved.centre.lat, 1.35);
+    assert.equal(saved.centre.confirm, true);
+    assert.match(saved.centre.address, /#01-237/);
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("location analysis separates distance measures, supports CFS strata and opens a reviewed outreach draft", async () => {
+  const original = globalThis.fetch,
+    calls = [],
+    fixture = locationFixture();
+  let writes = 0;
+  globalThis.fetch = async (url, options) => {
+    calls.push(String(url));
+    if (options?.method && options.method !== "GET") writes++;
+    if (url === "/api/preferences") return Response.json({ views: [] });
+    const q = Object.fromEntries(
+      new URL(String(url), "http://localhost").searchParams,
+    );
+    return Response.json(participationPatterns(fixture, q, "2026-11-05"));
+  };
+  try {
+    render(
+      React.createElement(ParticipationPatterns, {
+        user: { role: "planner" },
+        revision: 0,
+        initialDimension: "distance",
+      }),
+    );
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("heading", { name: "Participation by Distance" }),
+      ),
+    );
+    assert.ok(screen.getByText("Verified residential locations"));
+    assert.equal(
+      screen.queryByText("Administrator location verification"),
+      null,
+    );
+    assert.equal(screen.getByLabelText("Distance measure").value, "walking");
+    fireEvent.change(screen.getByLabelText("Distance measure"), {
+      target: { value: "straight" },
+    });
+    await waitFor(() =>
+      assert.ok(calls.some((url) => url.includes("distanceMetric=straight"))),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector(".patterns-page").getAttribute("aria-busy"),
+        "false",
+      ),
+    );
+    fireEvent.click(screen.getByText("Explore Distance and Other Factors"));
+    await waitFor(() =>
+      assert.ok(calls.some((url) => url.includes("second=cfs"))),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector(".patterns-page").getAttribute("aria-busy"),
+        "false",
+      ),
+    );
+    assert.ok(screen.getByLabelText("Focus secondary group"));
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: "Record proposed location follow-up",
+      })[0],
+    );
+    await waitFor(() =>
+      assert.ok(screen.getByRole("dialog", { name: "Review planning action" })),
+    );
+    assert.equal(
+      writes,
+      0,
+      "opening an outreach draft does not save or send anything",
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+
+test("participation patterns loads one dimension, saves the staff view and prints a protected snapshot", async () => {
+  const original = globalThis.fetch,
+    calls = [];
+  let saved;
+  const group = {
+    label: "60 to 69",
+    registered: 20,
+    unique: 10,
+    noAttendance: 10,
+    rate: 50,
+    attendance: 20,
+    programmes: 1,
+    domains: 1,
+    averageSessions: 2,
+    repeat: 5,
+    opportunity: 10,
+    repeatRate: 50,
+    firstObserved: 5,
+    returning: 5,
+  };
+  const report = {
+    dimension: "age",
+    scope: "clients",
+    basis: "current",
+    group: group.label,
+    ranking: "unique",
+    period: { from: "2026-11-01", to: "2026-11-03" },
+    coverage: { from: "2026-10-01", to: "2026-11-03" },
+    minimum: 5,
+    ratesAvailable: true,
+    registryComplete: true,
+    population: 20,
+    completeness: 100,
+    comparisonSuppressed: false,
+    groups: [group],
+    rankings: {
+      suppressed: false,
+      rows: [
+        {
+          id: "p",
+          name: "Weekly movement",
+          domain: "Physical",
+          sessions: 2,
+          unique: 10,
+          attendance: 20,
+          repeat: 5,
+          repeatRate: 50,
+        },
+      ],
+      total: 1,
+      page: 0,
+      limit: 5,
+    },
+    domainsAvailable: ["Physical"],
+    domains: { suppressed: false, rows: [] },
+    combined: null,
+    programmeDetail: null,
+    minority: null,
+    reportedBarriers: { suppressed: false, rows: [] },
+    findings: [
+      {
+        title: "Observed participation",
+        evidence: "10 of 20 clients attended",
+        interpretation: "Association only",
+        investigate: "Review availability",
+        action: "Ask for voluntary feedback",
+      },
+    ],
+    limitations: ["Current attributes are not historical assessments"],
+    metricsDefinition: { rate: "Participating clients / registered clients" },
+  };
+  globalThis.fetch = async (url, options) => {
+    calls.push(String(url));
+    if (url === "/api/preferences") return Response.json({ views: [] });
+    if (options?.method === "PUT") {
+      saved = JSON.parse(options.body);
+      return Response.json({ ok: true });
+    }
+    const q = new URL(String(url), "http://localhost").searchParams;
+    return Response.json({ ...report, dimension: q.get("dimension") || "age" });
+  };
+  try {
+    render(
+      React.createElement(ParticipationPatterns, {
+        user: { role: "admin" },
+        revision: 0,
+      }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector(".patterns-page").getAttribute("aria-busy"),
+        "false",
+      ),
+    );
+    assert.equal(
+      calls.filter((url) => url.startsWith("/api/participation-patterns?"))
+        .length,
+      1,
+    );
+    assert.ok(
+      screen.getByRole("heading", { name: "Participant group comparison" }),
+    );
+    assert.equal(document.querySelectorAll(".patterns-kpis article").length, 4);
+    assert.equal(document.querySelector(".patterns-page details").open, false);
+    fireEvent.click(screen.getByRole("button", { name: "CFS", exact: true }));
+    await waitFor(() =>
+      assert.ok(calls.some((url) => url.includes("dimension=cfs"))),
+    );
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector(".patterns-page").getAttribute("aria-busy"),
+        "false",
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save preferred view" }),
+    );
+    await waitFor(() => assert.equal(saved.dimension, "cfs"));
+    fireEvent.click(screen.getByRole("button", { name: "Presentation / PDF" }));
+    await waitFor(() =>
+      assert.equal(
+        document.querySelectorAll(".presentation .report-slide").length,
+        4,
+      ),
+    );
+    assert.equal(
+      document
+        .querySelector(".presentation")
+        .textContent.includes("participant_id"),
+      false,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      assert.equal(document.querySelectorAll(".presentation").length, 0),
+    );
+    cleanup();
+    calls.length = 0;
+    render(
+      React.createElement(ParticipationPatterns, {
+        user: { role: "viewer" },
+        revision: 0,
+      }),
+    );
+    assert.ok(screen.getByRole("heading", { name: "Authorised staff access" }));
+    assert.equal(calls.length, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 const { PresentationView } = await tsImport(
   "../src/presentation.tsx",
   import.meta.url,

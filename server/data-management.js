@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hash } from "./domain.js";
 import { ensureOperations } from "./operations-routes.js";
+import { ensureLocations } from "./location-store.js";
 
 const fail = (status, message) => Object.assign(Error(message), { status });
 const admin = (req) => {
@@ -71,11 +72,19 @@ const tables = {
     "user_id",
   ],
   operational_targets: ["id", "month", "metric", "value"],
+  location_store: ["id", "revision", "value"],
 };
 const names = Object.keys(tables);
 const reversed = [...names].reverse();
 const backupKind = "workspace-data-v1";
-export { transaction as dataTransaction };
+// Existing client workflows run before optional location storage is initialized.
+// Location mutations supply their own table lock; full recovery below locks all.
+export function dataTransaction(db, work, readOnly = false, writeTables) {
+  return transaction(db, work, readOnly, writeTables || [
+    ...names.filter((name) => name !== "location_store"),
+    "settings", "import_previews", "attendance_backups", "staff_preferences",
+  ]);
+}
 // SQLite executes the whole generator synchronously, so another request cannot
 // accidentally write inside its transaction. PostgreSQL awaits each statement.
 function transaction(db, work, readOnly = false, writeTables) {
@@ -265,6 +274,12 @@ function* readBackup(db, id) {
     .get(id);
   if (!row) throw fail(404, "Backup not found.");
   const state = JSON.parse(row.payload);
+  // Earlier backups predate location verification; restoring them preserves
+  // current verification/cache records instead of silently discarding them.
+  if (state.kind === backupKind && state.tables && !state.tables.location_store)
+    state.tables.location_store = yield db
+      .prepare("SELECT * FROM location_store")
+      .all();
   if (
     state.kind !== backupKind ||
     names.some((name) => !Array.isArray(state.tables?.[name]))
@@ -279,6 +294,7 @@ export function mountDataManagement(app, { db }) {
   app.use("/api/data-management", async (req, _res, next) => {
     admin(req);
     await ensureOperations(db);
+    await ensureLocations(db);
     next();
   });
   app.get("/api/data-management", async (req, res) => {
@@ -342,7 +358,9 @@ export function mountDataManagement(app, { db }) {
         if (
           operation === "delete" &&
           (scope.scope === "reset"
-            ? !names.some((name) => state.tables[name].length)
+            ? !names
+                .filter((name) => name !== "location_store")
+                .some((name) => state.tables[name].length)
             : !change.rows.length)
         )
           throw fail(400, "There is no data to delete in this selection.");
@@ -423,7 +441,22 @@ export function mountDataManagement(app, { db }) {
         if (p.operation === "restore" || p.selection.scope === "reset") {
           counts = restoreState ? summary(restoreState) : summary(state);
           for (const name of reversed)
-            yield tx.prepare(`DELETE FROM ${name}`).run();
+            if (restoreState || name !== "location_store")
+              yield tx.prepare(`DELETE FROM ${name}`).run();
+          if (!restoreState) {
+            const row = yield tx
+              .prepare("SELECT revision,value FROM location_store WHERE id=1")
+              .get();
+            if (row) {
+              const value = JSON.parse(row.value);
+              value.bindings = {};
+              yield tx
+                .prepare(
+                  "UPDATE location_store SET value=?,revision=revision+1 WHERE id=1",
+                )
+                .run(JSON.stringify(value));
+            }
+          }
           if (restoreState)
             for (const name of names) {
               const rows = restoreState.tables[name],

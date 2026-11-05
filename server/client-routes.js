@@ -4,6 +4,7 @@ import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
 import { ensureOperations } from "./operations-routes.js";
 import { barriers, informationSources } from "./needs-domain.js";
+import { transportCategories } from "./location-model.js";
 import {
   CLIENT_SNAPSHOT,
   clientFields,
@@ -695,6 +696,16 @@ export function mountClients(app, { db, storage, upload }) {
       (b.nextDate && !validDay(b.nextDate)) ||
       !Array.isArray(b.barriers) ||
       b.barriers.some((v) => !barriers.includes(v)) ||
+      (b.barriers.includes("No reported transport barrier") &&
+        b.barriers.some(
+          (v) =>
+            v !== "No reported transport barrier" &&
+            [
+              ...transportCategories,
+              "Distance and transport",
+              "Mobility limitations",
+            ].includes(v),
+        )) ||
       (b.barriers.length && b.permission !== true)
     )
       throw fail(
@@ -714,7 +725,12 @@ export function mountClients(app, { db, storage, upload }) {
       },
       barriers: b.barriers.map((category) => ({
         category,
-        status: source === "Unconfirmed" ? "Unknown" : "Reported",
+        status:
+          source === "Unconfirmed"
+            ? "Unknown"
+            : category === "No reported transport barrier"
+              ? "Not present"
+              : "Reported",
         source,
         date: reportDate,
       })),

@@ -1,3 +1,7 @@
+> **Location & Distance:** Reviewed building locations, cached walking routes, participation comparisons and proposed follow-ups are integrated into Participation Patterns and Client Engagement. [Setup, definitions, privacy and validation](docs/LOCATION-PARTICIPATION.md). This upgrade adds private storage in **migration 005**; earlier release notes below describe their own SQL requirements.
+
+> **Participation Patterns & Insights:** Compare participant groups, programme reach and repeat engagement under **Staff Tools**. [Staff guide, definitions, privacy and validation](docs/PARTICIPATION-PATTERNS.md). That release did not require an additional SQL migration.
+
 > **Simpler staff interface:** [Three main pages: Main Dashboard, Programme Analysis and Planning](docs/SIMPLE-STAFF-GUIDE.md). Occasional tools are under **Staff Tools**. Existing records and import safeguards are preserved. No additional SQL is required.
 
 > **Client registry integration:** [Linked client participation, safe registry imports, follow-up, source validation and staff guide](docs/CLIENT-REGISTRY-INTEGRATION.md). Client Engagement extends the existing three-level dashboard. No additional SQL is needed after migrations 001 through 004.

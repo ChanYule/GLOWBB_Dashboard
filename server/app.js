@@ -1,4 +1,7 @@
 import { mountReporting } from "./reporting.js";
+import { mountPatterns } from "./pattern-routes.js";
+import { mountEventTypes } from './event-routes.js';
+import { mountLocations } from "./location-routes.js";
 import { readEffectiveData } from "./needs-domain.js";
 import express from "express";
 import { mountIdentity } from "./identity.js";
@@ -36,6 +39,7 @@ export function createApp(
   {
     production = false,
     authRequired = process.env.DASHBOARD_AUTH === "1",
+    locationService,
   } = {},
 ) {
   const app = express(),
@@ -186,12 +190,13 @@ export function createApp(
       },
       settings,
       targets,
-      decisions: (
-        ["overview", "context"].includes(f.view) ? [] : await db
-          .prepare(
-            "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
-          )
-          .all()
+      decisions: (["overview", "context"].includes(f.view)
+        ? []
+        : await db
+            .prepare(
+              "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
+            )
+            .all()
       ).map(planningDetails),
     };
   }
@@ -209,6 +214,9 @@ export function createApp(
   });
   mountAnalysis(app, { db, storage, filters });
   mountReporting(app, { db, storage, filters });
+  mountPatterns(app, { db, storage });
+  mountEventTypes(app, { db, storage });
+  mountLocations(app, { db, storage, oneMap: locationService });
   app.get("/api/dashboard", async (req, res) => {
     if (req.query.risk)
       throw error(
@@ -334,6 +342,7 @@ export function createApp(
       id,
       mode,
       updatedProfiles: inspection.updates.length,
+      updatedSessions: inspection.sessionUpdates.length,
       matched: inspection.matched,
       missing: inspection.missing.length,
       resultingAttendance: inspection.resultingAttendance,
@@ -355,6 +364,7 @@ export function createApp(
         row: r.row,
         programme: r.programme.name,
         domain: r.programme.domain,
+        eventType: r.session.optional?.eventTypeRaw || 'Unclassified / unknown',
         date: r.session.date,
         start: r.session.start,
         end: r.session.end,
@@ -392,7 +402,7 @@ export function createApp(
         from: reference.coverage.from,
         to: reference.coverage.to,
       },
-      expectedReference: parsed.rows.some((r) => "livingRaw" in r.participant)
+      expectedReference: parsed.rows.some((r) => r.session.optional && 'eventTypeRaw' in r.session.optional) ? {} : parsed.rows.some((r) => "livingRaw" in r.participant)
         ? {
             raw: 3344,
             allAges: 405,

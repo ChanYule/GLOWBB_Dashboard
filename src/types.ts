@@ -55,6 +55,7 @@ export type Programme = Stats & {
     start: number;
     end: number;
     venue?: string;
+    eventTypes?: string[];
   }[];
   optional: Record<string, unknown>;
 };
@@ -150,6 +151,7 @@ export type Insight = {
   programmeId?: string;
 };
 export type Preview = {
+  updatedSessions?: number;
   id: string;
   mode?: string;
   updatedProfiles?: number;

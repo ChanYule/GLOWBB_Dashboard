@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
 import unzipper from "unzipper";
 import { parse } from "csv-parse/sync";
+import { EVENT_TYPE_HEADER, parseEventTypes,sessionEventTypes } from './event-types.js';
 export const HEADERS = [
   "Name/Member ID",
   "Gender",
@@ -101,7 +102,7 @@ export function parseRows(matrix) {
     }
     const raw = Object.fromEntries(headers.map((h, j) => [h, str(values[j])]));
     const signature = hash(
-      [...HEADERS, RISK_HEADER, ...Object.values(OPTIONAL_PROFILE_HEADERS)].map(
+      [...HEADERS, RISK_HEADER, EVENT_TYPE_HEADER, ...Object.values(OPTIONAL_PROFILE_HEADERS)].map(
         (h) => raw[h],
       ),
     );
@@ -169,7 +170,8 @@ export function parseRows(matrix) {
         row,
         participant,
         programme: { id: programmeId, name, domain },
-        session: { id: sessionId, programmeId, ...session },
+        session: { id: sessionId, programmeId, ...session,
+          ...(headers.includes(EVENT_TYPE_HEADER) ? {optional:{eventTypeRaw:raw[EVENT_TYPE_HEADER],eventTypes:parseEventTypes(raw[EVENT_TYPE_HEADER])}} : {}) },
         id: hash([participant.id, sessionId]),
         warnings,
         sourceSession: raw["Session Detail"],
@@ -264,6 +266,7 @@ export async function readFile(buffer, name) {
 }
 export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
   const updates = new Map();
+  const eventSources = new Map(), eventRows = new Map();
   const missing = [];
   const original = existing;
   const originalAttendance = new Set(existing.attendance.map((a) => a.id));
@@ -341,6 +344,11 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
             differences.join(", "),
         });
     }
+    if (r.session.optional && Object.hasOwn(r.session.optional, 'eventTypeRaw')) {
+      if(!eventSources.has(r.session.id))eventSources.set(r.session.id,new Map());
+      eventSources.get(r.session.id).set(JSON.stringify([...r.session.optional.eventTypes].sort()),r.session.optional);
+      eventRows.set(r.session.id,r.row);
+    }
     // Attendance identity never includes changing profile attributes.
     if (old) r = { ...r, participant: participants.get(old.id) };
     if (att.has(r.id)) {
@@ -353,8 +361,26 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
     fresh.push(r);
     warnings.push(...r.warnings.map((message) => ({ row: r.row, message })));
   }
+  const sessionUpdates=[];
+  const oldSessions=new Map(original.sessions.map(s=>[s.id,s]));
+  for(const [id, sources] of eventSources) {
+    const old=oldSessions.get(id), values=[...sources.values()];
+    if(values.length>1) {
+      warnings.push({row:eventRows.get(id),message:'Conflicting Event Types within the same session. Classification retained or left unclassified; review the source before importing again.'});
+      for(let i=0;i<fresh.length;i++)if(fresh[i].session.id===id)fresh[i]={...fresh[i],session:{...fresh[i].session,optional:old?.optional||{eventTypeRaw:null,eventTypes:[],eventTypeConflicts:values.map(v=>v.eventTypeRaw)}}};
+      continue;
+    }
+    const next=values[0];
+    if(!old)continue;
+    if(!next.eventTypes.length)continue; // Blank/older exports never erase reviewed metadata.
+    if(JSON.stringify(old.optional?.eventTypes||[])!==JSON.stringify(next.eventTypes)) {
+      warnings.push({row:eventRows.get(id),message:mode==='merge'?'Reviewed merge will update this session’s Event Types; original source values remain in history.':'Existing session Event Types differ; use reviewed Merge to update metadata.'});
+      if(mode==='merge')sessionUpdates.push({id,optional:{...old.optional,...next,eventTypeHistory:[...(old.optional?.eventTypeHistory||[]),{raw:old.optional?.eventTypeRaw??null,labels:old.optional?.eventTypes||[],recordedAt:new Date().toISOString()}]}});
+    }
+  }
   return {
     fresh,
+    sessionUpdates,
     updates: [...updates.values()],
     missing,
     mode,
@@ -733,7 +759,7 @@ export function analytics(
           ? []
           : [...new Map(r.map((a) => [a.s.id, a.s])).values()].sort((a, b) =>
               a.date.localeCompare(b.date),
-            );
+            ).map(s=>({...s,eventTypes:sessionEventTypes(s,settings)}));
       return {
         ...g,
         id: pg.id,

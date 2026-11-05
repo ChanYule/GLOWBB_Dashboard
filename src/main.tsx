@@ -56,6 +56,9 @@ import "./styles.css";
 import "./redesign.css";
 import "./data-management.css";
 import "./design-system.css";
+const ParticipationPatterns = lazy(() =>
+  import("./patterns-ui").then((m) => ({ default: m.ParticipationPatterns })),
+);
 const NeedsPage = lazy(() =>
   import("./needs-ui").then((m) => ({ default: m.NeedsPage })),
 );
@@ -86,6 +89,7 @@ const ProgrammeCompare = lazy(() =>
 const PresentationView = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationView })),
 );
+const EventTypeInsights=lazy(()=>import('./event-types-ui').then(m=>({default:m.EventTypeInsights})));
 const OperationsPage = lazy(() =>
   import("./operations-ui").then((module) => ({
     default: module.OperationsPage,
@@ -381,6 +385,7 @@ function App() {
     briefing: Briefing;
   } | null>(null);
   const [planSearch, setPlanSearch] = useState("");
+  const [patternsInitial, setPatternsInitial] = useState("");
   const [tab, setTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>(emptyFilters),
     [data, setData] = useState<Dashboard | null>(null),
@@ -392,6 +397,7 @@ function App() {
     [toast, setToast] = useState(""),
     [navigationOpen, setNavigationOpen] = useState(false);
   const contextOnly = [
+    "Participation Patterns & Insights",
     "Client Engagement",
     "Data management",
     "Participant Needs & Accessibility",
@@ -479,6 +485,7 @@ function App() {
     },
   ];
   const staffTabs = [
+    { name: "Participation Patterns & Insights", icon: ChartNoAxesCombined },
     {
       name: "Client Engagement",
       label: "Client Engagement & Outreach",
@@ -511,6 +518,7 @@ function App() {
       aria-current={tab === t.name ? "page" : undefined}
       onClick={() => {
         setTab(t.name);
+        setPatternsInitial("");
         setPlanSearch("");
         setNavigationOpen(false);
       }}
@@ -521,6 +529,7 @@ function App() {
     </button>
   );
   const title = [
+    "Participation Patterns & Insights",
     "Data management",
     "Client Engagement",
     "Participant Needs & Accessibility",
@@ -697,29 +706,31 @@ function App() {
                 </div>
                 <h1>{title}</h1>
                 <p className="muted">
-                  {tab === "Client Engagement"
-                    ? "Link your registered population to attendance, investigate gaps and plan reviewed outreach."
-                    : tab === "Data management"
-                      ? "Import, review, delete and recover saved records in one place."
-                      : tab === "Overview"
-                        ? "Track programme delivery, senior outreach and participation patterns to support planning."
-                        : tab === "Who Are We Serving?"
-                          ? "Understand current participant profiles and explicitly reported needs."
-                          : tab === "Gaps and Participation Barriers"
-                            ? "Review observed engagement, voluntary feedback and information gaps."
-                            : tab === "Programme Planning and Actions"
-                              ? "Agree next steps using documented needs and transparent evidence."
-                              : tab === "Programme Alignment"
-                                ? "Compare programme supply, unique reach and stated demand."
-                                : tab === "Data Quality and Administration"
-                                  ? "Keep source completeness and organisation definitions visible."
-                                  : tab === "Programme Performance"
-                                    ? "Compare reach and engagement with the right context."
-                                    : tab === "Audience & Outreach"
-                                      ? "Explore participation patterns and opportunities to connect."
-                                      : tab === "Operations & Screening"
-                                        ? "Monitor participation, client outreach and reported monthly assessments."
-                                        : "Turn observed participation into thoughtful plans for the next 3–6 months."}
+                  {tab === "Participation Patterns & Insights"
+                    ? "Compare participant groups, repeat engagement and programme reach to inform future planning."
+                    : tab === "Client Engagement"
+                      ? "Link your registered population to attendance, investigate gaps and plan reviewed outreach."
+                      : tab === "Data management"
+                        ? "Import, review, delete and recover saved records in one place."
+                        : tab === "Overview"
+                          ? "Track programme delivery, senior outreach and participation patterns to support planning."
+                          : tab === "Who Are We Serving?"
+                            ? "Understand current participant profiles and explicitly reported needs."
+                            : tab === "Gaps and Participation Barriers"
+                              ? "Review observed engagement, voluntary feedback and information gaps."
+                              : tab === "Programme Planning and Actions"
+                                ? "Agree next steps using documented needs and transparent evidence."
+                                : tab === "Programme Alignment"
+                                  ? "Compare programme supply, unique reach and stated demand."
+                                  : tab === "Data Quality and Administration"
+                                    ? "Keep source completeness and organisation definitions visible."
+                                    : tab === "Programme Performance"
+                                      ? "Compare reach and engagement with the right context."
+                                      : tab === "Audience & Outreach"
+                                        ? "Explore participation patterns and opportunities to connect."
+                                        : tab === "Operations & Screening"
+                                          ? "Monitor participation, client outreach and reported monthly assessments."
+                                          : "Turn observed participation into thoughtful plans for the next 3–6 months."}
                 </p>
               </div>
               <div className="heading-actions">
@@ -732,16 +743,23 @@ function App() {
                   <RefreshCw size={16} />
                   Refresh
                 </Button>
-                {!["Overview", "Data management", "Client Engagement"].includes(
-                  tab,
-                ) && (
+                {![
+                  "Overview",
+                  "Data management",
+                  "Client Engagement",
+                  "Participation Patterns & Insights",
+                ].includes(tab) && (
                   <Button onClick={() => setModal("export")}>
                     <Download size={17} />
                     Export report
                   </Button>
                 )}
                 {user.role === "admin" &&
-                  !["Data management", "Client Engagement"].includes(tab) && (
+                  ![
+                    "Data management",
+                    "Client Engagement",
+                    "Participation Patterns & Insights",
+                  ].includes(tab) && (
                     <Button primary onClick={() => setModal("import")}>
                       <Upload size={17} />
                       Import attendance
@@ -749,14 +767,22 @@ function App() {
                   )}
               </div>
             </div>
-            {!["Data management", "Client Engagement"].includes(tab) && (
+            {![
+              "Data management",
+              "Client Engagement",
+              "Participation Patterns & Insights",
+            ].includes(tab) && (
               <FilterBar
                 filters={filters}
                 setFilters={setFilters}
                 data={data}
               />
             )}
-            {!["Data management", "Client Engagement"].includes(tab) && (
+            {![
+              "Data management",
+              "Client Engagement",
+              "Participation Patterns & Insights",
+            ].includes(tab) && (
               <ActiveFilters
                 filters={filters}
                 data={data}
@@ -789,7 +815,11 @@ function App() {
                 }
                 aria-busy={loading}
               >
-                {!["Data management", "Client Engagement"].includes(tab) && (
+                {![
+                  "Data management",
+                  "Client Engagement",
+                  "Participation Patterns & Insights",
+                ].includes(tab) && (
                   <div className="period-caption">
                     <span>
                       <CalendarDays size={15} />
@@ -809,10 +839,21 @@ function App() {
                     </div>
                   }
                 >
-                  {tab === "Client Engagement" ? (
+                  {tab === "Participation Patterns & Insights" ? (
+                    <ParticipationPatterns
+                      user={user}
+                      revision={revision}
+                      initialDimension={patternsInitial}
+                      onClients={() => setTab("Client Engagement")}
+                    />
+                  ) : tab === "Client Engagement" ? (
                     <ClientEngagement
                       user={user}
                       coverageTo={data.coverage.to}
+                      onLocations={() => {
+                        setPatternsInitial("distance");
+                        setTab("Participation Patterns & Insights");
+                      }}
                       dataRevision={revision}
                       onImportAttendance={() => setModal("import")}
                       initialFilters={filters}
@@ -981,7 +1022,7 @@ function App() {
                       }}
                     />
                   ) : tab === "Programme Performance" ? (
-                    <Programmes data={data} onProgramme={setProgramme} />
+                    <><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><Programmes data={data} onProgramme={setProgramme} /></>
                   ) : tab === "Audience & Outreach" ? (
                     <Audience
                       data={data}
@@ -999,7 +1040,11 @@ function App() {
                     />
                   )}
                   {data.coverage.from !== null &&
-                    !["Data management", "Client Engagement"].includes(tab) && (
+                    ![
+                      "Data management",
+                      "Client Engagement",
+                      "Participation Patterns & Insights",
+                    ].includes(tab) && (
                       <footer className="data-footnote">
                         <ShieldCheck size={16} />
                         <p>
@@ -2729,6 +2774,7 @@ function ProgrammeDialog({
               {time(s.start)}–{time(s.end)} SGT
             </span>
             <span>{s.venue || "Venue not supplied"}</span>
+            <span>{s.eventTypes?.length?s.eventTypes.join(', '):'Event Type unclassified'}</span>
           </div>
         ))}
       </div>
@@ -3163,6 +3209,7 @@ function ImportDialog({
               ["Raw rows", preview.rawRows],
               ["Existing matches", preview.matched ?? 0],
               ["Profile updates", preview.updatedProfiles ?? 0],
+              ["Session Event Type updates", preview.updatedSessions ?? 0],
               ["Missing values", preview.missing ?? 0],
               ["Resulting attendance", preview.resultingAttendance ?? 0],
               ["Resulting profiles", preview.resultingParticipants ?? 0],
@@ -3298,14 +3345,14 @@ function ImportDialog({
               disabled={
                 busy ||
                 !consent ||
-                (!preview.ready && !preview.updatedProfiles) ||
+                (!preview.ready && !preview.updatedProfiles && !preview.updatedSessions) ||
                 (mode === "replace" && confirmation !== "REPLACE ATTENDANCE")
               }
               onClick={confirm}
             >
               {busy
                 ? "Saving…"
-                : `Confirm ${preview.ready} entries and ${preview.updatedProfiles || 0} profile updates`}
+                : `Confirm ${preview.ready} entries, ${preview.updatedProfiles || 0} profile and ${preview.updatedSessions || 0} session updates`}
             </Button>
           </div>
         </>

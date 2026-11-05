@@ -52,10 +52,13 @@ export function sqlitePreviews(db) {
           Error("Replacement requires confirmation and a fresh preview."),
           { status: 409 },
         );
+      const inspection=inspectImport(parsed, readData(db));
+      if(inspection.sessionUpdates.length && parsed.fingerprint!==inspection.fingerprint)
+        throw Object.assign(Error('Session metadata changed after preview. Review a fresh preview.'),{status:409});
       const result = saveImport(
         db,
         parsed,
-        inspectImport(parsed, readData(db)),
+        inspection,
         user,
       );
       this.remove(id, user);

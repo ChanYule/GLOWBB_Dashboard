@@ -1,0 +1,174 @@
+.patterns-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.patterns-page > .panel,
+.patterns-results > .panel,
+.patterns-findings {
+  margin: 22px 0;
+}
+.patterns-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.patterns-filter-grid label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 0;
+}
+.patterns-filter-grid input,
+.patterns-filter-grid select {
+  width: 100%;
+}
+.patterns-dimensions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.patterns-dimensions button {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 10px 16px;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+}
+.patterns-dimensions button[aria-pressed="true"] {
+  background: #e1f3ef;
+  border-color: var(--teal);
+  color: #096c65;
+  font-weight: 700;
+}
+.patterns-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.patterns-kpis .panel {
+  border-top: 3px solid var(--teal);
+}
+.patterns-kpis strong {
+  display: block;
+  margin-top: 18px;
+  font-size: clamp(20px, 2vw, 30px);
+  overflow-wrap: anywhere;
+}
+.patterns-kpis span,
+.patterns-basis {
+  font-size: 13px;
+  color: var(--muted);
+}
+.patterns-page .work-table {
+  overflow: auto;
+  margin: 20px 0;
+}
+.patterns-page table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+.patterns-page th {
+  text-align: left;
+  vertical-align: top;
+}
+.patterns-page th small {
+  display: block;
+  font-weight: 400;
+  margin-top: 8px;
+}
+.patterns-programmes th:first-child {
+  min-width: 240px;
+}
+.patterns-page details {
+  margin-top: 20px;
+}
+.patterns-page summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.patterns-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.patterns-repeat {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 30px;
+}
+.patterns-repeat strong {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 6px;
+}
+.location-admin form label,
+.location-admin > details > label {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.location-admin form input:not([type="checkbox"]),
+.location-admin > details > label input,
+.location-admin > details > label select {
+  width: 100%;
+}
+.location-admin .location-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.location-admin input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+}
+.patterns-findings .panel {
+  margin: 16px 0;
+  border-left: 3px solid #d6af62;
+}
+.patterns-results.updating {
+  opacity: 0.65;
+  pointer-events: none;
+}
+.patterns-results p {
+  line-height: 1.65;
+}
+.patterns-report .work-table {
+  overflow: auto;
+}
+.patterns-report .patterns-programmes table {
+  min-width: 700px;
+}
+@media print {
+  body.patterns-presenting .app {
+    display: none !important;
+  }
+  .patterns-report .patterns-programmes table {
+    min-width: 0;
+  }
+}
+@media (max-width: 1000px) {
+  .patterns-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 550px) {
+  .patterns-filter-grid,
+  .patterns-repeat {
+    grid-template-columns: 1fr;
+  }
+  .patterns-kpis {
+    gap: 10px;
+  }
+  .patterns-kpis .panel {
+    padding: 16px;
+  }
+  .patterns-kpis strong {
+    font-size: 20px;
+  }
+}

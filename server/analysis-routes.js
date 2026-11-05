@@ -181,6 +181,7 @@ export function mountAnalysis(app, { db, storage, filters }) {
         const next = {
           ...value,
           ...(saved.clients ? { clients: saved.clients } : {}),
+          ...(saved.patterns ? { patterns: saved.patterns } : {}),
         };
         yield tx
           .prepare(

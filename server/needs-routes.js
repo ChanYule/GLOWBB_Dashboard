@@ -145,6 +145,8 @@ export function validateProfile(d) {
             ) ||
             !(field === "needs" ? needs : barriers).includes(n.category) ||
             !needStates.includes(n.status) ||
+            (n.category === "No reported transport barrier" &&
+              !["Not present", "Not assessed", "Unknown"].includes(n.status)) ||
             !informationSources.includes(n.source) ||
             !optionalDate(n.date) ||
             (n.date && n.date > todaySG()) ||

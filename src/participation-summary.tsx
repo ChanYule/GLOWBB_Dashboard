@@ -11,7 +11,6 @@ type Counts = {
   unknownClient: number;
   male: number;
   minority: number;
-  inactive: number;
   ibPct: number | null;
   obPct: number | null;
   malePct: number | null;
@@ -62,7 +61,6 @@ function Values({ value }: { value: Counts | null }) {
         value ? share(value.ob, value.obPct) : null,
         value ? share(value.male, value.malePct) : null,
         value ? share(value.minority, value.minorityPct) : null,
-        value?.inactive,
       ].map((v, i) => (
         <td key={i}>
           {v == null ? "—" : typeof v === "number" ? count(v) : v}
@@ -171,8 +169,9 @@ export function ParticipationSummary({
           <>
             <p className="summary-scope">
               All recorded ages, with active dashboard filters applied.
-              Percentages use each row’s unique participants. Headline reach
-              cards above cover seniors.
+              Percentages use each row’s unique participants. The total unique
+              participants card covers all ages; male and minority senior cards
+              use the configured senior age threshold.
             </p>
             <div className="participation-table-scroll">
               <table>
@@ -201,11 +200,6 @@ export function ParticipationSummary({
                     </th>
                     <th scope="col">Male (%)</th>
                     <th scope="col">Minority (%)</th>
-                    <th scope="col">
-                      <abbr title="Attendees with two or fewer distinct programmes across all available history up to the total's stated cutoff">
-                        Inactive (≤2)
-                      </abbr>
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -247,20 +241,13 @@ export function ParticipationSummary({
             </div>
             <p className="muted summary-total-note">
               Totals count each person once within that month or reporting
-              period. Daily unique and inactive counts must not be added
-              together.
+              period. Daily unique counts must not be added together.
             </p>
             <details>
               <summary>Definitions and data coverage</summary>
               {Object.values(report.definitions).map((note) => (
                 <p key={note}>{note}</p>
               ))}
-              <p>
-                Inactive classification for all rows uses all available history
-                through {date(report.monthSummary.asOf)}{" "}
-                {report.monthSummary.asOf.slice(0, 4)}. The selected month does
-                not reset the programme count.
-              </p>
               <p>
                 Selected month: {report.monthSummary.unknownClient} attendees
                 have unknown client status.

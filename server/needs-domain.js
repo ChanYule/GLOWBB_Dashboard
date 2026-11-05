@@ -45,6 +45,16 @@ export const barrierThemes = {
     "Distance and transport",
     "Mobility limitations",
   ],
+  "Transport and route accessibility": [
+    "Distance to centre",
+    "Transport difficulties",
+    "Mobility or route accessibility concerns",
+    "Difficulty using public transport",
+    "Requires assistance travelling",
+    "Programme venue difficult to access",
+    "Other reported accessibility concern",
+    "No reported transport barrier",
+  ],
   "Programme Availability and Suitability": [
     "Programme timing",
     "Caregiving responsibilities",

@@ -69,6 +69,77 @@ async function database() {
   return openPostgres(undefined, { pool });
 }
 
+test('PostgreSQL session Event Types survive reviewed duplicate-only merges, backups and reporting mappings',async()=>{
+  const db=await database(),app=await serve(createApp(db));
+  try{
+    const first=await json(await app.request('/api/import/preview?mode=merge','POST',upload()));await json(await app.request('/api/import/confirm','POST',{id:first.id}));
+    const form=new FormData();form.append('file',new Blob([[...HEADERS,'Activity Name/Event Type'].map(v=>JSON.stringify(v)).join(',')+'\r\n'+['test-member','MALE','65','MALAY','','YES','YES','Movement','Physical','2026-05-04, 09:00 AM - 09:45 AM','Social & Cognitive, Learning'].map(v=>JSON.stringify(v)).join(',')]),'new.csv');
+    const preview=await json(await app.request('/api/import/preview?mode=merge','POST',form));assert.equal(preview.ready,0);assert.equal(preview.updatedSessions,1);const saved=await json(await app.request('/api/import/confirm','POST',{id:preview.id}));assert.equal(saved.updatedSessions,1);assert.equal((await db.prepare('SELECT count(*)::integer n FROM attendance').get()).n,1);
+    const session=await db.prepare('SELECT optional FROM sessions').get();assert.deepEqual(JSON.parse(session.optional).eventTypes,['Social & Cognitive','Learning']);
+    const report=await json(await app.request('/api/event-types/report'));assert.equal(report.types.find(t=>t.label==='Learning').sessions,1);assert.equal(report.types.find(t=>t.label==='Learning').unique,null);
+    const mapping=await json(await app.request('/api/event-types/mappings/preview','POST',{rows:[{raw:'Learning',label:'Reviewed Learning',parent:'Education',secondary:''}]}));await json(await app.request('/api/event-types/mappings/confirm','POST',{id:mapping.id,reviewed:true}));assert.equal(JSON.parse((await db.prepare('SELECT optional FROM sessions').get()).optional).eventTypeRaw,'Social & Cognitive, Learning');
+    const current=await json(await app.request('/api/event-types/report'));assert.equal(current.types.some(t=>t.label==='Reviewed Learning'),true);
+    const management=await json(await app.request('/api/data-management'));assert.equal(management.counts.attendance,1);
+  }finally{await app.close();await db.close();}
+});
+
+test("PostgreSQL participation patterns reuse protected snapshots, dated profiles and existing staff preferences", async () => {
+  const db = await database();
+  const app = await serve(createApp(db, { authRequired: false }));
+  try {
+    for (const path of [
+      "/api/participation-patterns",
+      "/api/participation-patterns?basis=dated",
+      "/api/participation-patterns/export",
+      "/api/participation-patterns?dimension=distance",
+    ]) {
+      const response = await app.request(path);
+      assert.equal(response.status, 200);
+      const report = await response.json();
+      assert.ok(Array.isArray(report.groups));
+      assert.equal(report.ratesAvailable, false);
+    }
+    const saved = await app.request(
+      "/api/participation-patterns/preferences",
+      "PUT",
+      { dimension: "living", scope: "clients" },
+    );
+    assert.equal(saved.status, 200);
+    const preferences = await (await app.request("/api/preferences")).json();
+    assert.equal(preferences.patterns.dimension, "living");
+    const locationSettings = await (await app.request("/api/locations")).json();
+    assert.equal(locationSettings.centre.lat, null);
+    assert.equal(
+      (
+        await db
+          .prepare("SELECT version FROM schema_version WHERE version=5")
+          .get()
+      ).version,
+      5,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "SELECT relrowsecurity FROM pg_class WHERE relname='location_store'",
+        )
+      ).rows[0].relrowsecurity,
+      true,
+    );
+    assert.ok(
+      (
+        await db
+          .prepare(
+            "SELECT count(*)::integer n FROM audit WHERE action='patterns.summary.exported'",
+          )
+          .get()
+      ).n > 0,
+    );
+  } finally {
+    await app.close();
+    await db.close();
+  }
+});
+
 async function serve(handler) {
   const server = createServer(handler).listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));

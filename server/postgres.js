@@ -5,7 +5,7 @@ import { inspectImport, defaults, hash } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
-  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry)\b/g;
+  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
@@ -137,6 +137,8 @@ export function openPostgres(connectionString, { pool } = {}) {
             { status: 409 },
           );
         const inspection = inspectImport(parsed, current);
+        if(inspection.sessionUpdates.length && parsed.fingerprint!==inspection.fingerprint)
+          throw Object.assign(Error('Session metadata changed after preview. Review a fresh preview.'),{status:409});
         const summary = await saveImport(tx, parsed, inspection, user);
         await tx.prepare("DELETE FROM import_previews WHERE id=?").run(id);
         return summary;
@@ -248,6 +250,7 @@ async function saveImport(db, parsed, inspection, user) {
     await db.prepare("DELETE FROM attendance").run();
   }
   const summary = {
+    updatedSessions: inspection.sessionUpdates?.length || 0,
     updatedProfiles: inspection.updates?.length || 0,
     mode: inspection.mode || "add",
     raw: parsed.rawRows,
@@ -299,6 +302,7 @@ async function saveImport(db, parsed, inspection, user) {
           date: r.session.date,
           start: r.session.start,
           end: r.session.end,
+          optional: JSON.stringify(r.session.optional||{}),
         },
       ]),
     ).values(),
@@ -320,8 +324,8 @@ async function saveImport(db, parsed, inspection, user) {
     ],
     [
       "sessions",
-      'id,programme_id,date,start,"end"',
-      'id text,programme_id text,date text,start integer,"end" integer',
+      'id,programme_id,date,start,"end",optional',
+      'id text,programme_id text,date text,start integer,"end" integer,optional text',
       sessions,
     ],
     [
@@ -336,6 +340,8 @@ async function saveImport(db, parsed, inspection, user) {
       [JSON.stringify(values)],
     );
   }
+  for(let start=0;start<(inspection.sessionUpdates||[]).length;start+=500)
+    await db.query('UPDATE glowbb.sessions AS s SET optional=x.optional FROM jsonb_to_recordset($1::jsonb) AS x(id text,optional text) WHERE s.id=x.id',[JSON.stringify(inspection.sessionUpdates.slice(start,start+500).map(s=>({id:s.id,optional:JSON.stringify(s.optional)})))]);
   const updates = (inspection.updates || []).map(({ id, ...details }) => ({
     id,
     details: JSON.stringify(details),
