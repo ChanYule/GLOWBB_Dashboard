@@ -95,7 +95,6 @@ If local data is imported before switching, back up SQLite and plan a separate t
 - **`SELF_SIGNED_CERT_IN_CHAIN`:** deploy the latest source, which includes Supabase's public root certificate automatically. Standard Supabase connections need no certificate variable. If the error remains, check the actual database hostname and whether the provider has rotated its CA.
 - **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data.
 - **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.
-- **Centre summary export says sensitive filtered exports are restricted despite a dates-only URL:** deploy the latest `api/index.js`. The hosted handler lets Express parse filters from the original URL instead of treating Vercel rewrite metadata as client filters. No SQL or environment changes are required. Actual demographic and sensitive filtered exports remain restricted.
 - **Preview expired:** upload again. The 20-minute limit applies across deployments.
 - **Upload rejected:** use one CSV/XLSX smaller than 4 MB and at most 50,000 rows. `.xls` is unsupported.
 

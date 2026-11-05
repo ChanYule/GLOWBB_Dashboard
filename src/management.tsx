@@ -97,9 +97,15 @@ export function Cards({
 }) {
   const items = [
     [
-      "Unique seniors",
-      data.coverage.from ? data.summary.unique : null,
-      `Age ${data.settings.seniorAge}+ · selected period`,
+      compact ? "Total unique participants" : "Unique seniors",
+      data.coverage.from
+        ? compact
+          ? data.summary.allAges
+          : data.summary.unique
+        : null,
+      compact
+        ? `All recorded ages · selected period${data.coverage.from ? ` · ${fmt(data.summary.unique)} aged ${data.settings.seniorAge}+` : ""}`
+        : `Age ${data.settings.seniorAge}+ · selected period`,
     ],
     [
       "Male seniors",

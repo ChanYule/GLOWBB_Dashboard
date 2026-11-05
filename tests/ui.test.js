@@ -129,6 +129,18 @@ test("management overview has four headline cards and presentation preserves the
       ),
     );
     assert.equal(document.querySelectorAll(".management-kpi").length, 4);
+    const totalCard = screen
+      .getByText("Total unique participants")
+      .closest("article");
+    assert.equal(
+      totalCard.querySelector("strong").textContent,
+      String(dashboard().summary.allAges),
+    );
+    assert.match(
+      totalCard.querySelector("small").textContent,
+      /All recorded ages/,
+    );
+
     assert.equal(screen.queryByText("Registered clients"), null);
     assert.equal(screen.queryByText("No recorded attendance"), null);
     await waitFor(() =>

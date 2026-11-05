@@ -6,7 +6,7 @@ The primary tab is now **Main Dashboard**. Registered-client totals, clients wit
 
 The four headline cards show:
 
-- Unique seniors.
+- Total unique participants across all recorded ages, with the age 60+ count shown underneath (or the configured senior threshold).
 - Male seniors.
 - Minority seniors.
 - Attendance entries across recorded ages.
@@ -17,7 +17,7 @@ One audience selector updates both the reach trend and top-five programme rankin
 
 **Attendance summary** provides Daily and Monthly views. The Daily view has a month selector within the active reporting range and shows week, date, programmes, attendances, unique participants, IB, OB, male, minority and inactive counts. The Monthly view shows each month and a deduplicated reporting-period total.
 
-- The sheet includes all recorded ages, subject to the active dashboard filters. The senior headline cards retain the configured senior age threshold.
+- The sheet and total unique participants card include all recorded ages, subject to the active dashboard filters. Male and minority senior headline cards and the senior charts retain the configured senior age threshold.
 - **IB** means existing clients; **OB** means non-clients. These are the same definitions used by Operations. Unknown client status remains separate and is not guessed into either group.
 - Sheet percentages use the unique participants in that row. Senior headline gender/race percentages retain their labelled known-information denominators.
 - **Inactive (≤2)** follows the requested definition: among people attending in the row, count those who have attended two or fewer distinct programmes across all available attendance history. Repeated sessions in one programme still count as one programme.
