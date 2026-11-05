@@ -20,10 +20,16 @@ export function PresentationView({
   close: () => void;
   briefing?: Briefing;
 }) {
-  const remote = useBriefing(filters, revision, !briefing);
-  const value = briefing || remote.value,
-    error = briefing ? "" : remote.error,
-    pending = briefing ? false : remote.pending;
+  const fetchRegistry = !!briefing?.registryOmitted;
+  const remote = useBriefing(filters, revision, !briefing || fetchRegistry);
+  // Preserve the displayed outreach/needs/action snapshot. Registry coverage is
+  // requested only when opening the report, rather than on the main dashboard.
+  const value =
+      fetchRegistry && briefing
+        ? { ...briefing, clients: remote.value?.clients || null }
+        : briefing || remote.value,
+    error = !briefing || fetchRegistry ? remote.error : "",
+    pending = !briefing || fetchRegistry ? remote.pending : false;
   useEffect(() => {
     const old = document.title;
     document.title = "GLOW Bukit Batok — Management report";
@@ -153,7 +159,9 @@ export function PresentationView({
           <section className="report-slide" id="report-3">
             <h1>{titles[3]}</h1>
             <p>
-              {fmt(value?.needs?.interests.denominator)} interest respondents; {fmt(value?.needs?.respondents)} people with any recorded response. Multiple interests may overlap.
+              {fmt(value?.needs?.interests.denominator)} interest respondents;{" "}
+              {fmt(value?.needs?.respondents)} people with any recorded
+              response. Multiple interests may overlap.
             </p>
             {value?.needs?.interests && !value.needs.interests.suppressed ? (
               <ReportBars
@@ -176,8 +184,8 @@ export function PresentationView({
           <section className="report-slide" id="report-4">
             <h1>{titles[4]}</h1>
             <p>
-              {fmt(value?.actions?.total)} recorded actions. Individual details
-              and private notes are excluded.
+              {fmt(value?.actions?.total)} recorded planning entries. Individual
+              details and private notes are excluded.
             </p>
             <ReportBars
               rows={Object.entries(value?.actions?.stages || {}).map(

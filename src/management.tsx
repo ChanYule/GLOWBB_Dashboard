@@ -1,3 +1,4 @@
+import { ParticipationSummary } from "./participation-summary";
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { TrendChart } from "./analytics-ui";
@@ -6,6 +7,7 @@ import type { ProtectedSeries } from "./needs-ui";
 
 export type Briefing = {
   generatedAt?: string;
+  registryOmitted?: boolean;
   clients: null | {
     available: boolean;
     attendanceAvailable: boolean;
@@ -29,12 +31,16 @@ export function useBriefing(
   filters: Filters,
   revision: number,
   enabled = true,
+  includeRegistry = true,
 ) {
   const [value, setValue] = useState<{ key: string; data: Briefing } | null>(
       null,
     ),
     [error, setError] = useState("");
-  const query = new URLSearchParams(filters).toString();
+  const query = new URLSearchParams({
+    ...filters,
+    ...(includeRegistry ? {} : { includeRegistry: "0" }),
+  }).toString();
   const key = query + ":" + revision;
   useEffect(() => {
     if (!enabled) return;
@@ -82,34 +88,14 @@ export function Cards({
   data,
   briefing,
   ready = true,
+  compact = false,
 }: {
   data: Dashboard;
   ready?: boolean;
+  compact?: boolean;
   briefing: Briefing | null;
 }) {
-  const c = briefing?.clients;
-  const clientValue = (key: string) =>
-    c?.available && (key === "registered" || c.attendanceAvailable)
-      ? c.summary[key]
-      : null;
   const items = [
-    [
-      "Registered clients",
-      clientValue("registered"),
-      "Current registry · all ages",
-    ],
-    [
-      "Clients attending",
-      clientValue("attending"),
-      c?.summary?.rate == null
-        ? "Registry and attendance required"
-        : `${fmt(c.summary.rate)}% of registered clients`,
-    ],
-    [
-      "No recorded attendance",
-      clientValue("noAttendance"),
-      "Registered clients · selected period",
-    ],
     [
       "Unique seniors",
       data.coverage.from ? data.summary.unique : null,
@@ -125,16 +111,40 @@ export function Cards({
       data.coverage.from ? data.summary.minority : null,
       `${fmt(data.summary.minorityPct)}% of ${fmt(data.summary.knownRace)} seniors with known race`,
     ],
+    [
+      "Programmes delivered",
+      data.coverage.from ? data.summary.programmes : null,
+      "Distinct programmes in the selected period",
+    ],
+    [
+      "Sessions delivered",
+      data.coverage.from ? data.summary.sessions : null,
+      "Distinct delivered sessions · all ages",
+    ],
+    [
+      "Attendance entries",
+      data.coverage.from ? data.summary.attendance : null,
+      "Recorded participation entries · all ages",
+    ],
   ] as const;
   return (
-    <div className="management-kpis" data-ready={!!briefing && ready}>
-      {items.map(([label, n, note]) => (
-        <article className="management-kpi" key={label}>
-          <span>{label}</span>
-          <strong>{fmt(n)}</strong>
-          <small>{note}</small>
-        </article>
-      ))}
+    <div
+      className={compact ? "management-kpis compact" : "management-kpis"}
+      data-ready={!!briefing && ready}
+    >
+      {items
+        .filter(
+          ([label]) =>
+            !compact ||
+            !["Programmes delivered", "Sessions delivered"].includes(label),
+        )
+        .map(([label, n, note]) => (
+          <article className="management-kpi" key={label}>
+            <span>{label}</span>
+            <strong>{fmt(n)}</strong>
+            <small>{note}</small>
+          </article>
+        ))}
     </div>
   );
 }
@@ -183,16 +193,15 @@ function Findings({
   briefing: Briefing | null;
   navigate: (tab: string) => void;
 }) {
-  const c = briefing?.clients;
   const rows = [
     {
-      title: "Review client coverage",
-      evidence: c?.available
-        ? `${fmt(c.summary.attending)} of ${fmt(c.summary.registered)} registered clients have recorded attendance in this period.`
-        : "A complete registry and an unfiltered population view are required.",
-      why: "Attendance gaps identify records to review; they do not explain why people did not attend.",
-      next: "Review the private follow-up list and record an agreed next step.",
-      tab: "Client Engagement",
+      title: "Review target-group outreach",
+      evidence: data.coverage.from
+        ? `${fmt(data.summary.male)} male seniors and ${fmt(data.summary.minority)} minority seniors reached in the selected period.`
+        : "Import attendance to review target-group reach.",
+      why: "Compare target-group reach with agreed outreach targets and programme delivery frequency.",
+      next: "Review which programmes attract these groups and where delivery could be adapted.",
+      tab: "Programme Performance",
     },
     {
       title: "Read reach alongside delivery",
@@ -249,17 +258,18 @@ export function ManagementHome({
   present: (briefing: Briefing) => void;
   updating?: boolean;
 }) {
-  const { value, error, pending } = useBriefing(filters, revision);
-  const [trend, setTrend] = useState<"unique" | "male" | "minority">("unique"),
-    [ranking, setRanking] = useState<"unique" | "male" | "minority">("unique");
+  const { value, error, pending } = useBriefing(filters, revision, true, false);
+  const [audience, setAudience] = useState<"unique" | "male" | "minority">(
+    "unique",
+  );
   return (
     <div className="management-home" data-report-from={data.period.from}>
       {!data.coverage.from && (
         <section className="panel">
           <h2>Make every connection count.</h2>
           <p>
-            Import and review your client registry and attendance to populate
-            this report. No sample statistics are shown.
+            Import and review attendance to populate this dashboard. No sample
+            statistics are shown.
           </p>
         </section>
       )}
@@ -268,68 +278,75 @@ export function ManagementHome({
           {error}
         </p>
       )}
-      <Cards data={data} briefing={value} ready={!pending && !updating} />
+      <Cards
+        data={data}
+        briefing={value}
+        ready={!pending && !updating}
+        compact
+      />
       <div className="report-section-heading">
-        <h2>Participation at a glance</h2>
+        <h2>Past participation</h2>
+        <label>
+          Focus
+          <select
+            aria-label="Chart focus"
+            value={audience}
+            onChange={(e) => setAudience(e.target.value as typeof audience)}
+          >
+            <option value="unique">All seniors</option>
+            <option value="male">Male seniors</option>
+            <option value="minority">Minority seniors</option>
+          </select>
+        </label>
         <button
           className="button primary"
           onClick={() => value && present(value)}
           disabled={pending || updating || !!error}
         >
-          Presentation View
+          Print summary
         </button>
       </div>
-      <section className="panel">
-        <h2>Registered client coverage</h2>
-        <Coverage briefing={value} />
-      </section>
       <div className="management-chart-grid">
         <section className="panel">
-          <div className="report-section-heading">
-            <h2>Monthly senior reach</h2>
-            <label>
-              Show
-              <select
-                value={trend}
-                onChange={(e) => setTrend(e.target.value as typeof trend)}
-              >
-                <option value="unique">All seniors</option>
-                <option value="male">Male seniors</option>
-                <option value="minority">Minority seniors</option>
-              </select>
-            </label>
-          </div>
-          <TrendChart rows={data.trends} metric={trend} />
+          <h3>Reach over time</h3>
+          <TrendChart rows={data.trends} metric={audience} />
         </section>
         <section className="panel">
-          <div className="report-section-heading">
-            <h2>Top five programmes</h2>
-            <label>
-              Rank by
-              <select
-                value={ranking}
-                onChange={(e) => setRanking(e.target.value as typeof ranking)}
-              >
-                <option value="unique">Unique seniors</option>
-                <option value="male">Male seniors</option>
-                <option value="minority">Minority seniors</option>
-              </select>
-            </label>
-          </div>
+          <h3>Top five programmes</h3>
           <ReportBars
             rows={[...data.programmes]
-              .sort((a, b) => b[ranking] - a[ranking])
+              .sort((a, b) => b[audience] - a[audience])
               .slice(0, 5)
               .map((p) => ({
                 label: p.name,
-                value: p[ranking],
+                value: p[audience],
                 detail: `${fmt(p.sessions)} sessions`,
               }))}
           />
         </section>
       </div>
-      <h2>Decisions to review</h2>
-      <Findings data={data} briefing={value} navigate={navigate} />
+      <ParticipationSummary
+        filters={filters}
+        revision={revision}
+        available={!!data.coverage.from}
+      />
+      <section className="panel simple-next-step">
+        <h2>Plan the next step</h2>
+        <p>
+          Review past programmes, choose what to run again or improve, and
+          record an owner and review date.
+        </p>
+        <button
+          className="button primary"
+          onClick={() => navigate("Planning & Recommendations")}
+        >
+          Open Planning
+        </button>
+        <details>
+          <summary>More planning notes</summary>
+          <Findings data={data} briefing={value} navigate={navigate} />
+        </details>
+      </section>
     </div>
   );
 }

@@ -507,6 +507,132 @@ summary {
 .skip-link:focus {
   top: 10px;
 }
+.summary-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.summary-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.summary-scope,
+.summary-total-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 14px 0;
+}
+.participation-table-scroll {
+  max-height: 470px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.participation-table-scroll table {
+  width: 100%;
+  min-width: 950px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.participation-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: #edf4f7;
+  z-index: 1;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.participation-table-scroll td {
+  white-space: nowrap;
+}
+.participation-table-scroll th,
+.participation-table-scroll td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.participation-table-scroll tfoot th,
+.participation-table-scroll tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: #e6f4ef;
+  color: var(--ink);
+  font-weight: 750;
+  border-top: 2px solid var(--teal);
+}
+.participation-table-scroll .summary-unavailable {
+  color: var(--muted);
+  background: #f8fafc;
+}
+.participation-summary details {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.participation-summary details p {
+  margin: 10px 0;
+}
+.management-kpis.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.nav-advanced {
+  margin: 12px 6px 0;
+  border-top: 1px solid #ffffff25;
+  padding-top: 10px;
+}
+.nav-advanced > summary {
+  font-size: 12px;
+  color: #c1cde0;
+  padding: 10px;
+  cursor: pointer;
+}
+.nav-advanced .nav-item {
+  font-size: 12px;
+  padding-left: 18px;
+}
+.simple-next-step > details {
+  margin-top: 18px;
+}
+.simple-next-step .management-findings {
+  margin-top: 16px;
+}
+.planning-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+  align-items: end;
+}
+.planning-toolbar > p {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.programme-drawer details {
+  margin: 18px 0;
+}
+.programme-table table {
+  min-width: 820px;
+}
+.programme-table th:first-child {
+  min-width: 240px;
+}
+.app .table-toolbar .search-field input {
+  border: 0;
+  box-shadow: none;
+}
+.planning-toolbar {
+  margin-bottom: 18px;
+}
+@media (max-width: 1024px) {
+  .management-kpis.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .planning-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
 
 .app .nav-section-label {
   font-size: 10px;

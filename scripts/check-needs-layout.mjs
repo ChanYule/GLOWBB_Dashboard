@@ -220,7 +220,7 @@ try {
     const start = performance.now();
     await command("Page.navigate", { url: origin });
     await wait(
-      "document.querySelector('h1')?.textContent.toLowerCase() === 'management overview' && (document.querySelector('.management-kpis[data-ready=true]') || document.querySelector('.metric-grid')) && !document.querySelector('.fetch-status')",
+      "document.querySelector('h1')?.textContent.toLowerCase() === 'main dashboard' && (document.querySelector('.management-kpis[data-ready=true]') || document.querySelector('.metric-grid')) && document.querySelector('.participation-summary table') && !document.querySelector('.fetch-status')",
       "benchmark overview",
     );
     const overviewReadyMs = performance.now() - start;
@@ -250,7 +250,7 @@ try {
         "(() => {const select=document.querySelector('.filters select');select.value='Last 3 months';select.dispatchEvent(new Event('change',{bubbles:true}));})()",
       );
       await wait(
-        `!!document.querySelector('[data-report-from="${expectedFrom}"] .management-kpis[data-ready=true]') && !document.querySelector('.fetch-status')`,
+        `!!document.querySelector('[data-report-from="${expectedFrom}"] .management-kpis[data-ready=true]') && !document.querySelector('.participation-summary[aria-busy=true]') && !document.querySelector('.fetch-status')`,
         "warm filter update",
       );
       warmFilterReadyMs = performance.now() - filterStart;
@@ -304,19 +304,19 @@ try {
     await send("Browser.close").catch(() => {});
   } else {
     const pages = [
-      "Management Overview",
+      "Main Dashboard",
       ...(registrySource ? ["Client Engagement & Outreach"] : []),
-      "Programme Performance",
+      "Programme Analysis",
       "Participant Needs & Accessibility",
       "Who Are We Serving?",
       "Gaps and Participation Barriers",
-      "Planning & Actions",
+      "Detailed action tracker",
       "Programme Alignment",
       "Custom Analysis",
       "Operations & Screening",
       "Social Risk Analysis",
       "Audience & Outreach",
-      "Planning & Recommendations",
+      "Planning",
       "Data Quality and Administration",
       "Data management",
     ];
@@ -327,7 +327,7 @@ try {
       [768, 1024],
       [375, 812],
     ]) {
-      if(process.argv.includes("--print-only") && width !== 1440) continue;
+      if (process.argv.includes("--print-only") && width !== 1440) continue;
       await command("Emulation.setDeviceMetricsOverride", {
         width,
         height,
@@ -336,11 +336,22 @@ try {
       });
       await command("Page.navigate", { url: origin });
       await wait(
-        "document.querySelector('h1')?.textContent === 'Management overview' && document.querySelector('.management-kpis[data-ready=true]') && !document.querySelector('.fetch-status')",
+        "document.querySelector('h1')?.textContent === 'Main dashboard' && document.querySelector('.management-kpis[data-ready=true]') && document.querySelector('.participation-summary table') && !document.querySelector('.fetch-status')",
         "management overview",
       );
-      for (const page of pages.filter(page => !process.argv.includes("--print-only") || page === "Management Overview")) {
-        if (page !== "Management Overview") {
+      const primary = await evaluate(
+        "[...document.querySelectorAll('nav > button')].map(b => b.textContent.trim())",
+      );
+      if (
+        JSON.stringify(primary) !==
+        JSON.stringify(["Main Dashboard", "Programme Analysis", "Planning"])
+      )
+        throw Error("Unexpected initial navigation: " + primary.join(", "));
+      for (const page of pages.filter(
+        (page) =>
+          !process.argv.includes("--print-only") || page === "Main Dashboard",
+      )) {
+        if (page !== "Main Dashboard") {
           if (width <= 650) {
             await evaluate(
               "(() => { const menu = document.querySelector('.navigation-toggle'); if (menu?.getAttribute('aria-expanded') === 'false') menu.click(); })()",
@@ -351,11 +362,11 @@ try {
             );
           }
           const clicked = await evaluate(
-            `(() => { const menu = document.querySelector('.navigation-toggle'); if (innerWidth <= 650 && menu?.getAttribute('aria-expanded') === 'false') menu.click(); const button = [...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === ${JSON.stringify(page)}); if (!button) return false; const details = button.closest('details'); if (details && !details.open) details.querySelector('summary').click(); if (!button.getClientRects().length) return false; button.click(); return true; })()`,
+            `(() => { const menu = document.querySelector('.navigation-toggle'); if (innerWidth <= 650 && menu?.getAttribute('aria-expanded') === 'false') menu.click(); const button = [...document.querySelectorAll('nav button')].find(b => b.textContent.trim() === ${JSON.stringify(page)}); if (!button) return false; const parents = []; for (let d = button.closest('details'); d; d = d.parentElement.closest('details')) parents.push(d); parents.reverse().forEach(d => { if (!d.open) d.querySelector('summary').click(); }); if (!button.getClientRects().length) return false; button.click(); return true; })()`,
           );
           if (!clicked) throw Error("Navigation missing: " + page);
           await wait(
-            `document.querySelector('h1')?.textContent === ${JSON.stringify(page === "Planning & Actions" ? "Planning & Actions" : page === "Programme Performance" ? "Programme performance" : page === "Operations & Screening" ? "Operations & health screening" : page === "Audience & Outreach" ? "Audience & outreach gaps" : page === "Planning & Recommendations" ? "Programme planning recommendations" : page)} && !document.body.innerText.includes('Loading needs analysis') && !document.querySelector('.fetch-status')`,
+            `document.querySelector('h1')?.textContent === ${JSON.stringify(page === "Detailed action tracker" ? "Detailed action tracker" : page === "Programme Analysis" ? "Programme analysis" : page === "Operations & Screening" ? "Operations & health screening" : page === "Audience & Outreach" ? "Audience & outreach gaps" : page === "Planning" ? "Planning" : page)} && !document.body.innerText.includes('Loading needs analysis') && !document.querySelector('.fetch-status')`,
             "page " + page,
           );
         }
@@ -409,9 +420,11 @@ try {
         if (
           (width === 1440 || width === 768) &&
           [
-            "Management Overview",
+            "Main Dashboard",
+            "Programme Analysis",
+            "Planning",
             "Who Are We Serving?",
-            "Planning & Actions",
+            "Detailed action tracker",
             "Data management",
             "Client Engagement & Outreach",
           ].includes(page)
@@ -425,9 +438,38 @@ try {
             Buffer.from(screenshot.data, "base64"),
           );
         }
-        if (page === "Management Overview") {
+        if (page === "Programme Analysis" && width === 1440) {
           await evaluate(
-            "[...document.querySelectorAll('button')].find(b=>b.textContent==='Presentation View').click()",
+            "document.querySelector('.work-table tbody button, .table-scroll tbody button').click()",
+          );
+          await wait(
+            "!![...document.querySelectorAll('dialog button')].find(b => b.textContent.trim()==='Plan next steps for this programme')",
+            "programme next step",
+          );
+          const programme = await evaluate(
+            "document.querySelector('dialog .modal-head h2').textContent",
+          );
+          await evaluate(
+            "[...document.querySelectorAll('dialog button')].find(b => b.textContent.trim()==='Plan next steps for this programme').click()",
+          );
+          await wait(
+            "document.querySelector('h1')?.textContent==='Planning' && !!document.querySelector('input[aria-label=\"Find a programme or saved plan\"]') && !document.querySelector('.fetch-status')",
+            "programme planning handoff",
+          );
+          const query = await evaluate(
+            "document.querySelector('input[aria-label=\"Find a programme or saved plan\"]').value",
+          );
+          if (query !== programme)
+            throw Error("Programme selection was lost during planning handoff");
+          results.push({
+            viewport: `${width}x${height}`,
+            page: "Programme to planning",
+            programmeSelected: true,
+          });
+        }
+        if (page === "Main Dashboard") {
+          await evaluate(
+            "[...document.querySelectorAll('button')].find(b=>b.textContent==='Print summary').click()",
           );
           await wait(
             "document.querySelectorAll('.report-slide').length === 6 && !document.querySelector('.presentation-toolbar button:last-child').disabled",
@@ -489,6 +531,74 @@ try {
             "!document.querySelector('.presentation')",
             "presentation close",
           );
+          const fixtureData = readData(db),
+            fixtureSessions = new Map(
+              fixtureData.sessions.map((s) => [s.id, s]),
+            );
+          const today = new Date().toLocaleDateString("en-CA", {
+            timeZone: "Asia/Singapore",
+          });
+          const delivered = fixtureData.attendance.filter(
+            (a) => fixtureSessions.get(a.sessionId)?.date <= today,
+          );
+          await evaluate(
+            "document.querySelectorAll('.participation-summary .segmented button')[1].click()",
+          );
+          await wait(
+            "document.querySelector('.participation-summary thead th')?.textContent === 'Month'",
+            "monthly summary",
+          );
+          const monthly = await evaluate(
+            "({attendance:Number(document.querySelector('.participation-summary tfoot tr').children[2].textContent.replaceAll(',','')),unique:Number(document.querySelector('.participation-summary tfoot tr').children[3].textContent.replaceAll(',','')),overflow:document.documentElement.scrollWidth>innerWidth+1,registry:[...document.querySelectorAll('.management-home h2')].some(e=>e.textContent==='Registered client coverage')})",
+          );
+          if (
+            monthly.attendance !== delivered.length ||
+            monthly.unique !==
+              new Set(delivered.map((a) => a.participantId)).size ||
+            monthly.overflow ||
+            monthly.registry
+          )
+            throw Error(
+              "Main dashboard summary reconciliation failed: " +
+                JSON.stringify(monthly),
+            );
+          if (width === 1440 || width === 375) {
+            await evaluate(
+              "document.querySelector('.participation-summary').scrollIntoView({block:'start'})",
+            );
+            const shot = await command("Page.captureScreenshot", {
+              format: "png",
+              captureBeyondViewport: false,
+            });
+            writeFileSync(
+              join(output, `${width}-Monthly-summary.png`),
+              Buffer.from(shot.data, "base64"),
+            );
+            await evaluate("window.scrollTo(0,0)");
+          }
+          await evaluate(
+            "document.querySelectorAll('.participation-summary .segmented button')[0].click()",
+          );
+          const firstMonth = await evaluate(
+            "document.querySelector('[aria-label=\"Summary month\"] option').value",
+          );
+          const monthLabel = new Intl.DateTimeFormat("en-SG", {
+            month: "long",
+            year: "numeric",
+            timeZone: "Asia/Singapore",
+          }).format(new Date(firstMonth + "-01T00:00:00+08:00"));
+          await evaluate(
+            `(() => {const select=document.querySelector('[aria-label="Summary month"]');select.value=${JSON.stringify(firstMonth)};select.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+          );
+          await wait(
+            `document.querySelector('.participation-summary caption')?.textContent.startsWith(${JSON.stringify(monthLabel)}) && document.querySelector('.participation-summary')?.getAttribute('aria-busy') === 'false'`,
+            "summary month switch",
+          );
+          results.push({
+            viewport: `${width}x${height}`,
+            page: "Daily and monthly summary controls",
+            ...monthly,
+          });
         }
         if (page === "Client Engagement & Outreach") {
           for (const [label, selector] of [
@@ -619,7 +729,12 @@ try {
     if (errors.length)
       throw Error("Browser runtime errors: " + errors.join(" | "));
     writeFileSync(
-      join(output, process.argv.includes("--print-only") ? "print-results.json" : "results.json"),
+      join(
+        output,
+        process.argv.includes("--print-only")
+          ? "print-results.json"
+          : "results.json",
+      ),
       JSON.stringify(
         {
           fixture:

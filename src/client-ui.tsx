@@ -1,3 +1,4 @@
+import { Coverage } from "./management";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -1382,6 +1383,22 @@ export function ClientEngagement({
                       </article>
                     ))}
                   </div>
+                  <section className="panel">
+                    <h2>Registered client coverage</h2>
+                    <Coverage
+                      briefing={{
+                        clients: {
+                          available: report.available && report.complete,
+                          attendanceAvailable: report.attendanceAvailable,
+                          summary: report.summary,
+                          populationNote: report.populationNote,
+                          limitations: report.limitations,
+                        },
+                        needs: null,
+                        actions: null,
+                      }}
+                    />
+                  </section>
                   <p className="client-privacy">
                     <ShieldCheck size={17} />
                     {report.privacyNote}

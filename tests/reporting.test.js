@@ -194,7 +194,7 @@ test("management briefing is read-only and excludes identities, clinical distrib
   const before = JSON.stringify(readData(db));
   db.prepare("INSERT INTO decisions VALUES(?,?,?,?,?)").run(
     readData(db).programmes[0].id,
-    "Review",
+    "In progress",
     "PRIVATE DECISION NOTE",
     "2026-11-04",
     1,
@@ -206,9 +206,17 @@ test("management briefing is read-only and excludes identities, clinical distrib
     const r = await fetch(base + "/api/reporting/briefing"),
       b = await r.json();
     assert.equal(r.status, 200);
-    assert.equal(b.actions.total, 1);
+    assert.equal(b.actions.total, 2);
     assert.equal(b.actions.stages.Approved, 1);
+    assert.equal(b.actions.stages["In Progress"], 1);
     const serialized = JSON.stringify(b);
+    const leanBriefing = await (
+      await fetch(base + "/api/reporting/briefing?includeRegistry=0")
+    ).json();
+    assert.equal(leanBriefing.clients, null);
+    assert.equal(leanBriefing.registryOmitted, true);
+    assert.deepEqual(leanBriefing.needs, b.needs);
+    assert.deepEqual(leanBriefing.actions, b.actions);
     for (const privateValue of [
       "source-person-0",
       "private clinical note",
@@ -220,6 +228,27 @@ test("management briefing is read-only and excludes identities, clinical distrib
     ])
       assert.equal(serialized.includes(privateValue), false);
     assert.equal(JSON.stringify(readData(db)), before);
+    const participation = await fetch(
+      base +
+        "/api/reporting/participation?from=2026-10-01&to=2026-10-31&month=2026-10",
+    );
+    assert.equal(participation.status, 200);
+    const sheet = await participation.json();
+    assert.equal(sheet.monthSummary.unique, 12);
+    assert.equal(sheet.monthSummary.inactive, 12);
+    assert.equal(JSON.stringify(sheet).includes("source-person-"), false);
+    assert.equal(
+      (await fetch(base + "/api/reporting/participation?month=2026-13")).status,
+      400,
+    );
+    assert.equal(
+      (await fetch(base + "/api/reporting/participation?cfs=1-3")).status,
+      403,
+    );
+    assert.equal(
+      (await fetch(base + "/api/reporting/participation?risk=recorded")).status,
+      403,
+    );
     for (const view of ["overview", "context"]) {
       const lean = await (
         await fetch(base + "/api/dashboard?view=" + view)

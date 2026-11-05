@@ -380,6 +380,7 @@ function App() {
     filters: Filters;
     briefing: Briefing;
   } | null>(null);
+  const [planSearch, setPlanSearch] = useState("");
   const [tab, setTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>(emptyFilters),
     [data, setData] = useState<Dashboard | null>(null),
@@ -464,21 +465,61 @@ function App() {
     setRevision((n) => n + 1);
     setToast(message);
   };
-  const tabs = [
-    { name: "Programme Performance", icon: BarChart3 },
+  const primaryTabs = [
+    { name: "Overview", label: "Main Dashboard", icon: LayoutDashboard },
+    {
+      name: "Programme Performance",
+      label: "Programme Analysis",
+      icon: BarChart3,
+    },
+    {
+      name: "Planning & Recommendations",
+      label: "Planning",
+      icon: ClipboardList,
+    },
+  ];
+  const staffTabs = [
+    {
+      name: "Client Engagement",
+      label: "Client Engagement & Outreach",
+      icon: Users,
+    },
     { name: "Participant Needs & Accessibility", icon: HeartHandshake },
-    { name: "Programme Planning and Actions", icon: ClipboardList },
-    { name: "Overview", icon: LayoutDashboard },
+    ...(user?.role === "admin"
+      ? [{ name: "Data management", icon: Database }]
+      : []),
+  ];
+  const advancedTabs = [
+    {
+      name: "Programme Planning and Actions",
+      label: "Detailed action tracker",
+      icon: ClipboardList,
+    },
     { name: "Who Are We Serving?", icon: Users },
     { name: "Gaps and Participation Barriers", icon: HeartHandshake },
     { name: "Audience & Outreach", icon: Users },
-    { name: "Planning & Recommendations", icon: ClipboardList },
     { name: "Operations & Screening", icon: Activity },
     { name: "Social Risk Analysis", icon: ShieldCheck },
     { name: "Custom Analysis", icon: ChartNoAxesCombined },
     { name: "Programme Alignment", icon: BarChart3 },
     { name: "Data Quality and Administration", icon: ShieldCheck },
   ];
+  const navItem = (t: { name: string; label?: string; icon: typeof Users }) => (
+    <button
+      key={t.name}
+      className={tab === t.name ? "nav-item active" : "nav-item"}
+      aria-current={tab === t.name ? "page" : undefined}
+      onClick={() => {
+        setTab(t.name);
+        setPlanSearch("");
+        setNavigationOpen(false);
+      }}
+    >
+      <t.icon size={20} />
+      <span>{t.label || t.name}</span>
+      {tab === t.name && <ChevronRight size={16} />}
+    </button>
+  );
   const title = [
     "Data management",
     "Client Engagement",
@@ -488,9 +529,9 @@ function App() {
       ? "Client Engagement & Outreach"
       : tab
     : tab === "Overview"
-      ? "Management overview"
+      ? "Main dashboard"
       : tab === "Programme Planning and Actions"
-        ? "Planning & Actions"
+        ? "Detailed action tracker"
         : [
               "Who Are We Serving?",
               "Gaps and Participation Barriers",
@@ -500,14 +541,14 @@ function App() {
             ].includes(tab)
           ? tab
           : tab === "Programme Performance"
-            ? "Programme performance"
+            ? "Programme analysis"
             : tab === "Social Risk Analysis" || tab === "Custom Analysis"
               ? tab
               : tab === "Audience & Outreach"
                 ? "Audience & outreach gaps"
                 : tab === "Operations & Screening"
                   ? "Operations & health screening"
-                  : "Programme planning recommendations";
+                  : "Planning";
   const sensitive =
     ["gender", "race", "ageBand", "client", "boundary"].some(
       (k) => filters[k as keyof Filters],
@@ -556,78 +597,20 @@ function App() {
             Skip to main content
           </a>
           <nav aria-label="Main navigation" id="main-navigation">
-            <button
-              className={tab === "Overview" ? "nav-item active" : "nav-item"}
-              aria-current={tab === "Overview" ? "page" : undefined}
-              onClick={() => {
-                setTab("Overview");
-                setNavigationOpen(false);
-              }}
-            >
-              <LayoutDashboard size={20} />
-              <span>Management Overview</span>
-              {tab === "Overview" && <ChevronRight size={16} />}
-            </button>
-            <button
-              className={
-                tab === "Client Engagement" ? "nav-item active" : "nav-item"
-              }
-              aria-current={tab === "Client Engagement" ? "page" : undefined}
-              onClick={() => {
-                setTab("Client Engagement");
-                setNavigationOpen(false);
-              }}
-            >
-              <Users size={20} />
-              <span>Client Engagement & Outreach</span>
-              {tab === "Client Engagement" && <ChevronRight size={16} />}
-            </button>
-            <div className="nav-section-label">UNDERSTAND · REVIEW · ACT</div>
-            {tabs.slice(0, 3).map((t) => (
-              <button
-                key={t.name}
-                className={tab === t.name ? "nav-item active" : "nav-item"}
-                aria-current={tab === t.name ? "page" : undefined}
-                onClick={() => {
-                  setTab(t.name);
-                  setNavigationOpen(false);
-                }}
-              >
-                <t.icon size={20} />
-                <span>
-                  {t.name === "Programme Planning and Actions"
-                    ? "Planning & Actions"
-                    : t.name}
-                </span>
-                {tab === t.name && <ChevronRight size={16} />}
-              </button>
-            ))}
+            {primaryTabs.map(navItem)}
             <details
               className="nav-tools"
-              open={tabs.slice(4).some((t) => t.name === tab) || undefined}
+              open={
+                [...staffTabs, ...advancedTabs].some((t) => t.name === tab) ||
+                undefined
+              }
             >
               <summary>
-                <ChartNoAxesCombined size={19} /> More Tools{" "}
+                <Users size={19} />
+                Staff Tools
                 <ChevronRight size={16} />
               </summary>
-              {tabs.slice(4).map((t) => (
-                <button
-                  key={t.name}
-                  className={tab === t.name ? "nav-item active" : "nav-item"}
-                  aria-current={tab === t.name ? "page" : undefined}
-                  onClick={() => {
-                    setTab(t.name);
-                    setNavigationOpen(false);
-                  }}
-                >
-                  <t.icon size={18} />
-                  <span>
-                    {t.name === "Programme Planning and Actions"
-                      ? "Planning & Actions"
-                      : t.name}
-                  </span>
-                </button>
-              ))}
+              {staffTabs.map(navItem)}
               <button
                 className="nav-item"
                 onClick={() => {
@@ -637,22 +620,23 @@ function App() {
               >
                 Dashboard Settings
               </button>
-            </details>
-            {user.role === "admin" && (
               <button
-                className={
-                  tab === "Data management" ? "nav-item active" : "nav-item"
-                }
-                aria-current={tab === "Data management" ? "page" : undefined}
+                className="nav-item"
                 onClick={() => {
-                  setTab("Data management");
+                  setModal("export");
                   setNavigationOpen(false);
                 }}
               >
-                <Database size={20} />
-                <span>Data management</span>
+                Download reports
               </button>
-            )}
+              <details
+                className="nav-advanced"
+                open={advancedTabs.some((t) => t.name === tab) || undefined}
+              >
+                <summary>Advanced analysis</summary>
+                {advancedTabs.map(navItem)}
+              </details>
+            </details>
           </nav>
           <div className="sidebar-bottom">
             <div className="privacy-note">
@@ -718,7 +702,7 @@ function App() {
                     : tab === "Data management"
                       ? "Import, review, delete and recover saved records in one place."
                       : tab === "Overview"
-                        ? "Who participates, what information is missing, and which actions need review."
+                        ? "Track programme delivery, senior outreach and participation patterns to support planning."
                         : tab === "Who Are We Serving?"
                           ? "Understand current participant profiles and explicitly reported needs."
                           : tab === "Gaps and Participation Barriers"
@@ -748,7 +732,9 @@ function App() {
                   <RefreshCw size={16} />
                   Refresh
                 </Button>
-                {!["Data management", "Client Engagement"].includes(tab) && (
+                {!["Overview", "Data management", "Client Engagement"].includes(
+                  tab,
+                ) && (
                   <Button onClick={() => setModal("export")}>
                     <Download size={17} />
                     Export report
@@ -963,14 +949,6 @@ function App() {
                           refresh("Reviewed needs data refreshed.")
                         }
                       />
-                      {tab === "Programme Planning and Actions" && (
-                        <Planning
-                          data={data}
-                          user={user}
-                          refresh={refresh}
-                          onTarget={() => setModal("target")}
-                        />
-                      )}
                     </>
                   ) : tab === "Social Risk Analysis" ? (
                     <SocialRisk user={user} />
@@ -989,7 +967,10 @@ function App() {
                       data={data}
                       filters={filters}
                       revision={revision}
-                      navigate={setTab}
+                      navigate={(name) => {
+                        setPlanSearch("");
+                        setTab(name);
+                      }}
                       present={(briefing) => {
                         setPresentationSnapshot({
                           data,
@@ -1013,6 +994,8 @@ function App() {
                       user={user}
                       refresh={refresh}
                       onTarget={() => setModal("target")}
+                      initialSearch={planSearch}
+                      simple
                     />
                   )}
                   {data.coverage.from !== null &&
@@ -1182,6 +1165,15 @@ function App() {
             }
             data={data}
             onClose={() => setProgramme(null)}
+            onPlan={
+              user.role === "viewer"
+                ? undefined
+                : () => {
+                    setPlanSearch(programme.name);
+                    setProgramme(null);
+                    setTab("Planning & Recommendations");
+                  }
+            }
           />
         )}
       </div>
@@ -1220,15 +1212,20 @@ function FilterBar({
     if (value === "This year") from = y + "-01-01";
     setFilters({ ...filters, from, to });
   }
+  const customRange =
+    preset === "Custom range" ||
+    (preset === "Available history" && !!filters.from);
   return (
     <div className="filter-panel">
       <div className="filters">
         <Select
           label="Reporting period"
           value={
-            !filters.from && filters.to === emptyFilters.to
-              ? "Available history"
-              : preset
+            customRange
+              ? "Custom range"
+              : !filters.from && filters.to === emptyFilters.to
+                ? "Available history"
+                : preset
           }
           onChange={choose}
         >
@@ -1244,32 +1241,36 @@ function FilterBar({
             <option key={x}>{x}</option>
           ))}
         </Select>
-        <label className="field date-field">
-          <span>From</span>
-          <input
-            aria-label="From date"
-            type="date"
-            value={filters.from}
-            max={filters.to || sgToday()}
-            onChange={(e) => {
-              setPreset("Custom range");
-              update("from", e.target.value);
-            }}
-          />
-        </label>
-        <label className="field date-field">
-          <span>To</span>
-          <input
-            aria-label="To date"
-            type="date"
-            value={filters.to}
-            min={filters.from}
-            onChange={(e) => {
-              setPreset("Custom range");
-              update("to", e.target.value);
-            }}
-          />
-        </label>
+        {customRange && (
+          <>
+            <label className="field date-field">
+              <span>From</span>
+              <input
+                aria-label="From date"
+                type="date"
+                value={filters.from}
+                max={filters.to || sgToday()}
+                onChange={(e) => {
+                  setPreset("Custom range");
+                  update("from", e.target.value);
+                }}
+              />
+            </label>
+            <label className="field date-field">
+              <span>To</span>
+              <input
+                aria-label="To date"
+                type="date"
+                value={filters.to}
+                min={filters.from}
+                onChange={(e) => {
+                  setPreset("Custom range");
+                  update("to", e.target.value);
+                }}
+              />
+            </label>
+          </>
+        )}
         <button
           className={`button filter-toggle ${advanced ? "selected" : ""}`}
           aria-expanded={advanced}
@@ -1687,7 +1688,8 @@ function Programmes({
           | "returning"
         >
       >("unique");
-  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false),
+    [portfolioOpen, setPortfolioOpen] = useState(false);
   const [page, setPage] = useState(0),
     [columns, setColumns] = useState<string[]>([
       "sessions",
@@ -1709,9 +1711,8 @@ function Programmes({
     .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
   return (
     <>
-      <DomainPortfolio data={data} />
       <Panel
-        title="A clearer picture of programme performance"
+        title="Past programmes"
         subtitle={`${list.length} programmes · senior outreach alongside delivery frequency`}
       >
         <div className="table-toolbar">
@@ -1785,7 +1786,7 @@ function Programmes({
           </Button>
           {savedMessage && <p role="status">{savedMessage}</p>}
         </details>
-        <div className="work-table">
+        <div className="work-table programme-table">
           <table>
             <thead>
               <tr>
@@ -1869,6 +1870,13 @@ function Programmes({
           and evidence limitations.
         </Note>
       </Panel>
+      <details
+        className="panel"
+        onToggle={(e) => setPortfolioOpen(e.currentTarget.open)}
+      >
+        <summary>Compare programme types</summary>
+        {portfolioOpen && <DomainPortfolio data={data} />}
+      </details>
     </>
   );
 }
@@ -2082,201 +2090,358 @@ function Planning({
   user,
   refresh,
   onTarget,
+  simple = false,
+  initialSearch = "",
 }: {
   data: Dashboard;
   user: User;
   refresh: (s?: string) => void;
   onTarget: () => void;
+  simple?: boolean;
+  initialSearch?: string;
 }) {
   const [horizon, setHorizon] = useState("3"),
     [category, setCategory] = useState("All"),
     [edit, setEdit] = useState<Recommendation | null>(null);
   const canEdit = user.role !== "viewer";
+  const [search, setSearch] = useState(initialSearch),
+    [visible, setVisible] = useState(5),
+    [savedVisible, setSavedVisible] = useState(10);
+  useEffect(() => {
+    setSearch(initialSearch);
+    setVisible(5);
+  }, [initialSearch]);
   const list = data.recommendations.filter(
-    (r) => category === "All" || r.category === category,
+    (r) =>
+      (category === "All" || r.category === category) &&
+      r.programme.toLowerCase().includes(search.toLowerCase()),
+  );
+  const planningRecord = (d: Decision): Recommendation =>
+    data.recommendations.find((r) => r.id === d.id) || {
+      id: d.id,
+      programme:
+        data.options.programmes.find((p) => p.id === d.id)?.name ||
+        (d.id.startsWith("target-")
+          ? "Saved outreach goal"
+          : "Saved programme"),
+      category: d.id.startsWith("target-") ? "Pilot" : "Review",
+      target: "Recorded planning objective",
+      evidence: "Staff-recorded decision",
+      figures:
+        "Saved plan; matching attendance may be outside the current reporting period.",
+      reason: "Review the saved plan with staff.",
+      action: d.plannedAction || "Review the saved decision.",
+      next: "Confirm an owner and review date.",
+      limitations:
+        "This is a saved staff decision, not a forecast of future attendance.",
+    };
+  const saved = data.decisions.filter((d) =>
+    [planningRecord(d).programme, d.assigned || "", d.plannedAction || ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   );
   const gaps = data.targets.filter((t) => t.gap > 0);
+  const goals = (
+    <Panel
+      title="Your outreach goals"
+      subtitle="Target progress uses each target’s own date range and programme scope, independently of dashboard filters."
+      action={
+        canEdit &&
+        (!simple || data.targets.length > 0) && (
+          <Button primary onClick={onTarget}>
+            <Plus size={17} />
+            Set target
+          </Button>
+        )
+      }
+    >
+      {data.targets.length ? (
+        <div className="target-grid">
+          {data.targets.map((t) => (
+            <div className="target-card" key={t.id}>
+              <div className="target-label">
+                <strong>
+                  {
+                    {
+                      unique: "Unique seniors",
+                      male: "Male seniors",
+                      minority: "Minority seniors",
+                      firstObserved: "First observed in dataset",
+                    }[t.metric]
+                  }
+                </strong>
+                {canEdit && (
+                  <button
+                    className="icon-button"
+                    aria-label="Remove target"
+                    onClick={async () => {
+                      await api("/api/targets/" + t.id, { method: "DELETE" });
+                      refresh("Target removed. Attendance is unchanged.");
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              <p>
+                {pretty(t.start)} – {pretty(t.end)}
+              </p>
+              {t.programme_id && (
+                <small>
+                  {
+                    data.options.programmes.find((p) => p.id === t.programme_id)
+                      ?.name
+                  }
+                </small>
+              )}
+              <div className="target-value">
+                <strong>{t.current}</strong>
+                <span>/ {t.value} target</span>
+                <b>{pct(t.progress)}</b>
+              </div>
+              <progress
+                value={Math.min(t.progress, 100)}
+                max="100"
+                aria-label="Target achievement"
+              />
+              <small>
+                {t.previousCurrent == null
+                  ? "No valid prior-period comparison"
+                  : `${t.previousCurrent} in the previous equivalent elapsed period`}
+              </small>
+              <p>
+                {t.gap} remaining · {t.daysRemaining} days left
+              </p>
+              <small>
+                {t.gap
+                  ? "Review suitable outreach approaches and participant interest."
+                  : "Target met within available records; review continuing engagement."}
+              </small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="target-empty">
+          <Target size={28} />
+          <div>
+            <h3>Give your planning a direction</h3>
+            <p>
+              Set your own outreach targets. No organisational targets have been
+              assumed.
+            </p>
+          </div>
+          {canEdit && (
+            <Button onClick={onTarget}>
+              {simple ? "Set target" : "Set your first target"}
+              <ArrowRight size={16} />
+            </Button>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
   return (
     <>
-      <Panel
-        title="Your outreach goals"
-        subtitle="Target progress uses each target’s own date range and programme scope, independently of dashboard filters."
-        action={
-          canEdit && (
-            <Button primary onClick={onTarget}>
-              <Plus size={17} />
-              Set target
-            </Button>
-          )
-        }
-      >
-        {data.targets.length ? (
-          <div className="target-grid">
-            {data.targets.map((t) => (
-              <div className="target-card" key={t.id}>
-                <div className="target-label">
-                  <strong>
-                    {
-                      {
-                        unique: "Unique seniors",
-                        male: "Male seniors",
-                        minority: "Minority seniors",
-                        firstObserved: "First observed in dataset",
-                      }[t.metric]
-                    }
-                  </strong>
-                  {canEdit && (
-                    <button
-                      className="icon-button"
-                      aria-label="Remove target"
-                      onClick={async () => {
-                        await api("/api/targets/" + t.id, { method: "DELETE" });
-                        refresh("Target removed. Attendance is unchanged.");
-                      }}
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-                <p>
-                  {pretty(t.start)} – {pretty(t.end)}
-                </p>
-                {t.programme_id && (
-                  <small>
-                    {
-                      data.options.programmes.find(
-                        (p) => p.id === t.programme_id,
-                      )?.name
-                    }
-                  </small>
-                )}
-                <div className="target-value">
-                  <strong>{t.current}</strong>
-                  <span>/ {t.value} target</span>
-                  <b>{pct(t.progress)}</b>
-                </div>
-                <progress
-                  value={Math.min(t.progress, 100)}
-                  max="100"
-                  aria-label="Target achievement"
-                />
-                <small>
-                  {t.previousCurrent == null
-                    ? "No valid prior-period comparison"
-                    : `${t.previousCurrent} in the previous equivalent elapsed period`}
-                </small>
-                <p>
-                  {t.gap} remaining · {t.daysRemaining} days left
-                </p>
-                <small>
-                  {t.gap
-                    ? "Review suitable outreach approaches and participant interest."
-                    : "Target met within available records; review continuing engagement."}
-                </small>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="target-empty">
-            <Target size={28} />
-            <div>
-              <h3>Give your planning a direction</h3>
-              <p>
-                Set your own outreach targets. No organisational targets have
-                been assumed.
-              </p>
-            </div>
-            {canEdit && (
-              <Button onClick={onTarget}>
-                Set your first target
-                <ArrowRight size={16} />
-              </Button>
-            )}
-          </div>
-        )}
-      </Panel>
+      {simple ? (
+        <details className="panel planning-goals">
+          <summary>Outreach targets (optional)</summary>
+          {goals}
+        </details>
+      ) : (
+        goals
+      )}
       <div className="planning-header">
         <div>
           <span className="eyebrow">EVIDENCE INTO ACTION</span>
-          <h2>A thoughtful plan for the next {horizon} months</h2>
+          <h2>
+            {simple
+              ? "Plan future programmes"
+              : `A thoughtful plan for the next ${horizon} months`}
+          </h2>
           <p className="muted">
             Staff decisions stay separate from observed attendance. No programme
             is automatically changed.
           </p>
         </div>
-        <div className="segmented">
-          {["3", "6"].map((v) => (
-            <button
-              key={v}
-              className={horizon === v ? "active" : ""}
-              onClick={() => setHorizon(v)}
-            >
-              {v} months
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="plan-timeline">
-        {Array.from({ length: Number(horizon) }, (_, i) => {
-          const now = sgToday(),
-            d = new Date(
-              Date.UTC(Number(now.slice(0, 4)), Number(now.slice(5, 7)) + i, 1),
-            );
-          return (
-            <div key={i}>
-              <span>MONTH {i + 1}</span>
-              <strong>
-                {new Intl.DateTimeFormat("en-SG", {
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(d)}
-              </strong>
-              <p>
-                {i === 0
-                  ? "Review evidence & resources"
-                  : i === 1
-                    ? "Confirm staff & participant interest"
-                    : i === 2
-                      ? "Pilot or deliver approved actions"
-                      : "Monitor participation & revisit plans"}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-      <Note>
-        Suggested planning sequence only. Approved actions and resource
-        assumptions can be recorded in planning notes; no attendance or reach is
-        projected.
-      </Note>
-      <div
-        className="category-tabs"
-        role="group"
-        aria-label="Recommendation category"
-      >
-        {["All", "Expand", "Maintain", "Improve", "Pilot", "Review"].map(
-          (c) => (
-            <button
-              key={c}
-              className={category === c ? "active" : ""}
-              onClick={() => setCategory(c)}
-            >
-              {c}
-              <span>
-                {c === "All"
-                  ? data.recommendations.length + gaps.length
-                  : c === "Pilot"
-                    ? gaps.length
-                    : data.recommendations.filter((r) => r.category === c)
-                        .length}
-              </span>
-            </button>
-          ),
+        {!simple && (
+          <div className="segmented">
+            {["3", "6"].map((v) => (
+              <button
+                key={v}
+                className={horizon === v ? "active" : ""}
+                onClick={() => setHorizon(v)}
+              >
+                {v} months
+              </button>
+            ))}
+          </div>
         )}
       </div>
+      {simple ? (
+        <div className="panel planning-toolbar">
+          <label className="field">
+            Find a programme or saved plan
+            <input
+              aria-label="Find a programme or saved plan"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setVisible(5);
+              }}
+              placeholder="Search programme names"
+            />
+          </label>
+          <Select
+            label="Show suggestions"
+            value={category}
+            onChange={(v) => {
+              setCategory(v);
+              setVisible(5);
+            }}
+          >
+            {["All", "Expand", "Maintain", "Improve", "Pilot", "Review"].map(
+              (c) => (
+                <option key={c}>{c}</option>
+              ),
+            )}
+          </Select>
+          <p className="muted">
+            Suggestions use recorded reach and the existing evidence rules.
+            Staff decide what to run again or change.
+          </p>
+        </div>
+      ) : (
+        <div
+          className="category-tabs"
+          role="group"
+          aria-label="Recommendation category"
+        >
+          {["All", "Expand", "Maintain", "Improve", "Pilot", "Review"].map(
+            (c) => (
+              <button
+                key={c}
+                className={category === c ? "active" : ""}
+                onClick={() => setCategory(c)}
+              >
+                {c}
+                <span>
+                  {c === "All"
+                    ? data.recommendations.length + gaps.length
+                    : c === "Pilot"
+                      ? gaps.length
+                      : data.recommendations.filter((r) => r.category === c)
+                          .length}
+                </span>
+              </button>
+            ),
+          )}
+        </div>
+      )}
+      {simple && (
+        <section className="panel">
+          <h2>Saved plans</h2>
+          <p className="muted">
+            Saved programme and outreach decisions remain visible across
+            reporting periods.
+          </p>
+          {saved.length ? (
+            <>
+              <div className="work-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Programme / goal</th>
+                      <th>Decision</th>
+                      <th>Owner</th>
+                      <th>Target date</th>
+                      <th>Next step</th>
+                      <th>Review</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {saved.slice(0, savedVisible).map((d) => (
+                      <tr key={d.id}>
+                        <th>{planningRecord(d).programme}</th>
+                        <td>{d.status}</td>
+                        <td>{d.assigned || "Not set"}</td>
+                        <td>{d.targetDate || "Not set"}</td>
+                        <td>{d.plannedAction || "Not recorded"}</td>
+                        <td>
+                          {canEdit ? (
+                            <button
+                              className="text-button"
+                              onClick={() => setEdit(planningRecord(d))}
+                            >
+                              Review saved plan
+                            </button>
+                          ) : (
+                            "Read only"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {saved.length > savedVisible && (
+                <Button onClick={() => setSavedVisible((n) => n + 10)}>
+                  Show more saved plans
+                </Button>
+              )}
+            </>
+          ) : (
+            <p>
+              No saved plans match this view. Choose a programme below and
+              record your next step.
+            </p>
+          )}
+        </section>
+      )}
+      {!simple && (
+        <>
+          <div className="plan-timeline">
+            {Array.from({ length: Number(horizon) }, (_, i) => {
+              const now = sgToday(),
+                d = new Date(
+                  Date.UTC(
+                    Number(now.slice(0, 4)),
+                    Number(now.slice(5, 7)) + i,
+                    1,
+                  ),
+                );
+              return (
+                <div key={i}>
+                  <span>MONTH {i + 1}</span>
+                  <strong>
+                    {new Intl.DateTimeFormat("en-SG", {
+                      month: "long",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    }).format(d)}
+                  </strong>
+                  <p>
+                    {i === 0
+                      ? "Review evidence & resources"
+                      : i === 1
+                        ? "Confirm staff & participant interest"
+                        : i === 2
+                          ? "Pilot or deliver approved actions"
+                          : "Monitor participation & revisit plans"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <Note>
+            Suggested planning sequence only. Approved actions and resource
+            assumptions can be recorded in planning notes; no attendance or
+            reach is projected.
+          </Note>
+        </>
+      )}
       <div className="recommendation-list">
-        {list.map((r) => {
+        {(simple ? list.slice(0, visible) : list).map((r) => {
           const decision = data.decisions.find((d) => d.id === r.id);
           return (
             <article className="recommendation" key={r.id}>
@@ -2298,17 +2463,28 @@ function Planning({
                   <strong>Action:</strong> {r.action} <strong>Target:</strong>{" "}
                   {r.target}.
                 </p>
-                <p>{r.reason}</p>
-                <p className="muted">
-                  <strong>Next step:</strong> {r.next}
-                </p>
+                {!simple && <p>{r.reason}</p>}
+                {!simple && (
+                  <p className="muted">
+                    <strong>Next step:</strong> {r.next}
+                  </p>
+                )}
                 <details>
-                  <summary>Evidence rules & limitations</summary>
+                  <summary>
+                    {simple
+                      ? "Why this suggestion?"
+                      : "Evidence rules & limitations"}
+                  </summary>
+                  {simple && (
+                    <p>
+                      {r.reason} {r.next}
+                    </p>
+                  )}
                   <p>
                     {r.limitations} Sufficient evidence requires at least{" "}
                     {data.settings.minSessions} sessions and{" "}
                     {data.settings.minParticipants} unique seniors. Expand flags
-                    reach of at least 25% of selected senior reach; Improve also
+                    reach of at least 25% of selected senior reach; Expand also
                     requires a documented confirmed-demand source and review
                     date. Improve flags a decline over 25% between two complete
                     observed months, each meeting the session threshold.
@@ -2320,7 +2496,7 @@ function Planning({
                   <p>
                     Assigned to {decision.assigned}
                     {decision.targetDate
-                      ? ` ? Target: ${decision.targetDate}`
+                      ? ` / Target: ${decision.targetDate}`
                       : ""}
                   </p>
                 )}
@@ -2337,7 +2513,7 @@ function Planning({
                 )}
                 {canEdit && (
                   <button className="text-button" onClick={() => setEdit(r)}>
-                    Update planning decision
+                    {simple ? "Record next step" : "Update planning decision"}
                     <ArrowRight size={16} />
                   </button>
                 )}
@@ -2345,8 +2521,13 @@ function Planning({
             </article>
           );
         })}
+        {simple && list.length > visible && (
+          <Button onClick={() => setVisible((n) => n + 5)}>
+            Show 5 more programmes
+          </Button>
+        )}
         {(category === "All" || category === "Pilot") &&
-          gaps.map((t) => (
+          (simple ? gaps.slice(0, 3) : gaps).map((t) => (
             <article className="recommendation" key={"target" + t.id}>
               <div className="recommendation-side">
                 <span className="badge category-pilot">Pilot</span>
@@ -2442,10 +2623,12 @@ function ProgrammeDialog({
   programme: p,
   data,
   onClose,
+  onPlan,
 }: {
   programme: Programme;
   data: Dashboard;
   onClose: () => void;
+  onPlan?: () => void;
 }) {
   const rec = data.recommendations.find((r) => r.id === p.id);
   return (
@@ -2466,10 +2649,6 @@ function ProgrammeDialog({
           ["Recorded sessions", p.sessions],
           ["Attendance · all ages", p.attendance],
           ["Average attendance / session", number(p.average)],
-          ["Repeat seniors · 2+ sessions", p.repeat],
-          ["First observed in period", p.firstObserved],
-          ["Recorded before period", p.returning],
-          ["Repeat participation rate", pct(p.repeatRate)],
         ].map(([k, v]) => (
           <div key={k}>
             <span>{k}</span>
@@ -2477,47 +2656,71 @@ function ProgrammeDialog({
           </div>
         ))}
       </div>
+      {onPlan && (
+        <Button primary onClick={onPlan}>
+          Plan next steps for this programme
+        </Button>
+      )}
+      <details>
+        <summary>Repeat participation and history</summary>
+        <div className="detail-stats">
+          {[
+            ["Repeat seniors · 2+ sessions", p.repeat],
+            ["First observed in period", p.firstObserved],
+            ["Recorded before period", p.returning],
+            ["Repeat participation rate", pct(p.repeatRate)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+      </details>
       <h3>Attendance trend · all ages</h3>
       <LineChart rows={p.trend} metric="attendance" />
-      <h3>Programme accessibility and feedback</h3>
-      <div className="work-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Staff-reviewed information</th>
-              <th>Recorded value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ["languages", "Languages"],
-              ["venueAccessibility", "Venue access"],
-              ["seatedOption", "Seated option"],
-              ["mobilityRequirements", "Mobility requirements"],
-            ].map(([key, label]) => (
-              <tr key={key}>
-                <th>{label}</th>
+      <details>
+        <summary>Programme notes and accessibility</summary>
+        <h3>Programme accessibility and feedback</h3>
+        <div className="work-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Staff-reviewed information</th>
+                <th>Recorded value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["languages", "Languages"],
+                ["venueAccessibility", "Venue access"],
+                ["seatedOption", "Seated option"],
+                ["mobilityRequirements", "Mobility requirements"],
+              ].map(([key, label]) => (
+                <tr key={key}>
+                  <th>{label}</th>
+                  <td>
+                    {String(
+                      (
+                        p.optional.accessibility as
+                          Record<string, string> | undefined
+                      )?.[key] || "Data required",
+                    )}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <th>Programme-specific feedback</th>
                 <td>
-                  {String(
-                    (
-                      p.optional.accessibility as
-                        Record<string, string> | undefined
-                    )?.[key] || "Data required",
-                  )}
+                  Data required: participant feedback is not automatically
+                  attributed to a programme.
                 </td>
               </tr>
-            ))}
-            <tr>
-              <th>Programme-specific feedback</th>
-              <td>
-                Data required: participant feedback is not automatically
-                attributed to a programme.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <h3>Recorded session timing</h3>
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <h3>Recorded session dates</h3>
       <div className="session-list">
         {p.sessionList.map((s) => (
           <div key={s.id}>
@@ -2633,24 +2836,27 @@ function DecisionDialog({
             onChange={(e) => setTargetDate(e.target.value)}
           />
         </label>
-        <label className="field">
-          Outcome after implementation
-          <textarea
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            maxLength={2000}
-          />
-        </label>
-        <label className="field">
-          <span>Planning notes & resource assumptions</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={5}
-            maxLength={4000}
-            placeholder="Record the next action, capacity assumptions, staff hours or questions to check. Avoid participant information."
-          />
-        </label>
+        <details>
+          <summary>Outcome and notes (optional)</summary>
+          <label className="field">
+            Outcome after implementation
+            <textarea
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value)}
+              maxLength={2000}
+            />
+          </label>
+          <label className="field">
+            <span>Planning notes & resource assumptions</span>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={5}
+              maxLength={4000}
+              placeholder="Record the next action, capacity assumptions, staff hours or questions to check. Avoid participant information."
+            />
+          </label>
+        </details>
         <Note>
           This saves a planning decision. It does not change programme sessions
           or attendance.

@@ -2,8 +2,62 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { tsImport } from "tsx/esm/api";
-import { createProxy } from "../api/index.js";
+import { createProxy, createHostedHandler } from "../api/index.js";
+import { createApp } from "../server/app.js";
+import { openDb } from "../server/db.js";
 const { api } = await tsImport("../src/api.ts", import.meta.url);
+test("hosted client summary exports use URL filters without platform routing metadata", async () => {
+  const db = openDb(":memory:");
+  const app = createApp(db, { authRequired: false });
+  const handler = createHostedHandler({
+    databaseUrl: "test",
+    loadApp: async () => app,
+  });
+  const server = createServer((req, res) => {
+    // Vercel provides its own query property, including rewrite route parameters.
+    req.query = {
+      ...Object.fromEntries(
+        new URL(req.url, "https://dashboard.invalid").searchParams,
+      ),
+      path: "clients/export/csv",
+    };
+    return handler(req, res);
+  });
+  server.listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  const base = "http://127.0.0.1:" + server.address().port;
+  try {
+    for (const format of ["csv", "report"]) {
+      const response = await fetch(
+        base +
+          `/api/clients/export/${format}?from=&to=2026-11-04&asOf=2026-11-04`,
+      );
+      assert.equal(response.status, 200);
+      assert.match(
+        response.headers.get("content-type"),
+        format === "csv" ? /text\/csv/ : /text\/html/,
+      );
+      assert.match(await response.text(), /2026-11-04/);
+    }
+    for (const query of [
+      "living=Alone",
+      "gender=MALE",
+      "path=clients/export/csv",
+    ]) {
+      assert.equal(
+        (await fetch(base + "/api/clients/export/csv?" + query)).status,
+        403,
+      );
+    }
+    assert.equal(
+      (await fetch(base + "/api/clients/export/csv?asOf=bad-date")).status,
+      400,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    db.close();
+  }
+});
 test("client gives actionable timeout errors for hosted JSON envelopes and plain gateway errors without leaking server details", async () => {
   for (const response of [
     Response.json(

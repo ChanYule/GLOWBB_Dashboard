@@ -1,6 +1,8 @@
+> **Simpler staff interface:** [Three main pages: Main Dashboard, Programme Analysis and Planning](docs/SIMPLE-STAFF-GUIDE.md). Occasional tools are under **Staff Tools**. Existing records and import safeguards are preserved. No additional SQL is required.
+
 > **Client registry integration:** [Linked client participation, safe registry imports, follow-up, source validation and staff guide](docs/CLIENT-REGISTRY-INTEGRATION.md). Client Engagement extends the existing three-level dashboard. No additional SQL is needed after migrations 001 through 004.
 
-> **Data management update:** Review imports, delete selected attendance or reset programme data, and recover from automatic backups. Secondary reports are under **More analysis tools**; mobile navigation opens through **Menu**. [Staff guide](docs/DATA-MANAGEMENT.md). No new SQL migration is required beyond 001 through 004.
+> **Data management update:** Review imports, delete selected attendance or reset programme data, and recover from automatic backups. Secondary reports are under **Staff Tools**; mobile navigation opens through **Menu**. [Staff guide](docs/DATA-MANAGEMENT.md). No new SQL migration is required beyond 001 through 004.
 
 > **Latest 13-column needs-based upgrade:** [Features, actual workbook reconciliation, migration 004 and staff workflows](docs/NEEDS-BASED-UPGRADE.md). The three analysis levels, profile/feedback collection, registry attestations and action tracking extend the existing dashboard.
 
@@ -99,3 +101,5 @@ See [delivery and QA notes](docs/DELIVERY.md) for actual results and limits. Mai
 See [the 4 November redesign report and staff guide](docs/REDESIGN-REPORT.md) for the five main workspaces, Presentation View, performance evidence, registry header compatibility and production access configuration.
 
 See [performance hardening and verification](docs/PERFORMANCE-HARDENING.md) for faster database reads, bulk merges, deletion/recovery and debounced filtering/search.
+
+See [Main Dashboard and Client Engagement](docs/MAIN-DASHBOARD.md) for the daily/monthly summary, client IB/OB definitions and the all-history two-programme inactive measure.

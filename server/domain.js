@@ -543,6 +543,7 @@ export function analytics(
         (filters.target === "male" && isSenior(a.p) && a.p.gender === "MALE") ||
         (filters.target === "minority" && isSenior(a.p) && isMinority(a.p))),
   );
+  if (selectionOnly === "rows") return base;
   if (selectionOnly) return new Set(base.map((a) => a.p.id));
   function stats(rows, scopeFrom = filters.from, scopeTo = filters.to) {
     const seniors = rows.filter((a) => isSenior(a.p)),

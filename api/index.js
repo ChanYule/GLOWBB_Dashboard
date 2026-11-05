@@ -93,9 +93,10 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
         signal: AbortSignal.timeout(55000),
       });
       const type = upstream.headers.get("content-type") || "";
-      const report = /^\/api\/(?:export|needs\/export|clients\/export)\/report$/.test(
-        incoming.pathname,
-      );
+      const report =
+        /^\/api\/(?:export|needs\/export|clients\/export)\/report$/.test(
+          incoming.pathname,
+        );
       const csv =
         /^\/api\/(?:export\/csv|needs\/export\/csv|clients\/export\/csv|analysis\/export|analysis\/view\/[^/]+\/export)$/.test(
           incoming.pathname,
@@ -170,6 +171,9 @@ export function createHostedHandler({ databaseUrl, backendUrl, loadApp } = {}) {
             return createApp(openPostgres(databaseUrl), { production: true });
           })();
       const app = await application;
+      // Vercel supplies an own query property with rewrite metadata. Express 5
+      // must parse the original URL itself so routing keys are not user filters.
+      if (Object.hasOwn(req, "query")) delete req.query;
       return app(req, res);
     } catch {
       application = undefined;

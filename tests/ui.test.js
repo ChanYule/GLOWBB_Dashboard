@@ -1,4 +1,5 @@
-﻿import test from "node:test";
+import { participationReport } from "../server/participation.js";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { JSDOM } from "jsdom";
@@ -72,7 +73,7 @@ const { PresentationView } = await tsImport(
   import.meta.url,
 );
 
-test("management overview has six cards and presentation preserves the same figures without private records", async () => {
+test("management overview has four headline cards and presentation preserves the same figures without private records", async () => {
   const original = globalThis.fetch;
   const brief = {
     clients: {
@@ -90,7 +91,11 @@ test("management overview has six cards and presentation preserves the same figu
     actions: { total: 0, stages: {} },
   };
   let briefingCalls = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    if (String(url).startsWith("/api/reporting/participation"))
+      return Response.json(
+        participationReport(readData(db), defaults, filters),
+      );
     briefingCalls++;
     return Response.json(brief);
   };
@@ -123,12 +128,39 @@ test("management overview has six cards and presentation preserves the same figu
         "true",
       ),
     );
-    assert.equal(document.querySelectorAll(".management-kpi").length, 6);
-    assert.equal(
-      document.querySelectorAll(".management-findings article").length,
-      3,
+    assert.equal(document.querySelectorAll(".management-kpi").length, 4);
+    assert.equal(screen.queryByText("Registered clients"), null);
+    assert.equal(screen.queryByText("No recorded attendance"), null);
+    await waitFor(() =>
+      assert.ok(screen.getByRole("columnheader", { name: "IB (%)" })),
     );
-    assert.ok(screen.getByRole("button", { name: "Presentation View" }));
+    assert.equal(
+      screen.getByText("Review target-group outreach").closest("details").open,
+      false,
+    );
+    assert.ok(screen.getByRole("button", { name: "Print summary" }));
+    assert.equal(
+      screen.getAllByRole("combobox", { name: "Chart focus" }).length,
+      1,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Chart focus" }), {
+      target: { value: "male" },
+    });
+    assert.ok(
+      screen.getByRole("img", { name: /male participation over time/ }),
+    );
+    assert.deepEqual(
+      [...document.querySelectorAll(".management-chart-grid .report-bar")].map(
+        (row) => [
+          row.querySelector("span").textContent,
+          Number(row.querySelector("strong").textContent),
+        ],
+      ),
+      [...dashboard().programmes]
+        .sort((a, b) => b.male - a.male)
+        .slice(0, 5)
+        .map((p) => [p.name, p.male]),
+    );
     cleanup();
     let closed = false;
     const privateData = {
@@ -156,7 +188,7 @@ test("management overview has six cards and presentation preserves the same figu
     );
     assert.equal(document.querySelectorAll(".report-slide").length, 6);
     assert.equal(briefingCalls, 1);
-    assert.ok(screen.getByText("100"));
+    assert.equal(screen.queryByText("Registered clients"), null);
     assert.ok(screen.getAllByText("70").length);
     assert.equal(
       document
@@ -342,6 +374,86 @@ test("planning uses role-specific actions and 3/6-month planning horizon", () =>
   fireEvent.click(screen.getByRole("button", { name: /Pilot/ }));
   assert.ok(screen.getByText(/No pilot recommendations/));
 });
+test("simple planning limits suggestions, supports search and preserves saved plans outside the attendance period", async () => {
+  const original = globalThis.fetch;
+  let savedRequest;
+  globalThis.fetch = async (url, options) => {
+    savedRequest = { url, body: JSON.parse(options.body) };
+    return Response.json({ ok: true });
+  };
+  const data = dashboard();
+  const example = data.recommendations[0];
+  data.recommendations = Array.from({ length: 8 }, (_, i) => ({
+    ...example,
+    id: "suggestion-" + i,
+    programme: "Programme " + i,
+  }));
+  const saved = {
+    id: data.options.programmes[0].id,
+    status: "In progress",
+    assigned: "Staff owner",
+    targetDate: "2026-12-01",
+    plannedAction: "Contact facilitator",
+    outcome: "Existing outcome",
+    notes: "Existing resource assumptions",
+  };
+  data.decisions = [saved];
+  let refreshed = false;
+  try {
+    render(
+      React.createElement(Planning, {
+        data,
+        simple: true,
+        user: { role: "admin" },
+        refresh: () => {
+          refreshed = true;
+        },
+        onTarget: () => {},
+      }),
+    );
+    assert.equal(
+      document.querySelectorAll(".recommendation-list article").length,
+      5,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show 5 more programmes" }),
+    );
+    assert.equal(
+      document.querySelectorAll(".recommendation-list article").length,
+      8,
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Find a programme or saved plan" }),
+      { target: { value: "Programme 7" } },
+    );
+    assert.equal(
+      document.querySelectorAll(".recommendation-list article").length,
+      1,
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Find a programme or saved plan" }),
+      { target: { value: "Staff owner" } },
+    );
+    assert.ok(screen.getByText("Contact facilitator"));
+    fireEvent.click(screen.getByRole("button", { name: "Review saved plan" }));
+    assert.equal(
+      screen.getByLabelText("Assigned staff member").value,
+      saved.assigned,
+    );
+    assert.equal(screen.getByLabelText("Target date").value, saved.targetDate);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save planning decision" }),
+    );
+    await waitFor(() => assert.equal(refreshed, true));
+    assert.equal(savedRequest.url, "/api/decisions/" + saved.id);
+    const expected = { ...saved };
+    delete expected.id;
+    assert.deepEqual(savedRequest.body, expected);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test("global filters expand, submit exact filter changes and reset", () => {
   let next;
   render(
@@ -353,6 +465,13 @@ test("global filters expand, submit exact filter changes and reset", () => {
       },
     }),
   );
+  assert.equal(screen.queryByLabelText("From"), null);
+  fireEvent.change(screen.getByLabelText("Reporting period"), {
+    target: { value: "Custom range" },
+  });
+  assert.equal(screen.getByLabelText("Reporting period").value, "Custom range");
+  assert.ok(screen.getByLabelText("From"));
+  assert.ok(screen.getByLabelText("To"));
   fireEvent.click(screen.getByRole("button", { name: "More filters" }));
   assert.equal(
     screen
@@ -389,16 +508,29 @@ test("authenticated administrator sees imports, settings, planning and sign out"
       assert.ok(screen.getByText("Make every connection count.")),
     );
     assert.ok(screen.getByRole("button", { name: "Import attendance" }));
+    const nav = document.querySelector("nav");
+    assert.deepEqual(
+      [...nav.querySelectorAll(":scope > button")].map((b) =>
+        b.textContent.trim(),
+      ),
+      ["Main Dashboard", "Programme Analysis", "Planning"],
+    );
+    fireEvent.click(screen.getByText("Staff Tools"));
     assert.ok(screen.getByRole("button", { name: "Data management" }));
+    assert.equal(
+      screen.getByText("Custom Analysis").closest("details").open,
+      false,
+    );
     assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
     assert.ok(screen.getByRole("button", { name: "Sign out" }));
-    fireEvent.click(screen.getByText("More Tools"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Planning & Recommendations" }),
+      screen.getByRole("button", { name: "Planning", exact: true }),
     );
     await waitFor(() =>
-      assert.ok(screen.getByRole("button", { name: "Set target" })),
+      assert.ok(screen.getByText("Outreach targets (optional)")),
     );
+    fireEvent.click(screen.getByText("Outreach targets (optional)"));
+    assert.ok(screen.getByRole("button", { name: "Set target" }));
     fireEvent.click(screen.getByRole("button", { name: "Set target" }));
     assert.ok(screen.getByRole("dialog", { name: "Set an outreach target" }));
   } finally {
@@ -671,7 +803,8 @@ test("the integrated operations tab remains reachable when attendance is empty",
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    fireEvent.click(screen.getByText("More Tools"));
+    fireEvent.click(screen.getByText("Staff Tools"));
+    fireEvent.click(screen.getByText("Advanced analysis"));
     fireEvent.click(
       screen.getByRole("button", { name: "Operations & Screening" }),
     );
@@ -880,11 +1013,12 @@ test("the needs dashboard restricts viewer access and makes the three analysis l
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    fireEvent.click(screen.getByText("More Tools"));
+    fireEvent.click(screen.getByText("Staff Tools"));
+    fireEvent.click(screen.getByText("Advanced analysis"));
     for (const label of [
       "Who Are We Serving?",
       "Gaps and Participation Barriers",
-      "Planning & Actions",
+      "Detailed action tracker",
       "Programme Alignment",
       "Data Quality and Administration",
     ])
@@ -1126,7 +1260,12 @@ test("data management requires a preview and typed confirmation, supports cancel
       screen.getByRole("button", { name: "Restore data" }).disabled,
       true,
     );
-    assert.equal(calls.at(-1).body.backupId, "saved-recovery");
+    assert.equal(
+      calls.findLast(
+        (c) => c.path.endsWith("/preview") && c.body?.operation === "restore",
+      ).body.backupId,
+      "saved-recovery",
+    );
   } finally {
     cleanup();
     globalThis.fetch = original;
