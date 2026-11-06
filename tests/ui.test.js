@@ -80,7 +80,7 @@ const { LocationAdmin } = await tsImport(
   "../src/location-admin.tsx",
   import.meta.url,
 );
-const {EventTypeInsights}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
+const {EventTypeInsights, EventTypePresentation}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
 test('legacy Overall Programme Planning preferences normalize and display age attendance for the exact reported dates',async()=>{
  const original=globalThis.fetch,state=locationFixture(),requests=[];globalThis.fetch=async(input)=>{const url=String(input);if(url==='/api/preferences')return Response.json({patterns:{preset:'overall',scope:'overall',dimension:'age',metric:'rate',from:'2026-05-04',to:'2026-11-05',path:['api','participation-patterns']}});const q=Object.fromEntries(new URL(url,'http://local').searchParams);requests.push(q);return Response.json(participationPatterns(state,q,'2026-11-05'));};
  try{render(React.createElement(ParticipationPatterns,{user:{username:'Planner',role:'planner'},revision:0}));await waitFor(()=>assert.equal(document.querySelector('.patterns-page')?.getAttribute('aria-busy'),'false'));assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.equal(screen.getByLabelText('Analyse by').value,'age');assert.equal(requests[0].from,'2026-05-04');assert.equal(requests[0].to,'2026-11-05');assert.equal(Object.hasOwn(requests[0],'metric'),false);assert.equal(Object.hasOwn(requests[0],'path'),false);assert.equal(screen.queryByRole('alert')===null,true);assert.ok(screen.getByText(/saved view was updated/));fireEvent.click(screen.getByRole('button',{name:'More filters'}));assert.equal(screen.getByLabelText('Patterns from').value,'2026-05-04');fireEvent.change(screen.getByLabelText('Patterns to'),{target:{value:'2026-11-04'}});assert.equal(screen.getByLabelText('Analyse by').value,'age');}finally{cleanup();globalThis.fetch=original;}
@@ -2074,4 +2074,33 @@ test("outreach action forms keep missing stage counts blank and save staff-revie
     cleanup();
     globalThis.fetch = original;
   }
+});
+
+
+test("programme classification table keeps secondary labels on one metric row and paginates without losing programmes", async () => {
+  const {ProgrammeClassificationTable} = await tsImport('../src/programme-classification-table.tsx', import.meta.url);
+  const rows = Array.from({length:25}, (_, i) => ({id:String(i),name:`Programme ${String(i).padStart(2,'0')}`,primaryDomain:'Physical',subDomains:['Learning','Social & Cognitive'],sessions:2,unique:10,repeat:10,averageSessions:2}));
+  try {
+    render(React.createElement(ProgrammeClassificationTable,{rows}));
+    const table = screen.getByRole('table',{name:'Programme domains and sub-domains'});
+    assert.ok(within(table).getByRole('columnheader',{name:'Primary Domain'}));
+    assert.ok(within(table).getByRole('columnheader',{name:'Sub-domain / Event Type'}));
+    assert.equal(within(table).getAllByRole('row').length,21);
+    const first = within(table).getByRole('rowheader',{name:'Programme 00'}).closest('tr');
+    assert.ok(within(first).getByText('Learning'));
+    assert.ok(within(first).getByText('Social & Cognitive'));
+    assert.equal(within(first).getAllByRole('cell').length,6);
+    fireEvent.click(screen.getByRole('button',{name:'Next classifications'}));
+    assert.equal(within(table).getAllByRole('row').length,6);
+    assert.ok(screen.getByText('Programme 24'));
+    fireEvent.change(screen.getByRole('searchbox'),{target:{value:'Programme 03'}});
+    assert.equal(within(table).getAllByRole('row').length,2);
+    assert.ok(screen.getByText('Programme 03'));
+    cleanup();
+    render(React.createElement(EventTypePresentation,{report:{period:{from:'2026-10-01',to:'2026-10-31'},target:'seniors',programmeClassifications:rows,findings:[],alignment:'Feedback needed',limitations:[]}}));
+    assert.equal(screen.getAllByRole('table').length,4);
+    assert.equal(screen.getAllByRole('rowheader').length,25);
+    assert.equal(screen.queryByRole('searchbox'),null);
+    assert.ok(screen.getByText('Programme 24'));
+  } finally {cleanup();}
 });

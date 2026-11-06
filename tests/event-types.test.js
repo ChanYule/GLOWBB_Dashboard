@@ -14,6 +14,7 @@ import {
   EVENT_TYPE_HEADER,
 } from "../server/event-types.js";
 import { eventTypeReport } from "../server/event-report.js";
+import { needsAnalysis } from "../server/needs-domain.js";
 import { openDb, readData, saveImport } from "../server/db.js";
 import { createApp } from "../server/app.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -172,6 +173,29 @@ test("overlapping mix and matrix use distinct sessions, programmes and participa
     assert.equal(once.total.opportunity, 0);
     assert.equal(once.total.repeatRate, null);
     assert.equal(r.rankings.rows.length, 2);
+    assert.equal(r.programmeClassifications.length, 2);
+    const programme = r.programmeClassifications.find(p => p.name === "Programme A");
+    assert.equal(programme.primaryDomain, "Physical");
+    assert.deepEqual(programme.subDomains, ["Learning", "Social & Cognitive"]);
+    assert.equal(programme.sessions, 2);
+    assert.equal(programme.unique, 10);
+    assert.equal(programme.repeat, 10);
+    assert.equal(programme.opportunity, 10);
+    assert.equal(programme.repeatRate, 100);
+    assert.equal(programme.averageSessions, 2);
+    const needs = needsAnalysis(f.state().data, [], [], [], {staffAnalysisFull:true,privacyMinimum:0}, {}, "2026-11-03");
+    const sameProgramme = needs.programmeClassifications.find(p => p.id === programme.id);
+    assert.deepEqual(sameProgramme.subDomains, programme.subDomains);
+    assert.equal(sameProgramme.primaryDomain, programme.primaryDomain);
+    assert.equal(sameProgramme.sessions, programme.sessions);
+    assert.equal(sameProgramme.unique, programme.unique);
+    assert.equal(sameProgramme.repeat, programme.repeat);
+    assert.equal(once.programmeClassifications.length, 1);
+    assert.equal(once.programmeClassifications[0].opportunity, 0);
+    const day = eventTypeReport(f.state(), {from:"2026-10-01",to:"2026-10-01"});
+    assert.equal(day.programmeClassifications.length, 1);
+    assert.equal(day.programmeClassifications[0].sessions, 1);
+    assert.equal(day.programmeClassifications[0].repeat, 0);
     assert.equal(r.findings.length <= 5, true);
   } finally {
     f.db.close();

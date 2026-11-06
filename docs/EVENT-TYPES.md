@@ -52,7 +52,7 @@ Administrators and planners can use protected analysis. Only administrators chan
 
 Management Overview adds a concise top-three secondary-classification summary when records support it, using the existing briefing request and planning snapshot. It does not fetch the detailed Event Type endpoint. The existing management presentation includes primary domain distribution and selected secondary patterns.
 
-The section's **Presentation / PDF** provides a concise three-section report: primary domains, selected secondary classifications with reach/repeat figures, and planning findings/limitations. Sensitive filtered sharing is rejected server-side. Classification does not prove health, learning or social outcomes.
+The section's **Presentation / PDF** lists every qualifying programme in a table with separate **Primary Domain** and **Sub-domain / Event Type** columns, followed by planning findings/limitations. Table pages continue in groups of eight programmes; exports do not stop at the on-screen page. Sensitive filtered sharing is rejected server-side. Classification does not prove health, learning or social outcomes.
 
 ## Data model and performance
 
@@ -73,3 +73,12 @@ The supplied workbook reconciled to **3,429 raw rows, 3,428 deduplicated attenda
 The final full suite passed **178 tests**, with zero failures or skipped tests. Lint, strict type checking and the production build passed. Tests cover backward compatibility, parsing, combined labels, raw preservation, metadata-only merges, source conflicts, history, overlapping/matrix counts, repeat opportunity, client denominators, administrator review, exports, preferences and workbook reconciliation. PostgreSQL-compatible integration tests exercise bulk persistence. Browser QA passed **131 checks** across five desktop/tablet/mobile viewport sizes without horizontal page overflow, visible errors or runtime exceptions. The Event Type report generated **three PDF pages**. Both supplied workbooks were loaded into an isolated in-memory application for QA.
 
 Source workbooks and saved workspace records are not modified or populated by validation. Hosted deployment, production database performance and physical devices remain unverified. There is no cost/capacity model, causal effectiveness estimate, automatic preference-to-Event-Type inference or proof of accessibility from labels.
+
+
+## Reading programme classifications together
+
+**Are We Offering the Right Mix of Programmes?** and **Programme alignment and diversity** now show one row per programme. **Primary Domain** is the programme's recorded AAP Domain. **Sub-domain / Event Type** lists all mapped Event Types on its qualifying sessions in the selected reporting period; combined labels such as `Social & Cognitive` remain intact. An absent classification is shown as `Unclassified / unknown`.
+
+Sessions, unique reach and same-programme repeat are calculated for that same programme, regardless of how many secondary labels it carries. A participant attending two sessions of one programme is one unique person and one repeat participant. They can also appear in another programme's reach, so unique reach must not be added across rows. Search by programme or either classification; use the page controls to view more than twenty programmes. Primary Domain and Sub-domain are also separate columns in Top Programmes.
+
+The combined table replaces the separate domain reach chart in Programme alignment and diversity. Existing detailed classification summaries remain under secondary analysis. No source classification, attendance record or saved mapping is changed by this presentation update. Existing reporting filters, staff permissions and unavailable-value rules continue to apply.

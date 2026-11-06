@@ -207,6 +207,18 @@ test("programme domain grouping deduplicates reach and keeps programmes, session
     assert.equal(r.alignment[0].sessions, 3);
     assert.equal(r.alignment[0].programmes, 2);
     assert.equal(r.alignment[0].sessionShare, 100);
+    assert.equal(r.programmeClassifications.length, 2);
+    const dining = r.programmeClassifications.find(p => p.name === "Dining");
+    assert.equal(dining.primaryDomain, "Social \u2013 Communal Dining");
+    assert.deepEqual(dining.subDomains, ["Unclassified / unknown"]);
+    assert.equal(dining.sessions, 1);
+    assert.equal(dining.unique, null); // Existing small-group protection also protects the complement.
+    const staff = needsAnalysis(data, [], [], [], {staffAnalysisFull:true,privacyMinimum:0}, {}, "2026-11-03");
+    const games = staff.programmeClassifications.find(p => p.name === "Social Games");
+    assert.equal(games.sessions, 2);
+    assert.equal(games.unique, 10);
+    assert.equal(games.repeat, 10);
+    assert.equal(games.averageSessions, 2);
     assert.ok(
       data.programmes.some((p) => p.domain === "Social – Communal Dining"),
     );

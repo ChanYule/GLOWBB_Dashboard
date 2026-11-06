@@ -514,6 +514,11 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     domains,
     types,
     matrix: cells,
+    programmeClassifications: rankRows.map(r => ({
+      id: r.id, name: r.label, primaryDomain: r.domain, subDomains: r.eventTypes,
+      sessions: r.sessions, unique: r.unique, repeat: r.repeat, averageSessions: r.averageSessions,
+      opportunity: r.opportunity, repeatRate: r.repeatRate, rate: r.rate,
+    })),
     rankings: {
       rows: rankRows.slice(page * limit, page * limit + limit),
       total: rankRows.length,

@@ -2,6 +2,7 @@ import { useEffect, useState, lazy, Suspense } from "react";
 import { api } from "./api";
 import { ReportBars } from "./management";
 import type { User } from "./types";
+import { ProgrammeClassificationTable, type ProgrammeClassificationRow } from "./programme-classification-table";
 import "./patterns.css";
 import {populations} from '../shared/participation-compat.js';
 const PresentationFrame = lazy(() =>
@@ -36,6 +37,7 @@ export type EventReport = {
   domains: Row[];
   types: Row[];
   matrix: (Row & { domain: string })[];
+  programmeClassifications: ProgrammeClassificationRow[];
   rankings: {
     rows: (Row & { id: string; domain: string; eventTypes: string[] })[];
     total: number;
@@ -426,7 +428,8 @@ export function EventTypeInsights({
                 <thead>
                   <tr>
                     <th>Programme</th>
-                    <th>AAP Domain / Event Types</th>
+                    <th>Primary Domain</th>
+                    <th>Sub-domain / Event Type</th>
                     <th>Sessions</th>
                     <th>Unique</th>
                     <th>Attendance</th>
@@ -449,11 +452,8 @@ export function EventTypeInsights({
                           p.label
                         )}
                       </th>
-                      <td>
-                        {p.domain}
-                        <br />
-                        {p.eventTypes.join(", ")}
-                      </td>
+                      <td>{p.domain}</td>
+                      <td>{p.eventTypes.join(", ")}</td>
                       <td>{p.sessions}</td>
                       <td>{fmt(p.unique)}</td>
                       <td>{fmt(p.attendance)}</td>
@@ -513,49 +513,7 @@ export function EventTypeInsights({
           </section>
           <section className="panel">
             <h2>Are We Offering the Right Mix of Programmes?</h2>
-            <div className="work-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Event Type</th>
-                    <th>Sessions offered</th>
-                    <th>Unique reached</th>
-                    <th>Same-programme repeat / opportunity</th>
-                    <th>Repeat rate</th>
-                    <th>Average sessions / person</th>
-                    <th>Different programmes with this type</th>
-                    <th>Multiple AAP Domains</th>
-                    <th>Client coverage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.types.map((t) => (
-                    <tr key={t.label}>
-                      <th>{t.label}</th>
-                      <td>{t.sessions}</td>
-                      <td>{fmt(t.unique)}</td>
-                      <td>
-                        {fmt(t.repeat)} / {fmt(t.opportunity)}
-                      </td>
-                      <td>
-                        {t.repeatRate == null
-                          ? "Unavailable"
-                          : `${t.repeatRate}%`}
-                      </td>
-                      <td>{fmt(t.averageSessions)}</td>
-                      <td>{fmt(t.multiProgramme)}</td>
-                      <td>{fmt(t.multiDomain)}</td>
-                      <td>{t.rate == null ? "Unavailable" : `${t.rate}%`}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="note">
-              One-off programmes have no same-programme repeat opportunity.
-              Trying different programmes with a shared label and crossing AAP
-              Domains are separate measures.
-            </p>
+            <ProgrammeClassificationTable rows={report.programmeClassifications || []} reachLabel={report.target === "all" ? "Unique participants" : "Unique seniors"} onProgramme={onProgramme} />
             <p>{report.alignment}</p>
             {!!report.alignmentRows?.length && (
               <div className="work-table">
@@ -699,40 +657,15 @@ export function EventTypeInsights({
   );
 }
 export function EventTypePresentation({ report }: { report: EventReport }) {
+  const rows = [...(report.programmeClassifications || [])].sort((a, b) => a.primaryDomain.localeCompare(b.primaryDomain) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const pages = Array.from({ length: Math.max(1, Math.ceil(rows.length / 8)) }, (_, index) => rows.slice(index * 8, (index + 1) * 8));
   return (
     <>
-      <section className="report-slide">
+      {pages.map((page, index) => <section className="report-slide programme-classification-slide" key={index}>
         <h1>Programme Mix and Engagement Types</h1>
-        <p>
-          {report.period.from} to {report.period.to} ·{" "}
-          {report.target === "all" ? "All recorded ages" : "Senior reach"}
-        </p>
-        <h2>Primary AAP Domain distribution</h2>
-        <ReportBars
-          rows={report.domains.slice(0, 7).map((r) => ({
-            label: r.label,
-            value: r.sessions,
-            detail: "delivered sessions",
-          }))}
-        />
-      </section>
-      <section className="report-slide">
-        <h1>Secondary engagement types</h1>
-        <ReportBars
-          rows={[...report.types]
-            .sort((a, b) => b.sessions - a.sessions)
-            .slice(0, 5)
-            .map((r) => ({
-              label: r.label,
-              value: r.sessions,
-              detail: `${fmt(r.unique)} unique · ${fmt(r.repeat)} same-programme repeat`,
-            }))}
-        />
-        <p>
-          Overlapping categories must not be added. Classifications are not
-          proof of outcomes.
-        </p>
-      </section>
+        <p>{report.period.from} to {report.period.to} | {report.target === "all" ? "All recorded ages" : "Senior reach"} | Programme table {index + 1} of {pages.length}</p>
+        <ProgrammeClassificationTable rows={page} reachLabel={report.target === "all" ? "Unique participants" : "Unique seniors"} print />
+      </section>)}
       <section className="report-slide">
         <h1>Programme planning considerations</h1>
         {report.findings.slice(0, 3).map((f, i) => (

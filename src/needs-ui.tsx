@@ -5,6 +5,7 @@ import { ClientRegistryImport } from "./client-import";
 import type { Dashboard, Filters, User } from "./types";
 import { AnalysisGraphic, PersonalWorkspace } from "./workspace";
 import "./needs.css";
+import { ProgrammeClassificationTable, type ProgrammeClassificationRow } from "./programme-classification-table";
 type Cell = {
   label: string;
   unique: number;
@@ -86,6 +87,7 @@ export type NeedsReport = {
     hypotheses: ProtectedSeries;
     preferences: Record<string, ProtectedSeries>;
   };
+  programmeClassifications: ProgrammeClassificationRow[];
   alignment: {
     label: string;
     rawDomains: string[];
@@ -1051,71 +1053,9 @@ function DataQuality({ report }: { report: NeedsReport }) {
 function Alignment({ report }: { report: NeedsReport }) {
   return (
     <Panel title="Programme alignment and diversity">
-      <p>
-        Supply and reach are separate measures. Original AAP domains are
-        retained; administrator reporting groups are labelled. Attendance share
-        alone does not establish overprovision or underprovision.
-      </p>
-      <div className="needs-two">
-        <div>
-          <h3>Delivered sessions by AAP domain</h3>
-          <AnalysisGraphic
-            rows={report.alignment.map((a) => ({
-              label: a.label,
-              value: a.sessions,
-            }))}
-            title="Programme mix by delivered sessions"
-            type="bar"
-          />
-        </div>
-        <div>
-          <h3>Unique seniors reached by domain</h3>
-          <AnalysisGraphic
-            rows={report.alignment.map((a) => ({
-              label: a.label,
-              value: a.unique,
-            }))}
-            title="Programme reach by AAP domain"
-            type="bar"
-          />
-        </div>
-      </div>
-      <div className="work-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Domain / reporting group</th>
-              <th>Programmes</th>
-              <th>Delivered sessions</th>
-              <th>Session share</th>
-              <th>Unique seniors</th>
-              <th>Avg attendance / session</th>
-              <th>Repeat seniors</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.alignment.map((a) => (
-              <tr key={a.label}>
-                <th>
-                  {a.label}
-                  <small>{a.rawDomains.join(", ")}</small>
-                </th>
-                <td>{a.programmes}</td>
-                <td>{a.sessions}</td>
-                <td>{fmt(a.sessionShare)}%</td>
-                <td>{a.unique}</td>
-                <td>{fmt(a.average)}</td>
-                <td>{a.repeat}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted">
-        Delivered means a distinct recorded programme/date/time session with
-        attendance. People overlap across domains; do not add unique reach.
-        Recorded attendance is not a verified future schedule.
-      </p>
+      <p>Review each programme's primary domain and recorded sub-domains together, with one set of reach and engagement figures for the same programme.</p>
+      <ProgrammeClassificationTable rows={report.programmeClassifications || []} />
+      <p className="muted">Delivered sessions have recorded attendance. Recorded attendance is not a verified future schedule; participant feedback is still needed to assess programme alignment.</p>
     </Panel>
   );
 }

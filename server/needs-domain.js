@@ -914,6 +914,18 @@ export function needsAnalysis(
       preferences: preferenceSummary,
     },
     alignment,
+    programmeClassifications: (() => {
+      const small = count => count > 0 && count < minimum;
+      const protectedRows = !settings.staffAnalysisFull && (sensitive || report.programmes.some(p => small(p.unique) || small(report.summary.unique - p.unique)));
+      return report.programmes.map(p => ({
+        id: p.id, name: p.name, primaryDomain: p.domain,
+        subDomains: [...new Set(p.sessionList.flatMap(session => session.eventTypes?.length ? session.eventTypes : ["Unclassified / unknown"]))].sort(),
+        sessions: p.sessions,
+        unique: protectedRows ? null : p.unique,
+        repeat: protectedRows || small(p.repeat) || small(p.unique - p.repeat) ? null : p.repeat,
+        averageSessions: protectedRows ? null : p.frequency,
+      }));
+    })(),
     coverage,
     findings,
     limitations: [

@@ -330,3 +330,29 @@
     font-size: 20px;
   }
 }
+
+.programme-classifications .classification-search {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+  margin: 12px 0;
+}
+.programme-classifications th,
+.programme-classifications td { vertical-align: top; }
+.programme-classification-slide .work-table { overflow: visible; }
+.programme-classification-slide table { table-layout: fixed; font-size: 12px; }
+.programme-classification-slide th,
+.programme-classification-slide td { padding: 8px 5px; overflow-wrap: anywhere; }
+.programme-classification-slide th:first-child { width: 18%; }
+.programme-classification-slide .muted { font-size: 12px; }
+@media print {
+  .programme-classification-slide tr { break-inside: avoid; }
+  .programme-classification-slide thead { display: table-header-group; }
+}
+
+.programme-classifications .work-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
