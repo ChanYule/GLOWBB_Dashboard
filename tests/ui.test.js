@@ -2090,13 +2090,12 @@ test("programme classification table keeps secondary labels on one metric row an
   try {
     render(React.createElement(ProgrammeClassificationTable,{rows}));
     const table = screen.getByRole('table',{name:'Programme domains and sub-domains'});
-    assert.ok(within(table).getByRole('columnheader',{name:'Primary Domain'}));
-    assert.ok(within(table).getByRole('columnheader',{name:'Sub-domain / Event Type'}));
+    assert.ok(within(table).getByRole('columnheader',{name:'Domains'}));
+    assert.equal(within(table).queryByRole('columnheader',{name:'Primary Domain'}),null);
     assert.equal(within(table).getAllByRole('row').length,21);
     const first = within(table).getByRole('rowheader',{name:'Programme 00'}).closest('tr');
-    assert.ok(within(first).getByText('Learning'));
-    assert.ok(within(first).getByText('Social & Cognitive'));
-    assert.equal(within(first).getAllByRole('cell').length,6);
+    assert.ok(within(first).getByText('Physical, Learning, Social, Cognitive'));
+    assert.equal(within(first).getAllByRole('cell').length,5);
     fireEvent.click(screen.getByRole('button',{name:'Next classifications'}));
     assert.equal(within(table).getAllByRole('row').length,6);
     assert.ok(screen.getByText('Programme 24'));

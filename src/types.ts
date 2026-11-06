@@ -47,6 +47,7 @@ export type Programme = Stats & {
   id: string;
   name: string;
   domain: string;
+  eventTypes?:string[];
   recurring: boolean;
   trend: Trend[];
   sessionList: {

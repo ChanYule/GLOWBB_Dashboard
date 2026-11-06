@@ -1,5 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { api } from "./api";
+import {activityDomains} from '../shared/activity-domains.js';
 import { ReportBars } from "./management";
 import type { User } from "./types";
 import "./patterns.css";
@@ -50,6 +51,7 @@ type Programme = {
   id: string;
   name: string;
   domain: string;
+  eventTypes?:string[];
   sessions: number;
   unique: number;
   attendance: number | null;
@@ -176,7 +178,7 @@ function Ranking({
               >
                 {p.name}
               </button>
-              <small>{p.domain}</small>
+              <small>{activityDomains(p.domain,p.eventTypes).join(', ')}</small>
               <dl>
                 <div>
                   <dt>Unique</dt>
@@ -229,7 +231,7 @@ function Ranking({
                 ) : (
                   p.name
                 )}
-                <small>{p.domain}</small>
+                <small>{activityDomains(p.domain,p.eventTypes).join(', ')}</small>
               </th>
               <td>{p.sessions}</td>
               <td>{p.unique}</td>

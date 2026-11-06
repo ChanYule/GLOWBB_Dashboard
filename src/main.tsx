@@ -1,4 +1,5 @@
 import type { Briefing } from "./management";
+import {activityDomains} from '../shared/activity-domains.js';
 import { ImportProgress } from "./import-progress";
 import { api } from "./api";
 import { metrics, reportingFilters } from "./view-config";
@@ -1835,7 +1836,7 @@ function Programmes({
           <table>
             <thead>
               <tr>
-                <th>Programme / AAP domain</th>
+                <th>Programme / Domains</th>
                 {columns
                   .filter((k) => metrics[k])
                   .map((k) => (
@@ -1864,7 +1865,7 @@ function Programmes({
                       >
                         {p.name}
                       </button>
-                      <small>{p.domain}</small>
+                      <small>{activityDomains(p.domain,p.eventTypes||(p.sessionList||[]).flatMap(s=>s.eventTypes||[])).join(', ')}</small>
                     </th>
                     {columns
                       .filter((k) => metrics[k])
@@ -2679,7 +2680,7 @@ function ProgrammeDialog({
   return (
     <Modal title={p.name} onClose={onClose} wide drawer>
       <div className="detail-intro">
-        <span className="badge soft">{p.domain}</span>
+        <span className="badge soft">{activityDomains(p.domain,p.eventTypes||(p.sessionList||[]).flatMap(s=>s.eventTypes||[])).join(', ')}</span>
         <span>
           {p.sessions === 1
             ? "One observed session"
@@ -2774,7 +2775,7 @@ function ProgrammeDialog({
               {time(s.start)}–{time(s.end)} SGT
             </span>
             <span>{s.venue || "Venue not supplied"}</span>
-            <span>{s.eventTypes?.length?s.eventTypes.join(', '):'Event Type unclassified'}</span>
+            <span>{activityDomains(p.domain,s.eventTypes).join(', ')}</span>
           </div>
         ))}
       </div>

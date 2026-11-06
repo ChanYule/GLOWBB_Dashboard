@@ -1,4 +1,5 @@
 import { defaults, todaySG } from "./domain.js";
+import {sessionEventTypes} from './event-types.js';
 import {
   populations,
   patternKeys,
@@ -521,6 +522,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       id,
       name: p.name,
       domain: p.domain,
+      eventTypes:[...new Set([...delivered.get(id)].flatMap(sid=>sessionEventTypes(sessionMap.get(sid),settings)))],
       sessions,
       unique,
       attendance: [...m.values()].reduce((a, b) => a + b, 0),

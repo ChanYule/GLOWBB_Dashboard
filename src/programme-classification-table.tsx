@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import {activityDomains} from '../shared/activity-domains.js';
 
 export type ProgrammeClassificationRow = {
   id: string;
@@ -40,7 +41,7 @@ export function ProgrammeClassificationTable({
         .filter(
           (row) =>
             !search ||
-            [row.name, row.primaryDomain, ...row.subDomains]
+            [row.name, activityDomains(row.primaryDomain,row.subDomains).join(', '),row.primaryDomain, ...row.subDomains]
               .join(" ")
               .toLocaleLowerCase()
               .includes(search.trim().toLocaleLowerCase()),
@@ -67,7 +68,7 @@ export function ProgrammeClassificationTable({
     <div className="programme-classifications">
       {!print && (
         <label className="classification-search">
-          Find a programme, domain or sub-domain
+          Find a programme or domain
           <input
             type="search"
             aria-label="Find programme classifications"
@@ -84,8 +85,7 @@ export function ProgrammeClassificationTable({
           <thead>
             <tr>
               <th>Programme</th>
-              <th>Primary Domain</th>
-              <th>Sub-domain / Event Type</th>
+              <th>Domains</th>
               <th>Delivered sessions</th>
               <th>{reachLabel}</th>
               <th>
@@ -113,14 +113,7 @@ export function ProgrammeClassificationTable({
                     row.name
                   )}
                 </th>
-                <td>{row.primaryDomain || "Unclassified / unknown"}</td>
-                <td>
-                  {row.subDomains.length
-                    ? row.subDomains.map((label) => (
-                        <div key={label}>{label}</div>
-                      ))
-                    : "Unclassified / unknown"}
-                </td>
+                <td>{activityDomains(row.primaryDomain,row.subDomains).join(', ')}</td>
                 <td>{fmt(row.sessions)}</td>
                 <td>{fmt(row.unique)}</td>
                 <td>

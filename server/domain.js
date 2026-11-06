@@ -765,6 +765,7 @@ export function analytics(
         id: pg.id,
         name: pg.name,
         domain: pg.domain,
+        ...(summaryOnly==='overview'?{}:{eventTypes:[...new Set(sessionList.flatMap(s=>s.eventTypes||[]))]}),
         optional: pg.optional || {},
         trend,
         sessionList,

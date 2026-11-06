@@ -1,5 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { api } from "./api";
+import {activityDomains} from '../shared/activity-domains.js';
 import { ReportBars } from "./management";
 import type { User } from "./types";
 import { ProgrammeClassificationTable, type ProgrammeClassificationRow } from "./programme-classification-table";
@@ -428,8 +429,7 @@ export function EventTypeInsights({
                 <thead>
                   <tr>
                     <th>Programme</th>
-                    <th>Primary Domain</th>
-                    <th>Sub-domain / Event Type</th>
+                    <th>Domains</th>
                     <th>Sessions</th>
                     <th>Unique</th>
                     <th>Attendance</th>
@@ -452,8 +452,7 @@ export function EventTypeInsights({
                           p.label
                         )}
                       </th>
-                      <td>{p.domain}</td>
-                      <td>{p.eventTypes.join(", ")}</td>
+                      <td>{activityDomains(p.domain,p.eventTypes).join(', ')}</td>
                       <td>{p.sessions}</td>
                       <td>{fmt(p.unique)}</td>
                       <td>{fmt(p.attendance)}</td>
