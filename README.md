@@ -1,3 +1,5 @@
+> **Client outreach priorities:** Full-registry age profiles and block-level gaps for young seniors, minority seniors, seniors living alone and previously attending inactive clients, with recorded working status and existing reviewed follow-up. [Staff workflow, source counts and validation](docs/OUTREACH-PRIORITIES.md). No additional SQL migration is required.
+
 > **Participation analysis fix and compact interface:** Compatible populations/metrics, repaired legacy preferences, a compact analysis selector and side-by-side comparison/ranking panels. [Diagnosis, population definitions, staff workflow and validation](docs/PARTICIPATION-REDESIGN.md). No additional SQL migration is required.
 
 > **AAP Domain & Event Types:** Import the new 14-column attendance export, review session classifications and administrator mappings, and compare programme mix, reach and repeat engagement in Programme Analysis and Participation Patterns. Management summaries and PDF reports are integrated. [Staff guide, definitions, data model and validation](docs/EVENT-TYPES.md). This upgrade requires **no additional SQL migration** beyond the existing application setup.

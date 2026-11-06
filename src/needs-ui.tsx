@@ -21,6 +21,8 @@ export type ProtectedSeries = {
   denominator: number | null;
   values: Cell[];
   note?: string;
+  population?:string;
+  populationLabel?:string;
 };
 export type Finding = {
   id: string;
@@ -139,6 +141,9 @@ type Profile = {
     blockRaw?: string;
     client?: boolean | null;
     boundary?: boolean | null;
+    employmentStatus?:string;
+    employmentSource?:string;
+    employmentRecordedOn?:string;
   };
   health?: Record<string, string>;
   social?: Record<string, string>;
@@ -448,14 +453,14 @@ export function ProtectedDistribution({
           />
           <p className="muted">
             Denominator: {fmt(series.denominator)} distinct{" "}
-            {title.includes("all participating ages")
+            {series.populationLabel || (title.includes("all participating ages")
               ? "participants of all ages"
               : title.startsWith("Preferred ") ||
                   title.includes("interest") ||
                   title.includes("barrier") ||
                   title.includes("need")
                 ? "question respondents"
-                : "people in this profile cohort"}
+                : "people in this profile cohort")}
             .{" "}
             {series.note ||
               "Multiple selections may overlap; do not add category counts."}
@@ -466,10 +471,10 @@ export function ProtectedDistribution({
                 <thead>
                   <tr>
                     <th>Group</th>
-                    <th>Unique seniors</th>
+                    <th>{series.population==='attendance'?'Unique participants':'Unique seniors'}</th>
                     <th>Attendance</th>
-                    <th>Repeat seniors</th>
-                    <th>Entries / senior</th>
+                    <th>{series.population==='attendance'?'Repeat participants':'Repeat seniors'}</th>
+                    <th>{series.population==='attendance'?'Entries / participant':'Entries / senior'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -757,7 +762,7 @@ export function NeedsPage({
                         key={field}
                         title={
                           field === "ages"
-                            ? "Age distribution ? all participating ages"
+                            ? series.population==='registry'?'Age profile — all registered clients':'Age distribution — programme participants'
                             : field === "clients"
                               ? "Client participation ? seniors"
                               : field === "boundary"
@@ -779,7 +784,7 @@ export function NeedsPage({
               </details>
               <div className="needs-two">
                 <ProtectedDistribution
-                  title="Recorded CFS profile"
+                  title="Recorded CFS profile — programme participants"
                   series={report.profiles.cfs}
                   engagement
                 />
@@ -1358,6 +1363,9 @@ export function ParticipantEditor({
                       update("basic", { ...profile.basic, registrationDate: v })
                     }
                   />
+                  <Select label="Recorded employment status" value={profile.basic?.employmentStatus||''} options={['','Working','Not working','Retired','Unknown','Prefers not to say']} onChange={v=>update('basic',{...profile.basic,employmentStatus:v})}/>
+                  <Field label="Employment information source" value={profile.basic?.employmentSource||''} onChange={v=>update('basic',{...profile.basic,employmentSource:v})}/>
+                  <Field label="Employment recorded date" type="date" value={profile.basic?.employmentRecordedOn||''} onChange={v=>update('basic',{...profile.basic,employmentRecordedOn:v})}/>
                 </div>
               </>
             )}

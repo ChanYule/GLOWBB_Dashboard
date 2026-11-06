@@ -72,6 +72,7 @@ export function validateProfile(d) {
           "blockRaw",
           "client",
           "boundary",
+          "employmentStatus","employmentSource","employmentRecordedOn",
         ].includes(k),
     ) ||
     ("age" in b &&
@@ -87,6 +88,9 @@ export function validateProfile(d) {
     )
   )
     throw fail(400, "Check basic profile values and dates.");
+  if(b.employmentStatus&&!['Working','Not working','Retired','Unknown','Prefers not to say'].includes(b.employmentStatus))throw fail(400,'Choose a recorded employment status.');
+  if(!optionalDate(b.employmentRecordedOn)||(b.employmentRecordedOn&&b.employmentRecordedOn>todaySG())||(b.employmentSource&&!optionalString(b.employmentSource)))throw fail(400,'Check employment source and recorded date.');
+  if(['Working','Not working','Retired'].includes(b.employmentStatus)&&(!b.employmentSource?.trim()||!b.employmentRecordedOn))throw fail(400,'Record the employment information source and date; do not infer working status from age.');
   const h = d.health || {};
   if (
     Object.keys(h).some(

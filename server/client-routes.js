@@ -1,5 +1,6 @@
 import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
+import {clientOutreach} from './client-outreach.js';
 import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
@@ -388,6 +389,10 @@ export function mountClients(app, { db, storage, upload }) {
       ),
     ),
   );
+  app.post('/api/clients/outreach',async(req,res)=>{
+    const result=await dataTransaction(db,function*(tx){const state=yield* readState(tx,storage);const value=clientOutreach(state,req.body||{});yield* audit(tx,req.user.id,'client.outreach.viewed',{cohort:value.cohort,count:value.people.total,page:value.people.page});return value;},false,['audit']);
+    res.json(result);
+  });
   app.post("/api/clients/followups", async (req, res) => {
     const {
       filters = {},

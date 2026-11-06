@@ -2,6 +2,7 @@ import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
 import { locationDefaults } from "../server/location-model.js";
+import {clientOutreach} from '../server/client-outreach.js';
 import {eventTypeReport} from '../server/event-report.js';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -81,6 +82,12 @@ const { LocationAdmin } = await tsImport(
   import.meta.url,
 );
 const {EventTypeInsights, EventTypePresentation}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
+const {ClientOutreach}=await tsImport('../src/client-outreach.tsx',import.meta.url);
+test('outreach work list filters block and attendance without shrinking registered denominators, and opens the existing review flow',async()=>{
+ const original=globalThis.fetch,state=locationFixture(),requests=[];let reviewed;
+ globalThis.fetch=async(_url,init)=>{const body=JSON.parse(init.body);requests.push(body);return Response.json(clientOutreach(state,body,'2026-11-06'));};
+ try{render(React.createElement(ClientOutreach,{user:{role:'planner'},dates:{from:'2026-11-01',to:'2026-11-03',asOf:'2026-11-03'},revision:0,onDates:()=>{},onReview:row=>reviewed=row}));await waitFor(()=>assert.equal(screen.getAllByRole('button',{name:'Review client / plan follow-up'}).length,25));assert.ok(screen.getByRole('heading',{name:'Age profile · all registered clients'}));fireEvent.change(screen.getByLabelText('Outreach list attendance'),{target:{value:'attending'}});fireEvent.change(screen.getByLabelText('Outreach block'),{target:{value:'213'}});await waitFor(()=>assert.equal(screen.getAllByRole('button',{name:'Review client / plan follow-up'}).length,10));fireEvent.click(screen.getAllByRole('button',{name:'Review client / plan follow-up'})[0]);assert.equal(reviewed.block,'213');assert.equal(reviewed.cfs,'4');assert.equal(reviewed.risk,'0');assert.equal(reviewed.employment,'Not recorded');assert.ok(reviewed.attendance>0);assert.equal(requests.at(-1).filters.block,'213');assert.equal(requests.at(-1).status,'attending');assert.ok(screen.getByText(/coverage denominators stay intact/));}finally{cleanup();globalThis.fetch=original;}
+});
 test('legacy Overall Programme Planning preferences normalize and display age attendance for the exact reported dates',async()=>{
  const original=globalThis.fetch,state=locationFixture(),requests=[];globalThis.fetch=async(input)=>{const url=String(input);if(url==='/api/preferences')return Response.json({patterns:{preset:'overall',scope:'overall',dimension:'age',metric:'rate',from:'2026-05-04',to:'2026-11-05',path:['api','participation-patterns']}});const q=Object.fromEntries(new URL(url,'http://local').searchParams);requests.push(q);return Response.json(participationPatterns(state,q,'2026-11-05'));};
  try{render(React.createElement(ParticipationPatterns,{user:{username:'Planner',role:'planner'},revision:0}));await waitFor(()=>assert.equal(document.querySelector('.patterns-page')?.getAttribute('aria-busy'),'false'));assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.equal(screen.getByLabelText('Analyse by').value,'age');assert.equal(requests[0].from,'2026-05-04');assert.equal(requests[0].to,'2026-11-05');assert.equal(Object.hasOwn(requests[0],'metric'),false);assert.equal(Object.hasOwn(requests[0],'path'),false);assert.equal(screen.queryByRole('alert')===null,true);assert.ok(screen.getByText(/saved view was updated/));fireEvent.click(screen.getByRole('button',{name:'More filters'}));assert.equal(screen.getByLabelText('Patterns from').value,'2026-05-04');fireEvent.change(screen.getByLabelText('Patterns to'),{target:{value:'2026-11-04'}});assert.equal(screen.getByLabelText('Analyse by').value,'age');}finally{cleanup();globalThis.fetch=original;}

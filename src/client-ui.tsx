@@ -1,5 +1,5 @@
 import { Coverage } from "./management";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState,lazy,Suspense } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowDown,
@@ -23,6 +23,7 @@ import type { Filters, User } from "./types";
 import { ActionEditor, blankAction, ParticipantEditor } from "./needs-ui";
 import { ClientRegistryImport } from "./client-import";
 import "./clients.css";
+const ClientOutreach=lazy(()=>import('./client-outreach').then(m=>({default:m.ClientOutreach})));
 type ClientQuery = Record<string, string>;
 type Metric = number | null;
 type ComparisonRow = {
@@ -664,6 +665,7 @@ export function ClientEngagement({
   }, [user.role]);
   useEffect(() => {
     if (!ready || user.role === "viewer") return;
+    if(tab==='outreach'){setBusy(false);return;}
     let live = true;
     const controller = new AbortController();
     setBusy(true);
@@ -689,7 +691,7 @@ export function ClientEngagement({
       live = false;
       controller.abort();
     };
-  }, [q, revision, ready, user.role, dataRevision]);
+  }, [q, revision, ready, user.role, dataRevision,tab]);
   const refresh = () => {
     setRevision((n) => n + 1);
     onChanged();
@@ -787,6 +789,7 @@ export function ClientEngagement({
           </button>
         )}
         {[
+          ["outreach", "Outreach priorities"],
           ["analysis", "Client participation"],
           ["explore", "Explore client participation gaps"],
           ["followups", "Client follow-up list"],
@@ -1052,7 +1055,7 @@ export function ClientEngagement({
               onChange={(e) => filter("asOf", e.target.value)}
             />
           </label>
-          <label className="field">
+          {tab!=='outreach'&&<label className="field">
             <span>Participation status</span>
             <select
               value={q.status || ""}
@@ -1072,10 +1075,10 @@ export function ClientEngagement({
                 No recorded attendance in available history
               </option>
             </select>
-          </label>
+          </label>}
         </div>
         <div className="client-actions">
-          <button
+          {tab!=='outreach'&&<button
             className="text-button"
             aria-expanded={advanced}
             onClick={() => setAdvanced((v) => !v)}
@@ -1083,7 +1086,7 @@ export function ClientEngagement({
             <Filter size={16} />{" "}
             {advanced ? "Hide advanced filters" : "More client filters"}
             {selectedCount > 0 ? ` (${selectedCount})` : ""}
-          </button>
+          </button>}
           <button
             className="text-button"
             onClick={() => setView((v) => ({ ...v, filters: initial }))}
@@ -1091,7 +1094,7 @@ export function ClientEngagement({
             Reset client filters
           </button>
         </div>
-        {advanced && report && (
+        {tab!=='outreach' && advanced && report && (
           <div className="client-filter-grid client-advanced">
             {[
               ["gender", "Gender"],
@@ -1200,6 +1203,7 @@ export function ClientEngagement({
           {message}
         </p>
       )}
+      {tab==='outreach'&&<Suspense fallback={<p>Loading outreach workspace…</p>}><ClientOutreach user={user} dates={{from:q.from||'',to:q.to||'',asOf:q.asOf}} revision={revision+dataRevision} onDates={next=>setView(old=>({...old,filters:{...old.filters,...next}}))} onReview={row=>setSelected(row)}/></Suspense>}
       {error && (
         <div className="error" role="alert">
           {error}
@@ -1216,7 +1220,7 @@ export function ClientEngagement({
           Calculating linked client participation…
         </p>
       )}
-      {report && reportQuery === JSON.stringify(q) && !error && (
+      {tab!=='outreach' && report && reportQuery === JSON.stringify(q) && !error && (
         <>
           <div className="client-scope">
             <span>

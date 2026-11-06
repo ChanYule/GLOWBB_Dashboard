@@ -128,12 +128,12 @@ export function NeedsExperience({
               series && (
                 <ProtectedDistribution
                   series={series}
-                  title="Recorded profile distribution"
+                  title={profile==='cfs'?'Recorded CFS profile — programme participants':profile==='ages'&&series.population==='registry'?'Age profile — all registered clients':'Recorded profile distribution'}
                 />
               )
             )}
             <p className="muted">
-              Current recorded information. Small groups are protected; missing
+              Current recorded information. Missing
               information remains unknown.
             </p>
           </section>

@@ -252,17 +252,18 @@ export function needsAnalysis(
         : "Distinct people in the selected reporting period. Unknown information is separate.",
     };
   };
-  const ageValues = new Map();
-  for (const p of allSelected) {
+  const ageValues = new Map([[`Below ${settings.seniorAge}`,0],[`${settings.seniorAge}–${settings.ageBands[0]-1}`,0],[`${settings.ageBands[0]}–${settings.ageBands[1]-1}`,0],[`${settings.ageBands[1]}+`,0]]);
+  const agePopulation=registryKnown?qualityPeople:allSelected;
+  for (const p of agePopulation) {
     const label =
       p.age == null
         ? "Unknown age"
         : p.age < settings.seniorAge
           ? "Below " + settings.seniorAge
           : p.age < settings.ageBands[0]
-            ? `${settings.seniorAge}?${settings.ageBands[0] - 1}`
+              ? `${settings.seniorAge}–${settings.ageBands[0] - 1}`
             : p.age < settings.ageBands[1]
-              ? `${settings.ageBands[0]}?${settings.ageBands[1] - 1}`
+                ? `${settings.ageBands[0]}–${settings.ageBands[1] - 1}`
               : `${settings.ageBands[1]}+`;
     ageValues.set(label, (ageValues.get(label) || 0) + 1);
   }
@@ -285,6 +286,7 @@ export function needsAnalysis(
       if (!counts.has(a.participantId)) counts.set(a.participantId, new Set());
       counts.get(a.participantId).add(a.sessionId);
     }
+    const entries=[...counts.values()].reduce((sum,ids)=>sum+ids.size,0);
     const repeat = [...counts.values()].filter((s) => s.size > 1).length,
       once = [...counts.values()].filter((s) => s.size === 1).length,
       noRecordedAttendance = members.length - counts.size;
@@ -293,19 +295,19 @@ export function needsAnalysis(
     );
     return {
       unique: members.length,
-      attendance: unsafe ? null : rows.length,
+      attendance: unsafe ? null : entries,
       repeat: unsafe ? null : repeat,
       once: unsafe ? null : once,
       noRecordedAttendance: unsafe ? null : noRecordedAttendance,
       frequency:
-        unsafe || !members.length ? null : rows.length / members.length,
+        unsafe || !members.length ? null : entries / members.length,
       repeatRate:
         unsafe || !members.length ? null : (repeat / members.length) * 100,
     };
   };
-  const distribution = (field, labelFn = (p) => p[field] || "Missing") => {
+  const distribution = (field, labelFn = (p) => p[field] || "Missing", population=profilePopulation) => {
     const grouped = new Map();
-    for (const p of profilePopulation) {
+    for (const p of population) {
       const label = labelFn(p);
       if (!grouped.has(label)) grouped.set(label, []);
       grouped.get(label).push(p);
@@ -317,10 +319,13 @@ export function needsAnalysis(
     const suppressed = values.some((v) => v.unique > 0 && v.unique < minimum);
     return {
       suppressed,
-      denominator: profilePopulation.length,
+      denominator: population.length,
+      ...(population===allSelected?{population:'attendance',populationLabel:'unique programme participants (all selected ages; clients and non-clients)'}:{}),
       values: suppressed ? [] : values.sort((a, b) => b.unique - a.unique),
       note: suppressed
         ? `The whole breakdown is withheld because a subgroup is smaller than ${minimum}; complementary values are withheld too.`
+        : population===allSelected
+          ? 'Unique people with recorded programme attendance in the selected reporting period, including clients and non-clients. Missing CFS values remain in the population. Latest-known recorded profiles; attendance dates are not assessment dates.'
         : registryKnown
           ? "Registered seniors in the attested snapshot, including those without recorded attendance. Latest-known profiles; attendance dates are not assessment dates."
           : "Participating seniors across available attendance. Latest-known profiles; attendance dates are not assessment dates.",
@@ -872,10 +877,10 @@ export function needsAnalysis(
     demographics: {
       gender: demographicSeries(report.gender, report.summary.unique),
       race: demographicSeries(report.race, report.summary.unique),
-      ages: demographicSeries(
+      ages: {...demographicSeries(
         [...ageValues].map(([label, value]) => ({ label, value })),
-        allSelected.length,
-      ),
+        agePopulation.length,
+      ),population:registryKnown?'registry':'attendance',populationLabel:registryKnown?'registered clients of all ages':'programme participants of all selected ages',note:registryKnown?'Full current client registry, including clients with no recorded attendance. Use Client Engagement → Outreach priorities for attended/no-attendance comparisons by age and block.':'Recorded programme participants only. Import and verify a complete client registry to measure population outreach gaps.'},
       clients: demographicSeries(report.clients, report.summary.unique),
       boundary: demographicSeries(report.boundary, report.summary.unique),
     },
@@ -883,6 +888,7 @@ export function needsAnalysis(
       cfs: protectedDistribution(
         "cfs",
         (p) => settings.cfsMappings[p.cfs]?.label || p.cfs || "Missing",
+        allSelected,
       ),
       living: protectedDistribution(
         "livingRaw",

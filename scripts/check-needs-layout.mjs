@@ -42,6 +42,7 @@ const sourceAttendanceCount = db
   .prepare("SELECT count(*) n FROM attendance")
   .get().n;
 const sourceParticipantCount=db.prepare('SELECT count(DISTINCT participant_id) n FROM attendance').get().n;
+const sourceProgrammeCount=db.prepare('SELECT count(*) n FROM programmes').get().n;
 app.use(express.static("dist"));
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
@@ -682,6 +683,16 @@ try {
         }
         if (check.errors.length)
           throw Error("Visible page error: " + check.errors.join(" | "));
+        if(page==='Client Engagement & Outreach'){
+          await evaluate("[...document.querySelectorAll('.client-tabs button')].find(b=>b.textContent==='Outreach priorities').click()");
+          await wait("!!document.querySelector('.client-outreach') && document.querySelector('.client-outreach').getAttribute('aria-busy')==='false' && !!document.querySelector('.client-outreach table')",'client outreach priorities');
+          const outreach=await evaluate("({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('.client-outreach [role=alert]')].map(e=>e.textContent),age:document.querySelector('.client-outreach').innerText.includes('Age profile · all registered clients'),employment:document.querySelector('[aria-label=\"Outreach working status\"]')?.value})");
+          if(outreach.scrollWidth>width+1||outreach.alerts.length||!outreach.age)throw Error('Outreach layout failed: '+JSON.stringify(outreach));
+          results.push({viewport:`${width}x${height}`,page:'Registered client outreach priorities',...outreach});
+          if(width===1440){await evaluate("(()=>{const select=document.querySelector('[aria-label=\"Outreach group\"]');select.value='alone';select.dispatchEvent(new Event('change',{bubbles:true}));})()");await pause(200);await wait("document.querySelector('.client-outreach')?.getAttribute('aria-busy')==='false'",'living-alone outreach');const living=await evaluate("document.querySelector('.client-outreach').innerText");if(!living.includes('Seniors recorded living alone')||!living.includes('Recorded block'))throw Error('Living-alone drill-down unavailable');}
+          await evaluate("[...document.querySelectorAll('.client-tabs button')].find(b=>b.textContent==='Client participation').click()");
+          await wait("!document.querySelector('.client-outreach') && !!document.querySelector('.client-kpis') && !document.body.innerText.includes('Calculating linked client')",'return to client participation');
+        }
         if (
           (width === 1440 || width === 768) &&
           [
@@ -715,9 +726,11 @@ try {
             await wait("!!document.querySelector('.event-insights table caption')",'domain and Event Type matrix');
             const matrix=await evaluate("document.querySelector('.event-insights table caption').closest('table').innerText");if(!matrix.includes('Learning')||!matrix.includes('Physical'))throw Error('Event matrix source labels missing');
             await evaluate("[...document.querySelectorAll('.event-insights button')].find(e=>e.textContent==='Presentation / PDF').click()");
-            await wait("document.querySelectorAll('.presentation .report-slide').length===3",'Event Type presentation');
-            await command('Emulation.setEmulatedMedia',{media:'print'});const pdf=await command('Page.printToPDF',{landscape:true,printBackground:true,preferCSSPageSize:true});const bytes=Buffer.from(pdf.data,'base64');writeFileSync(join(output,'Event-Type-report-print.pdf'),bytes);const pages=(bytes.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;if(pages!==3)throw Error(`Event Type PDF produced ${pages} pages instead of three`);await command('Emulation.setEmulatedMedia',{media:'screen'});
-            await evaluate("document.querySelector('.presentation-toolbar button').click()");await wait("!document.querySelector('.presentation')",'close Event Type presentation');results.push({viewport:`${width}x${height}`,page:'Event Type matrix and three-page PDF',pages});
+            const expectedSections=Math.max(1,Math.ceil(sourceProgrammeCount/8))+1;
+            await wait(`document.querySelectorAll('.presentation .report-slide').length===${expectedSections}`,'paginated Event Type presentation');
+            const classificationRows=await evaluate("document.querySelectorAll('.presentation .programme-classification-slide tbody tr').length");if(classificationRows!==sourceProgrammeCount)throw Error('Programme classification print rows do not reconcile to distinct programmes');
+            await command('Emulation.setEmulatedMedia',{media:'print'});const pdf=await command('Page.printToPDF',{landscape:true,printBackground:true,preferCSSPageSize:true});const bytes=Buffer.from(pdf.data,'base64');writeFileSync(join(output,'Event-Type-report-print.pdf'),bytes);const pages=(bytes.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;if(pages<expectedSections)throw Error(`Event Type PDF produced only ${pages} pages for ${expectedSections} report sections`);await command('Emulation.setEmulatedMedia',{media:'screen'});
+            await evaluate("document.querySelector('.presentation-toolbar button').click()");await wait("!document.querySelector('.presentation')",'close Event Type presentation');results.push({viewport:`${width}x${height}`,page:'Event Type matrix and paginated PDF',pages,classificationRows});
           }
         }
         if (page === "Programme Analysis" && width === 1440) {

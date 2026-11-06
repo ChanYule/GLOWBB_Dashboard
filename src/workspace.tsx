@@ -379,8 +379,7 @@ function Chart({
               title={title}
             />
             <p className="muted">
-              Fixed protected cohort; {protectedSeries.denominator} distinct
-              seniors / question respondents. Stated needs and interests are not
+              {protectedSeries.denominator} distinct {protectedSeries.populationLabel||'seniors / question respondents'}. Stated needs and interests are not
               inferred from attendance. Multiple selections overlap.
             </p>
           </>
