@@ -1836,11 +1836,11 @@ function Programmes({
           <table>
             <thead>
               <tr>
-                <th>Programme / Domains</th>
+                <th scope="col">Programme / Domains</th>
                 {columns
                   .filter((k) => metrics[k])
                   .map((k) => (
-                    <th key={k}>{metrics[k][0]}</th>
+                    <th scope="col" key={k}>{metrics[k][0]}</th>
                   ))}
               </tr>
             </thead>
@@ -1858,14 +1858,19 @@ function Programmes({
                 )
                 .map((p) => (
                   <tr key={p.id}>
-                    <th>
+                    <th scope="row">
                       <button
-                        className="text-button"
+                        className="text-button programme-name"
                         onClick={() => onProgramme(p)}
                       >
                         {p.name}
                       </button>
-                      <small>{activityDomains(p.domain,p.eventTypes||(p.sessionList||[]).flatMap(s=>s.eventTypes||[])).join(', ')}</small>
+                      <ul className="programme-domains" aria-label="Programme domains">
+                        {activityDomains(
+                          p.domain,
+                          p.eventTypes || (p.sessionList || []).flatMap(s => s.eventTypes || []),
+                        ).map(domain => <li key={domain}>{domain}</li>)}
+                      </ul>
                     </th>
                     {columns
                       .filter((k) => metrics[k])

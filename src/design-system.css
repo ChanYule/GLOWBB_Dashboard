@@ -610,11 +610,104 @@ summary {
 .programme-drawer details {
   margin: 18px 0;
 }
-.programme-table table {
-  min-width: 820px;
+.app .programme-table {
+  margin: 18px 0;
+  border: 1px solid var(--line, #dce5ed);
+  border-radius: 12px;
+  background: #fff;
 }
-.programme-table th:first-child {
-  min-width: 240px;
+.app .programme-table table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+.app .programme-table th,
+.app .programme-table td {
+  padding: 18px 20px;
+  border-bottom: 1px solid #e6edf2;
+  text-align: right;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.app .programme-table thead th {
+  padding-top: 15px;
+  padding-bottom: 15px;
+  background: #f3f7f9;
+  color: #486078;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.app .programme-table th:first-child {
+  width: 38%;
+  min-width: 300px;
+  text-align: left;
+}
+.app .programme-table tbody td {
+  color: #213b55;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.app .programme-table tbody td:first-of-type {
+  font-weight: 600;
+}
+.app .programme-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.app .programme-table tbody tr:hover {
+  background: #f7fbfb;
+}
+.app .programme-table .programme-name {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #163c55;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app .programme-table .programme-name:hover {
+  color: #087e78;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.app .programme-table .programme-name:focus-visible {
+  outline: 2px solid #098d84;
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.app .programme-domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app .programme-domains li {
+  padding: 3px 9px;
+  border: 1px solid #d3e9e5;
+  border-radius: 6px;
+  background: #edf7f5;
+  color: #31655f;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+@media (max-width: 650px) {
+  .app .programme-table th,
+  .app .programme-table td {
+    padding: 14px;
+  }
+  .app .programme-table th:first-child {
+    min-width: 260px;
+  }
 }
 .app .table-toolbar .search-field input {
   border: 0;

@@ -5,6 +5,7 @@ import { ReportBars } from "./management";
 import type { User } from "./types";
 import "./patterns.css";
 import { PatternControls } from "./pattern-controls";
+import { AttendanceQuestions } from "./attendance-questions-ui";
 import {
   compatibleAnalysis,
   normalizePatternPreferences,
@@ -464,6 +465,12 @@ export function ParticipationPatterns({
   return (
     <div className="patterns-page" aria-busy={loading}>
       {controls}
+      {ready && <AttendanceQuestions query={q} revision={`${revision}:${locationRevision}:${retry}`} onReview={dimension => {
+        setQ(old => ({ from: old.from || "", to: old.to || "", domain: old.domain || "", basis: old.basis || "current", scope: "clients", dimension, ranking: "unique" }));
+        setMetric("rate");
+        setAdvanced(false);
+        setMessage("Showing the registered-client comparison used in the answer.");
+      }} />}
       {message && (
         <p role="status" className="patterns-notice">
           {message}

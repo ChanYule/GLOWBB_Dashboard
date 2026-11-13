@@ -1,0 +1,9 @@
+.attendance-questions-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.attendance-question { min-width: 0; border: 1px solid var(--border, #dce3ed); border-radius: 12px; padding: 1rem; }
+.attendance-question h3 { margin: 0 0 .75rem; font-size: 1rem; line-height: 1.45; }
+.attendance-question p { line-height: 1.55; }
+.attendance-question-action { background: var(--surface-soft, #f4f6fa); padding: .75rem; border-radius: 8px; }
+.attendance-question details { margin: .75rem 0; }
+.attendance-question summary { cursor: pointer; font-weight: 600; }
+.attendance-question .text-button { white-space: normal; text-align: left; }
+@media (max-width: 760px) { .attendance-questions-grid { grid-template-columns: 1fr; } }

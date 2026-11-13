@@ -6,7 +6,7 @@ Open **Staff Tools → Participation Patterns & Insights**. The three main pages
 
 ## Staff workflow
 
-1. Choose a preset or select **Age Group**, **CFS**, **Social Risk Factor**, **Race**, **Gender**, **Living Arrangement** or **Residential block**. Only one selected characteristic is loaded.
+1. Choose a preset or select **Age Group**, **CFS**, **Social Risk Factor**, **Race**, **Gender**, **Living Arrangement** or **Residential block** for the detailed comparison.
 2. Choose **Registered clients (all ages)** for client participation rates, or **All attendance participants (all ages)** for reach including non-clients. Blank date fields mean all delivered history. This page has its own reporting dates; other pages' demographic filters are not silently applied.
 3. Review the four cards and **Participant group comparison**. Switch the comparison metric; expand **View group figures and definitions** for counts, attendance, programme variety and repeat figures.
 4. Choose a specific group and rank programmes by **Unique Reach**, **Attendance Entries** or **Repeat Engagement**. Five privacy-safe programmes appear initially. **View all programmes** opens a paginated list. Select a programme for its breakdown by the current characteristic and the presence of recorded accessibility fields.
@@ -16,6 +16,12 @@ Open **Staff Tools → Participation Patterns & Insights**. The three main pages
 8. **Presentation / PDF** opens a protected snapshot using the existing report shell. **Print / Save as PDF** excludes the disabled workspace. Close or Escape restores the workspace.
 
 ## Calculations and definitions
+
+### Attendance questions that matter
+
+The staff page also answers four focused questions about CFS, residential block, living arrangement and social risk. Each card provides a recorded-data answer, a staff follow-up, expandable **Evidence and limits**, and **Explore this comparison** to open the underlying registered-client analysis.
+
+These answers always include registered clients with no recorded attendance, follow this page's period, domain and profile basis, and remain independent of the selected population/group. Participation means attending at least once divided by registered clients; it is not attendance at booked sessions. Answers require a verified complete registry and at least two known, releasable groups with five or more registered clients (or the report's higher threshold). Unknown, unrecognised, small and withheld groups are excluded and disclosed. CFS compares the lowest and highest available standard bands without asserting a trend. Differences do not establish causes or actual barriers. No additional storage or migration is required.
 
 - Exact stored identities join registry and attendance. Import canonicalisation and programme mapping rules are unchanged; similar programme names are not merged.
 - Age groups are mutually exclusive: Below 60, 60 to 69, 70 to 79, 80 and above. Missing, Unknown and invalid ages stay separate.

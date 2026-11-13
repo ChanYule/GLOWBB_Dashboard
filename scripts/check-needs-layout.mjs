@@ -716,6 +716,16 @@ try {
           );
         }
         if(page==='Programme Analysis'){
+          await wait("!!document.querySelector('.programme-table tbody .programme-name')", 'past programme table');
+          const programmeLayout = await evaluate("(()=>{const table=document.querySelector('.programme-table');const rows=[...table.querySelectorAll('tbody tr')];return {rows:rows.length,separated:rows.every(row=>{const name=row.querySelector('.programme-name');const tags=row.querySelector('.programme-domains');return !!name&&!!tags&&tags.getBoundingClientRect().top>=name.getBoundingClientRect().bottom;}),numericAlignment:[...rows[0].querySelectorAll('td')].every(td=>getComputedStyle(td).textAlign==='right'),pageWidth:document.documentElement.scrollWidth};})()");
+          if(!programmeLayout.separated||!programmeLayout.numericAlignment||programmeLayout.pageWidth>width+1)throw Error('Past programme table layout failed: '+JSON.stringify(programmeLayout));
+          results.push({viewport:`${width}x${height}`,page:'Past programme table',...programmeLayout});
+          if([1440,768,375].includes(width)){
+            await evaluate("document.querySelector('.programme-table').scrollIntoView({block:'start'})");
+            const tableShot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+            writeFileSync(join(output,`${width}-Past-Programmes.png`),Buffer.from(tableShot.data,'base64'));
+            await evaluate('scrollTo(0,0)');
+          }
           await wait("!!document.querySelector('.event-insights') && !document.querySelector('.event-insights[aria-busy=true]') && !!document.querySelector('.event-insights .report-bars')",'Event Type programme mix');
           const check=await evaluate("({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,alerts:[...document.querySelectorAll('.event-insights [role=alert]')].map(e=>e.textContent),labels:document.querySelector('.event-insights').innerText.includes('Social & Cognitive')})");
           if(check.scrollWidth>width+1||check.alerts.length||!check.labels)throw Error('Event Type layout/data check failed: '+JSON.stringify(check));

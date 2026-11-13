@@ -77,6 +77,41 @@ const { ParticipationPatterns } = await tsImport(
   "../src/patterns-ui.tsx",
   import.meta.url,
 );
+const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+test('attendance Q&A keeps full denominators, follows period changes, hides stale answers and retries failed cards', async () => {
+  const original = globalThis.fetch, queries = [], reviewed = [];
+  let pending, failRisk = true;
+  const makeReport = q => ({ dimension: q.dimension, scope: 'clients', basis: 'current', minimum: 0,
+    registryComplete: true, ratesAvailable: true, comparisonSuppressed: false,
+    period: { from: q.from, to: q.to }, groups: [
+      { label: q.dimension === 'cfs' ? 'CFS 1 to 3' : 'Group A', registered: 20, unique: 10, rate: 50 },
+      { label: q.dimension === 'cfs' ? 'CFS 7 to 8' : 'Group B', registered: 20, unique: 5, rate: 25 },
+    ] });
+  globalThis.fetch = async input => {
+    const q = Object.fromEntries(new URL(String(input), 'http://local').searchParams); queries.push(q);
+    if (q.dimension === 'risk' && failRisk) return Response.json({ error: 'Try again' }, { status: 503 });
+    if (q.from === '2026-11-02' && q.dimension === 'cfs') return new Promise(resolve => { pending = () => resolve(Response.json(makeReport(q))); });
+    return Response.json(makeReport(q));
+  };
+  try {
+    const props = { query: { scope: 'overall', group: 'one person', second: 'age', from: '2026-11-01', to: '2026-11-03', domain: 'Physical' }, revision: '1', onReview: d => reviewed.push(d) };
+    const view = render(React.createElement(AttendanceQuestions, props));
+    await waitFor(() => assert.equal(screen.getAllByText(/25 percentage points lower/).length, 1));
+    assert.equal(queries.length, 4);
+    assert.ok(queries.every(q => q.scope === 'clients' && q.domain === 'Physical' && !q.group && !q.second));
+    assert.ok(screen.getByText(/not a session attendance rate/));
+    failRisk = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry answer' }));
+    await waitFor(() => assert.equal(screen.queryByRole('alert'), null));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Explore this comparison' })[0]);
+    assert.deepEqual(reviewed, ['cfs']);
+    view.rerender(React.createElement(AttendanceQuestions, { ...props, query: { ...props.query, from: '2026-11-02' } }));
+    await waitFor(() => assert.ok(pending));
+    assert.equal(screen.queryByText(/25 percentage points lower/), null, 'old-period answers disappear while loading');
+    pending();
+    await waitFor(() => assert.ok(screen.getByText(/25 percentage points lower/)));
+  } finally { cleanup(); globalThis.fetch = original; }
+});
 const { LocationAdmin } = await tsImport(
   "../src/location-admin.tsx",
   import.meta.url,
@@ -92,7 +127,7 @@ test('legacy Overall Programme Planning preferences normalize and display age at
  const original=globalThis.fetch,state=locationFixture(),requests=[];globalThis.fetch=async(input)=>{const url=String(input);if(url==='/api/preferences')return Response.json({patterns:{preset:'overall',scope:'overall',dimension:'age',metric:'rate',from:'2026-05-04',to:'2026-11-05',path:['api','participation-patterns']}});const q=Object.fromEntries(new URL(url,'http://local').searchParams);requests.push(q);return Response.json(participationPatterns(state,q,'2026-11-05'));};
  try{render(React.createElement(ParticipationPatterns,{user:{username:'Planner',role:'planner'},revision:0}));await waitFor(()=>assert.equal(document.querySelector('.patterns-page')?.getAttribute('aria-busy'),'false'));assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.equal(screen.getByLabelText('Analyse by').value,'age');assert.equal(requests[0].from,'2026-05-04');assert.equal(requests[0].to,'2026-11-05');assert.equal(Object.hasOwn(requests[0],'metric'),false);assert.equal(Object.hasOwn(requests[0],'path'),false);assert.equal(screen.queryByRole('alert')===null,true);assert.ok(screen.getByText(/saved view was updated/));fireEvent.click(screen.getByRole('button',{name:'More filters'}));assert.equal(screen.getByLabelText('Patterns from').value,'2026-05-04');fireEvent.change(screen.getByLabelText('Patterns to'),{target:{value:'2026-11-04'}});assert.equal(screen.getByLabelText('Analyse by').value,'age');}finally{cleanup();globalThis.fetch=original;}
 });
-test('participation API failures offer retry without discarding selected population or dates',async()=>{const original=globalThis.fetch;let calls=0;const state=locationFixture();globalThis.fetch=async input=>{if(String(input)==='/api/preferences')return Response.json({patterns:{scope:'overall',dimension:'gender',from:'2026-11-01',to:'2026-11-05'}});if(++calls===1)return Response.json({error:'Temporary database connection unavailable'},{status:503});return Response.json(participationPatterns(state,Object.fromEntries(new URL(String(input),'http://local').searchParams),'2026-11-05'));};try{render(React.createElement(ParticipationPatterns,{user:{role:'planner'},revision:0}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Participation data could not be loaded'})));fireEvent.click(screen.getByRole('button',{name:'Retry participation analysis'}));await waitFor(()=>assert.equal(screen.queryByRole('alert')===null,true));assert.equal(screen.getByLabelText('Analyse by').value,'gender');assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.ok(document.querySelector('.patterns-main-grid'));assert.equal(calls,2);}finally{cleanup();globalThis.fetch=original;}});
+test('participation API failures offer retry without discarding selected population or dates',async()=>{const original=globalThis.fetch;let calls=0;const state=locationFixture();globalThis.fetch=async input=>{if(String(input)==='/api/preferences')return Response.json({patterns:{scope:'overall',dimension:'gender',from:'2026-11-01',to:'2026-11-05'}});const q=Object.fromEntries(new URL(String(input),'http://local').searchParams);if(q.dimension==='gender'&&++calls===1)return Response.json({error:'Temporary database connection unavailable'},{status:503});return Response.json(participationPatterns(state,q,'2026-11-05'));};try{render(React.createElement(ParticipationPatterns,{user:{role:'planner'},revision:0}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Participation data could not be loaded'})));fireEvent.click(screen.getByRole('button',{name:'Retry participation analysis'}));await waitFor(()=>assert.equal(screen.queryByRole('alert')===null,true));assert.equal(screen.getByLabelText('Analyse by').value,'gender');assert.equal(screen.getByLabelText('Analysis population').value,'overall');assert.ok(document.querySelector('.patterns-main-grid'));assert.equal(calls,2);}finally{cleanup();globalThis.fetch=original;}});
 test('programme mix keeps secondary analysis collapsed, switches measures and saves reviewed view preferences',async()=>{
  const original=globalThis.fetch,s=locationFixture();for(const session of s.data.sessions)session.optional={eventTypeRaw:'Learning, Social & Cognitive',eventTypes:['Learning','Social & Cognitive']};const queries=[];let saved;
  globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/event-types/report?')){queries.push(url);return Response.json(eventTypeReport(s,Object.fromEntries(new URL(url,'http://local').searchParams)));}if(url==='/api/event-types/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
@@ -353,7 +388,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     assert.equal(
       calls.filter((url) => url.startsWith("/api/participation-patterns?"))
         .length,
-      1,
+      5,
     );
     assert.ok(
       screen.getByRole("heading", { name: "Participant group comparison" }),
