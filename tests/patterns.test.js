@@ -72,6 +72,23 @@ function fixture() {
 }
 const now = "2026-11-05",
   query = { from: "2026-11-01", to: "2026-11-03" };
+test('below-60 selections use attendance without changing client totals or assigning client rates', () => {
+  const s = fixture(); s.settings.staffAnalysisFull = true;
+  const before = participationPatterns(s, { ...query, scope: 'clients' }, now);
+  s.data.participants.push({ id: 'younger-nonclient', age: 59, client: false }, { id: 'unknown-age', age: null, client: false });
+  for (const id of ['younger-nonclient', 'unknown-age'])
+    for (const sessionId of ['a1', 'a2', 'a2', 'future']) s.data.attendance.push({ participantId: id, sessionId });
+  const migrated = normalizePatternPreferences({ ...query, dimension: 'age', scope: 'clients', group: 'Below 60', second: 'distance', programme: 'a' }, now);
+  assert.equal(migrated.changed, true); assert.equal(migrated.query.scope, 'overall');
+  assert.equal(migrated.query.second, undefined); assert.equal(migrated.query.programme, undefined);
+  const r = participationPatterns(s, migrated.query, now), below = r.groups.find(g => g.label === 'Below 60');
+  // Existing 55-year-old attendance participants plus the new non-client.
+  assert.equal(below.unique, 11); assert.equal(below.attendance, 22);
+  assert.equal(below.registered, null); assert.equal(below.rate, null); assert.equal(r.ratesAvailable, false);
+  assert.equal(r.rankings.rows.find(p => p.id === 'a').unique, 11);
+  assert.equal(participationPatterns(s, { ...query, scope: 'clients' }, now).population, before.population);
+  assert.equal(s.data.participants.find(p => p.id === 'younger-nonclient').client, false);
+});
 test('exact Overall Programme Planning scenario accepts all ages and releases canonical age aggregates even with distinct profile histories',()=>{
  const s=fixture();s.data.sessions.find(session=>session.id==='prior').date='2026-05-04';s.data.participants.push({id:'one-more',age:75,gender:'FEMALE',race:'CHINESE',cfs:'unknown'});s.data.attendance.push({participantId:'one-more',sessionId:'a1'});
  const q={scope:'overall',dimension:'age',from:'2026-05-04',to:'2026-11-05'};

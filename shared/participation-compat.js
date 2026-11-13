@@ -142,6 +142,15 @@ export function normalizePatternPreferences(value = {}, today = "9999-12-31") {
   query.scope = compatibleAnalysis(query.scope, query.dimension).scope;
   if (query.second)
     query.scope = compatibleAnalysis(query.scope, query.second).scope;
+  // A saved younger-attendee selection must not be trapped in a client-only
+  // denominator. This changes only the view, never a person's client status.
+  if (query.dimension === 'age' && query.group === 'Below 60' && query.scope !== 'overall') {
+    query.scope = 'overall';
+    delete query.second;
+    delete query.stratum;
+    delete query.programme;
+    delete query.page;
+  }
   const changed = Object.entries(source).some(
     ([k, v]) => !patternKeys.includes(k) || query[k] !== v,
   );

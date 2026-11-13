@@ -78,6 +78,36 @@ const { ParticipationPatterns } = await tsImport(
   import.meta.url,
 );
 const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+test('registered age view includes younger attendance separately and selecting Below 60 opens their programmes', async () => {
+  const original = globalThis.fetch, state = locationFixture(), queries = [];
+  state.settings.staffAnalysisFull = true;
+  const registered = state.registry.length;
+  state.data.participants.push({ id: 'younger-nonclient', age: 59, client: false });
+  for (const sessionId of ['s1', 's2', 's2']) state.data.attendance.push({ participantId: 'younger-nonclient', sessionId });
+  globalThis.fetch = async input => {
+    if (String(input) === '/api/preferences') return Response.json({ patterns: { scope: 'clients', dimension: 'age', from: '2026-11-01', to: '2026-11-03' } });
+    const q = Object.fromEntries(new URL(String(input), 'http://local').searchParams); queries.push(q);
+    return Response.json(participationPatterns(state, q, '2026-11-05'));
+  };
+  try {
+    render(React.createElement(ParticipationPatterns, { user: { role: 'planner' }, revision: 0 }));
+    await waitFor(() => assert.ok(screen.getByRole('button', { name: 'View below-60 attendance and programmes' })));
+    const panel = screen.getByRole('heading', { name: 'Below 60 · attendance participants' }).closest('section');
+    assert.ok(within(panel).getByText('1 unique participants'));
+    assert.match(panel.textContent, /2 attendance entries/);
+    assert.equal(screen.getByLabelText('Analysis population').value, 'clients');
+    assert.equal(state.registry.length, registered);
+    fireEvent.change(screen.getByLabelText('Specific participant group'), { target: { value: 'Below 60' } });
+    await waitFor(() => assert.equal(screen.getByLabelText('Analysis population').value, 'overall'));
+    await waitFor(() => assert.equal(screen.getByLabelText('Specific participant group').value, 'Below 60'));
+    await waitFor(() => assert.ok(screen.getByRole('list', { name: 'Programme rankings for Below 60' })));
+    assert.ok(within(screen.getByRole('list', { name: 'Programme rankings for Below 60' })).getByRole('button', { name: 'Repeated programme' }));
+    assert.equal(screen.getByLabelText('Group comparison metric').value, 'unique');
+    assert.equal(screen.queryByRole('option', { name: 'Client participation rate (%)' }), null);
+    assert.ok(queries.some(q => q.scope === 'overall' && q.group === 'Below 60' && q.from === '2026-11-01' && q.to === '2026-11-03'));
+    assert.equal(state.data.participants.find(p => p.id === 'younger-nonclient').client, false);
+  } finally { cleanup(); globalThis.fetch = original; }
+});
 test('attendance Q&A keeps full denominators, follows period changes, hides stale answers and retries failed cards', async () => {
   const original = globalThis.fetch, queries = [], reviewed = [];
   let pending, failRisk = true;

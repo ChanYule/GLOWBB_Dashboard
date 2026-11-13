@@ -6,6 +6,7 @@ import type { User } from "./types";
 import "./patterns.css";
 import { PatternControls } from "./pattern-controls";
 import { AttendanceQuestions } from "./attendance-questions-ui";
+import { Under60Participants } from "./under60-participants";
 import {
   compatibleAnalysis,
   normalizePatternPreferences,
@@ -364,7 +365,17 @@ export function ParticipationPatterns({
         </p>
       </section>
     );
-  const update = (key: string, value: string) =>
+  const showUnder60 = () => {
+    setQ(old => ({ from: old.from || "", to: old.to || "", domain: old.domain || "", basis: old.basis || "current", dimension: "age", scope: "overall", group: "Below 60", ranking: old.ranking || "unique" }));
+    setMetric("unique");
+    setAdvanced(false);
+    setMessage("Showing attendance participants below 60. Registered-client totals and rates are unchanged.");
+  };
+  const update = (key: string, value: string) => {
+    if (key === "group" && value === "Below 60" && q.dimension === "age" && q.scope !== "overall") {
+      showUnder60();
+      return;
+    }
     setQ((old) => ({
       ...old,
       [key]: value,
@@ -376,6 +387,7 @@ export function ParticipationPatterns({
         ? { group: "", programme: "" }
         : {}),
     }));
+  };
   const selected = report?.groups.find((g) => g.label === report.group);
   const comparisonMetric =
     !report?.ratesAvailable && metric === "rate" ? "unique" : metric;
@@ -646,6 +658,8 @@ export function ParticipationPatterns({
               {report.location.note} Unknown distances remain in the population.
             </p>
           )}
+          {q.dimension === "age" && q.scope === "clients" && <Under60Participants query={q} revision={`${revision}:${locationRevision}:${retry}`} onExplore={showUnder60} />}
+          {report.dimension === "age" && report.scope === "overall" && report.group === "Below 60" && <p className="note">Below-60 results use recorded attendance, including people outside the client registry. No registered-client participation rate applies to this group.</p>}
           <div className="patterns-main-grid">
             <section className="panel patterns-comparison">
               <div className="report-section-heading">

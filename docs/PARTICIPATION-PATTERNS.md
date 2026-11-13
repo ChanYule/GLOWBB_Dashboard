@@ -17,6 +17,10 @@ Open **Staff Tools → Participation Patterns & Insights**. The three main pages
 
 ## Calculations and definitions
 
+### Participants below 60
+
+The registered-client age view also shows **Below 60 · attendance participants** as a separate attendance summary. **View below-60 attendance and programmes**, or selecting **Below 60** in the group selector, opens all-age attendance analysis focused on that group. Saved client-only Below 60 selections open this attendance view too. Dates, domain and profile basis are retained. Counts use distinct people and person-session pairs; unknown ages stay separate. This does not add anyone to the client registry or change client participation-rate denominators. No registered-client participation rate is shown for the attendance-only group.
+
 ### Attendance questions that matter
 
 The staff page also answers four focused questions about CFS, residential block, living arrangement and social risk. Each card provides a recorded-data answer, a staff follow-up, expandable **Evidence and limits**, and **Explore this comparison** to open the underlying registered-client analysis.
