@@ -1,4 +1,5 @@
 import { OutreachRulesFields } from "./outreach-rules-fields";
+import { ProgrammeDiagnosticLabels } from './programme-diagnostic-ui';
 import type { Briefing } from "./management";
 import {activityDomains} from '../shared/activity-domains.js';
 import { ImportProgress } from "./import-progress";
@@ -61,6 +62,7 @@ import "./design-system.css";
 const ParticipationPatterns = lazy(() =>
   import("./patterns-ui").then((m) => ({ default: m.ParticipationPatterns })),
 );
+const ProgrammeGroupDiagnostics = lazy(() => import('./programme-group-diagnostics').then(m => ({default:m.ProgrammeGroupDiagnostics})));
 const NeedsPage = lazy(() =>
   import("./needs-ui").then((m) => ({ default: m.NeedsPage })),
 );
@@ -1024,7 +1026,7 @@ function App() {
                       }}
                     />
                   ) : tab === "Programme Performance" ? (
-                    <><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><Programmes data={data} onProgramme={setProgramme} /></>
+                    <><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><Programmes data={data} onProgramme={setProgramme} user={user} filters={filters} /></>
                   ) : tab === "Audience & Outreach" ? (
                     <Audience
                       data={data}
@@ -1715,9 +1717,13 @@ function Overview({
 function Programmes({
   data,
   onProgramme,
+  user,
+  filters,
 }: {
   data: Dashboard;
   onProgramme: (p: Programme) => void;
+  user?: User;
+  filters?: Filters;
 }) {
   const [search, setSearch] = useState(""),
     [sort, setSort] =
@@ -1736,6 +1742,7 @@ function Programmes({
         >
       >("unique");
   const [compareOpen, setCompareOpen] = useState(false),
+    [groupDiagnosticsOpen, setGroupDiagnosticsOpen] = useState(false),
     [portfolioOpen, setPortfolioOpen] = useState(false);
   const [page, setPage] = useState(0),
     [columns, setColumns] = useState<string[]>([
@@ -1838,6 +1845,7 @@ function Programmes({
             <thead>
               <tr>
                 <th scope="col">Programme / Domains</th>
+                <th scope="col">Programme diagnostics</th>
                 {columns
                   .filter((k) => metrics[k])
                   .map((k) => (
@@ -1873,6 +1881,10 @@ function Programmes({
                         ).map(domain => <li key={domain}>{domain}</li>)}
                       </ul>
                     </th>
+                    <td>
+                      <small>{p.unique} unique seniors · {p.sessions} sessions · {p.attendance} entries (all ages)</small>
+                      <ProgrammeDiagnosticLabels diagnostics={p.diagnostics} audience="seniors" />
+                    </td>
                     {columns
                       .filter((k) => metrics[k])
                       .map((k) => (
@@ -1922,6 +1934,10 @@ function Programmes({
           and evidence limitations.
         </Note>
       </Panel>
+      {user && ['admin','planner'].includes(user.role) && <details className="panel" onToggle={e=>setGroupDiagnosticsOpen(e.currentTarget.open)}>
+        <summary>Compare programme reach by participant group</summary>
+        {groupDiagnosticsOpen && <Suspense fallback={<p>Loading programme group diagnostics…</p>}><ProgrammeGroupDiagnostics user={user} from={filters?.from||data.period.from||''} to={filters?.to||data.period.to||''} domain={filters?.domain||''} revision={data.metadata?.lastUpdatedAt||data.metadata?.generatedAt||String(data.summary.attendance)}/></Suspense>}
+      </details>}
       <details
         className="panel"
         onToggle={(e) => setPortfolioOpen(e.currentTarget.open)}
@@ -2713,6 +2729,7 @@ function ProgrammeDialog({
           Plan next steps for this programme
         </Button>
       )}
+      <ProgrammeDiagnosticLabels diagnostics={p.diagnostics} audience="seniors" />
       <details>
         <summary>Repeat participation and history</summary>
         <div className="detail-stats">

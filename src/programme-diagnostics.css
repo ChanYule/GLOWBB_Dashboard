@@ -1,0 +1,46 @@
+.programme-diagnostic-labels {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  min-width: 220px;
+  max-width: 620px;
+}
+.programme-diagnostic-labels small {
+  display: block;
+  margin-top: 0.35rem;
+  white-space: normal;
+}
+.diagnostic-caution {
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid #987325;
+  background: #fbf4e4;
+  color: #473913;
+}
+.programme-representation {
+  margin-top: 0.65rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #d1dbe4;
+}
+.programme-domain-mix {
+  margin-top: 1.25rem;
+}
+.programme-domain-mix td,
+.programme-domain-mix th {
+  padding: 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid #d1dbe4;
+}
+.programme-group-diagnostics .patterns-filter-grid {
+  margin: 1rem 0;
+}
+@media print {
+  .programme-diagnostic-labels {
+    max-width: none;
+    min-width: 0;
+  }
+  .programme-domain-mix {
+    break-inside: auto;
+  }
+  .programme-domain-mix tr {
+    break-inside: avoid;
+  }
+}

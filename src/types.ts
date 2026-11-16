@@ -47,6 +47,7 @@ export type Stats = {
 };
 export type Trend = Stats & { label: string; partial?: boolean };
 export type Programme = Stats & {
+  diagnostics?: import('../shared/programme-diagnostics.js').ProgrammeDiagnostic;
   id: string;
   name: string;
   domain: string;

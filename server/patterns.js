@@ -1,5 +1,6 @@
 import { defaults, todaySG } from "./domain.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
+import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
 import { outreachRules, supportIndicators } from '../shared/outreach-priority-rules.js';
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import { sessionDistribution } from './session-distribution.js';
@@ -655,6 +656,16 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
   const rankingsBlocked = Boolean(
     selectedBlocked || (rankRows.length > 0 && !safeRankRows.length),
   );
+  safeRankRows = safeRankRows.map(row => {
+    const counts = programmeCounts.get(row.id);
+    const total = [...counts.values()].reduce((a,b) => a+b,0);
+    const representationSafe = ratesAvailable && !rankingsBlocked && !groups.some(g => g.suppressed) &&
+      labels.every(label => ![counts.get(label)||0, total-(counts.get(label)||0), buckets.get(label).length-(counts.get(label)||0)].some(nonzeroSmall));
+    return { ...row,
+      diagnostics: programmeDiagnostics(row, settings.reliability),
+      representation: representationSafe ? programmeRepresentation({groupAttendees:row.unique,programmeAttendees:total,groupRegistered:members.length,registered:people.length}) : null,
+    };
+  });
   const sorted = rankingsBlocked
     ? []
     : safeRankRows
@@ -692,6 +703,24 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     domainRows.some((r) =>
       [r.unique, members.length - r.unique].some(nonzeroSmall),
     );
+  const selectedGroup = groups.find(g => g.label === group);
+  const mixEntries = new Map();
+  for (const p of members) for (const session of selected.get(p.id) || []) {
+    const domain = programmes.get(session.programmeId).domain;
+    mixEntries.set(domain, (mixEntries.get(domain)||0)+1);
+  }
+  const domainMix = {
+    suppressed: !!domainsBlocked, available: !!coverage.from,
+    unique: domainsBlocked || !coverage.from ? null : selectedGroup?.unique ?? null,
+    attendance: domainsBlocked || !coverage.from ? null : selectedGroup?.attendance ?? null,
+    rows: domainsBlocked || !coverage.from ? [] : [...new Set(['Learning','Physical','Social','Cognitive',...domainRows.map(r=>r.label)])].map(label => ({
+      label: label || 'Unclassified / unknown',
+      unique: domainRows.find(r=>r.label===label)?.unique || 0,
+      attendeeShare: ratio(domainRows.find(r=>r.label===label)?.unique || 0,selectedGroup?.unique),
+      attendance: selectedGroup?.attendance == null ? null : mixEntries.get(label)||0,
+      entryShare: selectedGroup?.attendance == null ? null : ratio(mixEntries.get(label)||0,selectedGroup.attendance),
+    })),
+  };
   let combined = null;
   if (q.second) {
     const crossed = new Map();
@@ -825,6 +854,8 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     // Release only the existing structured accessibility fields, never free text.
     programmeDetail = {
       ...selectedProgramme,
+      diagnostics: blocked ? null : selectedProgramme?.diagnostics,
+      representation: blocked ? null : selectedProgramme?.representation,
       breakdown: blocked ? [] : breakdown,
       suppressed: blocked,
       accessibilityFields: Object.keys(accessibility).filter(
@@ -1073,6 +1104,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       suppressed: domainsBlocked,
       rows: domainsBlocked ? [] : domainRows,
     },
+    domainMix,
     combined,
     twoFactor: twoFactorAnalysis({ combined, dimensions: [q.dimension, q.second], ratesAvailable, overall, reliability: reliabilityConfig }),
     programmeDetail,
@@ -1112,6 +1144,9 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       medianSessions: "Median distinct sessions per participating person in the selected period; IQR spans the 25th–75th percentiles using linear interpolation. Nonattenders are excluded.",
       repeatRate:
         "Same-programme repeat participants / people with a multi-session opportunity",
+      diagnosticRepeatRate: "Programme participants with 2+ distinct sessions / unique programme participants, including zero for a one-session programme. Existing repeat-opportunity metrics are unchanged.",
+      representation: "Selected group's share of registered-client programme attendees versus its share of the same complete eligible registry. All-age/non-client attendance is excluded from both shares.",
+      domainMix: "Recorded primary-domain unique reach overlaps; primary-domain entry shares use the selected group's total entries. Event Types are not reassigned as primary domains.",
     },
   };
 }

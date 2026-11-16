@@ -6,6 +6,7 @@ import { EVENT_TYPE_HEADER, parseEventTypes,sessionEventTypes } from './event-ty
 import { DEFAULT_RELIABILITY } from '../shared/participation-reliability.js';
 import { DEFAULT_ENGAGEMENT } from '../shared/engagement-depth.js';
 import { DEFAULT_OUTREACH_RULES } from "../shared/outreach-priority-rules.js";
+import { programmeDiagnostics } from '../shared/programme-diagnostics.js';
 export const HEADERS = [
   "Name/Member ID",
   "Gender",
@@ -768,6 +769,7 @@ export function analytics(
             ).map(s=>({...s,eventTypes:sessionEventTypes(s,settings)}));
       return {
         ...g,
+        diagnostics: programmeDiagnostics(g, settings.reliability),
         id: pg.id,
         name: pg.name,
         domain: pg.domain,

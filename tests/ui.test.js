@@ -1,6 +1,8 @@
 import { outreachPriorities } from "../server/outreach-priorities.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
 import { participationProportion } from '../shared/participation-reliability.js';
+import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
+import { diagnosticFixture } from './fixtures/programme-diagnostics-state.js';
 import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -77,7 +79,7 @@ const { ManagementHome } = await tsImport(
   "../src/management.tsx",
   import.meta.url,
 );
-const { ParticipationPatterns } = await tsImport(
+const { ParticipationPatterns, Ranking } = await tsImport(
   "../src/patterns-ui.tsx",
   import.meta.url,
 );
@@ -87,6 +89,53 @@ const { OutreachPriorities } = await tsImport(
   import.meta.url,
 );
 const { TwoFactorPanel } = await tsImport('../src/two-factor-panel.tsx', import.meta.url);
+const { ProgrammeDiagnosticLabels, ProgrammeDomainMix } = await tsImport('../src/programme-diagnostic-ui.tsx', import.meta.url);
+const { ProgrammeGroupDiagnostics } = await tsImport('../src/programme-group-diagnostics.tsx', import.meta.url);
+
+test('programme diagnostics show explicit repeat denominators, tiny-sample caveats, representation and overlapping domain mix',()=>{
+  try{
+    const view=render(React.createElement(ProgrammeDiagnosticLabels,{diagnostics:programmeDiagnostics({unique:1,repeat:0,sessions:1}),representation:programmeRepresentation({groupAttendees:1,programmeAttendees:5,groupRegistered:20,registered:100}),showRepresentation:true}));
+    assert.ok(screen.getByText('Repeat attendance: 0%'));assert.ok(screen.getByText(/One delivered session/));assert.ok(screen.getByText(/Small sample/));assert.ok(screen.getByText(/One-off draw signal/));
+    assert.match(document.body.textContent,/1 \/ 5 registered-client attendees/);assert.match(document.body.textContent,/20 \/ 100 registered clients/);
+    view.rerender(React.createElement(ProgrammeDiagnosticLabels,{diagnostics:programmeDiagnostics({unique:20,repeat:null,sessions:2}),showRepresentation:true}));
+    assert.ok(screen.getByText('Repeat attendance: Unavailable'));assert.ok(screen.getByText(/One-off draw diagnostic unavailable/));assert.ok(screen.getByText(/Representation unavailable/));
+    const report=participationPatterns(diagnosticFixture(),{scope:'clients',dimension:'age',group:'60 to 69'},'2026-11-06');
+    view.rerender(React.createElement(ProgrammeDomainMix,{mix:report.domainMix}));
+    const table=screen.getByRole('table',{name:'Recorded primary domains for the selected group'});assert.ok(within(table).getByText('Cognitive'));assert.match(table.textContent,/Physical/);assert.ok(screen.getByText(/do not add unique counts/));
+    const row=report.rankings.rows[0];
+    view.rerender(React.createElement(Ranking,{report:{...report,rankings:{...report.rankings,rows:Array.from({length:12},(_,i)=>({...row,id:'p'+i,name:'Programme '+i}))}},printing:true}));
+    assert.equal(screen.getByRole('table',{name:/Programme rankings/}).querySelectorAll('tbody tr').length,12,'printing must not silently truncate diagnostic rows at five');
+    assert.ok(screen.getAllByText('Representation',{exact:false}).length>=12);
+  }finally{cleanup();}
+});
+
+test('Programme Analysis keeps search/detail metrics and lazily loads staff-only group diagnostics with current dates and domain',async()=>{
+  const original=globalThis.fetch,state=diagnosticFixture(),calls=[];
+  const computed=analytics(state.data,state.settings,{},'2026-11-06');
+  globalThis.fetch=async(url)=>{
+    calls.push(String(url));if(url==='/api/preferences')return Response.json({});
+    const q=Object.fromEntries(new URL(String(url),'http://localhost').searchParams);return Response.json(participationPatterns(state,q,'2026-11-06'));
+  };
+  try{
+    const data={...dashboard(),programmes:computed.programmes};
+    render(React.createElement(Programmes,{data,user:{role:'admin'},filters:{from:'2026-11-01',to:'2026-11-03',domain:''},onProgramme:()=>{}}));
+    assert.ok(screen.getByRole('columnheader',{name:'Programme diagnostics'}));assert.ok(screen.getAllByText(/unique seniors.*entries \(all ages\)/).length>0);
+    assert.equal(calls.some(u=>u.includes('/api/participation-patterns?')),false,'group comparison is lazy');
+    const details=screen.getByText('Compare programme reach by participant group').closest('details');details.open=true;fireEvent(details,new Event('toggle'));
+    await waitFor(()=>assert.ok(screen.getByRole('list',{name:/Programme rankings/})));
+    assert.ok(calls.some(u=>u.includes('from=2026-11-01')&&u.includes('to=2026-11-03')&&u.includes('scope=clients')));
+    fireEvent.change(screen.getByLabelText('Programme diagnostic group'),{target:{value:'60 to 69'}});
+    await waitFor(()=>assert.ok(screen.getByRole('list',{name:'Programme rankings for 60 to 69'})));
+    const groupList=screen.getByRole('list',{name:'Programme rankings for 60 to 69'});
+    assert.match(groupList.textContent,/10 \/ 70 registered-client attendees/);assert.match(groupList.textContent,/One-off draw signal/);
+    assert.ok(screen.getByRole('table',{name:'Recorded primary domains for the selected group'}));
+  }finally{cleanup();globalThis.fetch=original;}
+});
+
+test('viewer programme group diagnostics never request protected data',()=>{
+  const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('unexpected');};
+  try{render(React.createElement(ProgrammeGroupDiagnostics,{user:{role:'viewer'},from:'',to:'',domain:'',revision:'0'}));assert.ok(screen.getByText(/require authorised staff access/));assert.equal(calls,0);}finally{cleanup();globalThis.fetch=original;}
+});
 
 test('two-factor matrix labels small and zero cells, paginates both axes, and prints every recorded combination', () => {
   const rows = Array.from({length:14},(_,i)=>({groups:['Row '+i,'Column '+i],registered:i===1?1:20,unique:0,rate:0,supportIndicators:['Recorded living alone']}));

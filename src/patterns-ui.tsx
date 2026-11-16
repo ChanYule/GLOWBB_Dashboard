@@ -11,6 +11,8 @@ import type { Reliability } from "./participation-rate-chart";
 import { Under60Participants } from "./under60-participants";
 import { TwoFactorPanel } from './two-factor-panel';
 import type { TwoFactorReport } from '../shared/two-factor-analysis.js';
+import { ProgrammeDiagnosticLabels, ProgrammeDomainMix } from './programme-diagnostic-ui';
+import type { ProgrammeDiagnostic, Representation, DomainMix } from '../shared/programme-diagnostics.js';
 import { ParticipationGroupSummary } from './participation-group-summary';
 import type { SessionDistribution, OverallContext } from './participation-group-summary';
 import { EngagementPanel } from './engagement-panel';
@@ -60,6 +62,8 @@ type Group = {
   returning?: number;
 };
 type Programme = {
+  diagnostics?: ProgrammeDiagnostic | null;
+  representation?: Representation | null;
   id: string;
   name: string;
   domain: string;
@@ -72,6 +76,7 @@ type Programme = {
   averageSessions: number | null;
 };
 export type Report = {
+  domainMix?: DomainMix;
   twoFactor?: TwoFactorReport | null;
   dimension: keyof typeof dimensions;
   location?: null | {
@@ -166,7 +171,7 @@ const fmt = (n: number | null | undefined, suffix = "") =>
 const denied =
   "Small groups or this filter combination are protected. Try the full available period without a domain filter. Missing and withheld values are not zero.";
 
-function Ranking({
+export function Ranking({
   report,
   onProgramme,
   printing = false,
@@ -188,12 +193,12 @@ function Ranking({
               {report.rankings.page * report.rankings.limit + i + 1}
             </span>
             <div>
-              <button
+              {onProgramme ? <button
                 className="text-button"
                 onClick={() => onProgramme?.(p.id)}
               >
                 {p.name}
-              </button>
+              </button> : <strong>{p.name}</strong>}
               <small>{activityDomains(p.domain,p.eventTypes).join(', ')}</small>
               <dl>
                 <div>
@@ -213,6 +218,7 @@ function Ranking({
                   <dd>{fmt(p.attendance)}</dd>
                 </div>
               </dl>
+              <ProgrammeDiagnosticLabels diagnostics={p.diagnostics} representation={p.representation} showRepresentation />
             </div>
           </li>
         ))}
@@ -231,10 +237,11 @@ function Ranking({
             <th>Unique reach</th>
             <th>Attendance entries</th>
             <th>Repeat</th>
+            <th>Programme diagnostics</th>
           </tr>
         </thead>
         <tbody>
-          {report.rankings.rows.slice(0, printing ? 5 : undefined).map((p) => (
+          {report.rankings.rows.map((p) => (
             <tr key={p.id}>
               <th>
                 {onProgramme && !printing ? (
@@ -259,6 +266,7 @@ function Ranking({
                     : "Withheld"
                   : `${p.repeat} (${p.repeatRate}%)`}
               </td>
+              <td><ProgrammeDiagnosticLabels diagnostics={p.diagnostics} representation={p.representation} showRepresentation /></td>
             </tr>
           ))}
         </tbody>
@@ -770,11 +778,13 @@ export function ParticipationPatterns({
               </div>
               <p className="muted">
                 Recorded programme results for this group. Missing values are not zero.
+                Small samples do not establish popularity. Diagnostic repeat attendance uses 2+ sessions divided by unique people; the existing opportunity-based group metric is unchanged.
               </p>
               <Ranking
                 report={report}
                 onProgramme={(id) => update("programme", id)}
               />
+              <ProgrammeDomainMix mix={report.domainMix} />
               {!report.rankings.suppressed && (
                 <div className="work-actions">
                   <button
@@ -1231,6 +1241,7 @@ export function ParticipationPatterns({
             <section className="report-slide">
               <h2>Programmes and repeat engagement</h2>
               <Ranking report={printReport} printing />
+              <ProgrammeDomainMix mix={printReport.domainMix} />
               <p>
                 Group repeat rate:{" "}
                 {fmt(
