@@ -1,6 +1,7 @@
 import { defaults, todaySG } from "./domain.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
 import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
+import { monthlyClientTrends, comparisonWindow, periodChanges } from './analysis-trends.js';
 import { outreachRules, supportIndicators } from '../shared/outreach-priority-rules.js';
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import { sessionDistribution } from './session-distribution.js';
@@ -182,7 +183,7 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
 
 // One indexed attendance pass per requested dimension. No participant records
 // or source attributes leave this calculation; all output is protected aggregate.
-export function participationPatterns(state, input = {}, now = todaySG()) {
+export function participationPatterns(state, input = {}, now = todaySG(), { includeTrends = true } = {}) {
   const q = validatePatternQuery(input, now),
     settings = { ...defaults, ...state.settings };
   const minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);
@@ -1072,7 +1073,14 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
   } : null;
   const reliabilityFinding = findings.find(f => ['CFS comparison', 'Participation comparison and uncertainty'].includes(f.title));
   if (reliabilityFinding) { findings.splice(findings.indexOf(reliabilityFinding), 1); findings.unshift(reliabilityFinding); }
+  let trendAnalysis = null;
+  if (includeTrends && q.scope === 'clients') {
+    const window = comparisonWindow(q, coverage);
+    const previous = window.available && settings.staffAnalysisFull ? participationPatterns(state, { ...q, from: window.previousFrom, to: window.previousTo, second: '', programme: '', group: '', page: '0' }, now, { includeTrends: false }) : null;
+    trendAnalysis = { monthly: monthlyClientTrends({ ...state, settings }, q.domain, now), changes: periodChanges({ groups, ratesAvailable }, previous, window, settings.reliability) };
+  }
   return {
+    trendAnalysis,
     dimension: q.dimension,
     location,
     minority,

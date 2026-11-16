@@ -12,6 +12,8 @@ import { Under60Participants } from "./under60-participants";
 import { TwoFactorPanel } from './two-factor-panel';
 import type { TwoFactorReport } from '../shared/two-factor-analysis.js';
 import { ProgrammeDiagnosticLabels, ProgrammeDomainMix } from './programme-diagnostic-ui';
+import { AnalysisTrends } from './analysis-trends';
+import type { TrendAnalysis } from './analysis-trends';
 import type { ProgrammeDiagnostic, Representation, DomainMix } from '../shared/programme-diagnostics.js';
 import { ParticipationGroupSummary } from './participation-group-summary';
 import type { SessionDistribution, OverallContext } from './participation-group-summary';
@@ -76,6 +78,7 @@ type Programme = {
   averageSessions: number | null;
 };
 export type Report = {
+  trendAnalysis?: TrendAnalysis | null;
   domainMix?: DomainMix;
   twoFactor?: TwoFactorReport | null;
   dimension: keyof typeof dimensions;
@@ -1032,6 +1035,7 @@ export function ParticipationPatterns({
               </article>
             ))}
           </section>
+          {report.trendAnalysis && loadedQuery === query && !loading && !error && <AnalysisTrends value={report.trendAnalysis} />}
           <details
             className="panel"
             onToggle={(e) => {
@@ -1254,6 +1258,7 @@ export function ParticipationPatterns({
             </section>
             {printReport.engagement && <section className="report-slide"><EngagementPanel groups={printReport.groups} metadata={printReport.engagement} dimension={printReport.dimension} populationLabel={populations[printReport.scope]?.label || printReport.scope} printing /></section>}
             {printReport.twoFactor && <section className="report-slide"><TwoFactorPanel report={printReport.twoFactor} printing /></section>}
+            {printReport.trendAnalysis && <section className="report-slide"><AnalysisTrends value={printReport.trendAnalysis} printing /></section>}
             <section className="report-slide">
               <h2>Findings and planning implications</h2>
               {printReport.findings.slice(0, 3).map((f) => (

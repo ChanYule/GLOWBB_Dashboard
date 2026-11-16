@@ -91,6 +91,12 @@ const { OutreachPriorities } = await tsImport(
 const { TwoFactorPanel } = await tsImport('../src/two-factor-panel.tsx', import.meta.url);
 const { ProgrammeDiagnosticLabels, ProgrammeDomainMix } = await tsImport('../src/programme-diagnostic-ui.tsx', import.meta.url);
 const { ProgrammeGroupDiagnostics } = await tsImport('../src/programme-group-diagnostics.tsx', import.meta.url);
+const { AnalysisTrends } = await tsImport('../src/analysis-trends.tsx', import.meta.url);
+
+test('monthly client trends expose count tables, partial anchors and print definitions without inventing prior comparisons',()=>{
+  const state=diagnosticFixture(),report=participationPatterns(state,{scope:'clients',dimension:'age'},'2026-11-06');
+  try{const view=render(React.createElement(AnalysisTrends,{value:report.trendAnalysis}));assert.ok(screen.getByRole('table',{name:'Monthly registered-client counts and anchors'}));assert.ok(screen.getByRole('img',{name:/Active clients at month anchor/}));assert.ok(screen.getByText(/previous equivalent period starts before attendance coverage/));fireEvent.change(screen.getByLabelText('Monthly trend measure'),{target:{value:'sessions'}});assert.ok(screen.getByRole('img',{name:/Delivered sessions/}));view.rerender(React.createElement(AnalysisTrends,{value:report.trendAnalysis,printing:true}));assert.equal(screen.queryByLabelText('Monthly trend measure'),null);assert.ok(screen.getByText('Trend definitions and limits').closest('details').open);}finally{cleanup();}
+});
 
 test('programme diagnostics show explicit repeat denominators, tiny-sample caveats, representation and overlapping domain mix',()=>{
   try{

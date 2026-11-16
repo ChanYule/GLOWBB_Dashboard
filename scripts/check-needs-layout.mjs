@@ -451,7 +451,7 @@ try {
               "[...document.querySelectorAll('.patterns-page button')].find(b => b.textContent==='Presentation / PDF').click()",
             );
             await wait(
-              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===5",
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length>=5",
               "patterns presentation",
             );
             const reportCheck = await evaluate(
@@ -599,7 +599,7 @@ try {
               "[...document.querySelectorAll('.patterns-page button')].find(b=>b.textContent==='Presentation / PDF').click()",
             );
             await wait(
-              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===5",
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length>=5",
               "location presentation",
             );
             await command("Emulation.setEmulatedMedia", { media: "print" });

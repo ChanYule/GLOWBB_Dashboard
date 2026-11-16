@@ -1,0 +1,17 @@
+# Phase 7: trends and period changes
+
+Open **Participation Patterns & Insights**, choose **Registered clients**, and review **Monthly client trends** and **What changed this period?**. Presentation/PDF includes the full monthly count table and change evidence.
+
+Monthly rows span the available attendance coverage, independently of the selected dates and demographic group. Active clients use the existing rule: last recorded attendance across all programmes within the configured active band (default 30 days) of each month-end anchor. The final anchor is clipped to coverage end. Known registration dates restrict monthly client eligibility; current registry records with unknown dates do not establish historical membership. This is not a historical census.
+
+First observed and returning client participants, plus delivered sessions, follow the programme-domain filter. First observed means earliest attendance in available history falls in the month, not new to the centre. A client is returning if their first recorded visit preceded the month. Visits and sessions are deduplicated. Active status can differ from attendance within the month. Partial first/last months are labelled and must not be read as complete-month totals. No history gives unavailable values, not an invented zero series. Attendance-only populations do not gain client metrics.
+
+The change panel compares the selected period, clipped to coverage end, with an immediately preceding equal number of calendar days. Both starts must be covered. Full-coverage default selections usually have no covered preceding equivalent period; the panel explains this rather than inventing zeros. The three largest increases/decreases are percentage-point changes in client participation for the selected first characteristic and domain, with participating/registered counts and 95% plausible ranges for both periods. Groups need at least the Phase 1 caution minimum in both periods (default 20); unknown, withheld and unavailable groups are excluded. No change in a direction produces an explicit empty state. Range overlap and non-causal limitations remain visible.
+
+Calculations stay server-side; responses contain aggregate counts only. New monthly details use the existing authorised exact-count staff projection and are withheld under conservative privacy settings. Existing viewer restrictions remain. Source records, client status and earlier recency metrics are unchanged. Current profiles, changing cohort composition, missing history and many comparisons can bias observations. This is not a causal or formal significance test.
+
+There is no campaign/event-marker table in the existing schema. Optional event annotations were skipped as requested and remain future work; attendance sessions are not invented campaign markers.
+
+Main files: `server/analysis-trends.js`, `server/patterns.js`, `src/analysis-trends.tsx` and CSS, plus screen/print integration in `src/patterns-ui.tsx`. Tests cover anchors, active versus attended, deduplication, first observed/returning, domain selection, equal-length windows, insufficient history, minimum sizes, privacy projection and screen/print content. Run `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run lint` and `npm.cmd run build`. No migration or deployment is included. DOM tests do not establish rendered layout or PDF pagination.
+
+Validation passed 267 automated tests, type checking, lint and production build. Visual browser QA and hosted deployment remain unverified.

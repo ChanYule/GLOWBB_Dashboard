@@ -1,0 +1,34 @@
+.monthly-bars {
+  display: grid;
+  gap: 0.7rem;
+  margin: 1rem 0;
+}
+.monthly-bars > div {
+  display: grid;
+  grid-template-columns: 140px minmax(60px, 1fr) 45px;
+  align-items: center;
+  gap: 0.6rem;
+}
+.monthly-bars i {
+  display: block;
+  height: 18px;
+  background: #148c85;
+  max-width: 100%;
+}
+.analysis-trends small {
+  display: block;
+}
+.analysis-trends select {
+  display: block;
+  min-width: 260px;
+  max-width: 100%;
+}
+.analysis-trends td,
+.analysis-trends th {
+  padding: 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #ccd7e2;
+}
+.analysis-trends li {
+  margin: 0.75rem 0;
+}
