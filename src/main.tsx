@@ -1,3 +1,4 @@
+import {centreById} from '../shared/centres.js';
 import {CentreImportReview} from './centre-import-review';
 import {centreUrl} from "./api";
 import { OutreachRulesFields } from "./outreach-rules-fields";
@@ -3154,7 +3155,7 @@ function ImportDialog({
         () => {},
       );
   };
-  if(receipt)return <Modal title="Import receipt by centre" onClose={onDone}><h3>Attendance imported</h3>{Object.entries(receipt).map(([id,r])=><p key={id}>{id}: {r.imported} entries imported</p>)}<Button primary onClick={onDone}>Done and refresh selected centre</Button></Modal>;
+  if(receipt)return <Modal title="Import receipt by centre" onClose={onDone}><h3>Attendance imported</h3>{Object.entries(receipt).map(([id,r])=><p key={id}>{centreById(id)?.name||id}: {r.imported} entries imported</p>)}<Button primary onClick={onDone}>Done and refresh selected centre</Button></Modal>;
   return (
     <Modal
       title={preview ? "Review attendance import" : "Import attendance"}
@@ -3203,7 +3204,7 @@ function ImportDialog({
               Name/Member ID, Gender, optional Name/Current Living Arrangement
               and Name/Marital Status, Name/Age, Name/Race, Name/CFS, optional
               Name/Social Risk Factor(s), Is Client, Within Boundary, Activity
-              Name, AAP Domain, Session Detail
+              Name, AAP Domain, Activity Name/Event Type, Session Detail, Centres (or Centre)
             </p>
             <p>
               Headers in row 1 of exactly one worksheet. Session example:
@@ -3225,7 +3226,9 @@ function ImportDialog({
       ) : (
         <>
           <div className="import-counts">
-            {[
+            {(preview.centreCounts?[
+              ['Total records',preview.rawRows],['Will insert',preview.ready],['Duplicates - skipped',preview.duplicates],['Invalid rows',preview.invalid],['Conflicts - skipped',preview.skipped],['Profile updates',preview.updatedProfiles??0],['Session classification updates',preview.updatedSessions??0],['Rows flagged',preview.flaggedRows??preview.invalid],
+            ]:[
               ["Raw rows", preview.rawRows],
               ["Existing matches", preview.matched ?? 0],
               ["Profile updates", preview.updatedProfiles ?? 0],
@@ -3237,7 +3240,7 @@ function ImportDialog({
               ["Duplicates", preview.duplicates],
               ["Invalid", preview.invalid],
               ["Conflicts · skipped", preview.skipped],
-            ].map(([k, v]) => (
+            ]).map(([k, v]) => (
               <div key={k}>
                 <strong>{v}</strong>
                 <span>{k}</span>
@@ -3290,7 +3293,7 @@ function ImportDialog({
               )}
             </div>
           </details>
-          <h3>Preview · first {preview.preview.length} valid rows</h3>
+          {!preview.centreCounts&&<><h3>Preview · first {preview.preview.length} valid rows</h3>
           <div className="import-preview">
             {preview.preview.map((r) => (
               <div key={r.row}>
@@ -3303,8 +3306,8 @@ function ImportDialog({
                 </small>
               </div>
             ))}
-          </div>
-          <details>
+          </div></>}
+          {!!Object.keys(preview.expectedReference).length&&<details>
             <summary>Compare with the reference workbook checks</summary>
             <p>
               Use these checks only for the exact reference workbook.
@@ -3323,7 +3326,7 @@ function ImportDialog({
                 </div>
               ))}
             </div>
-          </details>
+          </details>}
           {mode === "replace" && (
             <div className="warning">
               <h3>Replace all saved attendance</h3>

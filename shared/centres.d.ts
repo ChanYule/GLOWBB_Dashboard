@@ -6,6 +6,9 @@ export type Centre = {
 };
 export const CENTRES: readonly Centre[];
 export function centreById(id: string): Centre | null;
+export function normalizeCentreLocation(
+  value: unknown,
+): "bukit_batok" | "nanyang" | null;
 export function classifyCentre(
   location: unknown,
   activity: unknown,
@@ -16,4 +19,6 @@ export function classifyCentre(
   overridden?: boolean;
   locationRaw: unknown;
   activityRaw: unknown;
+  location: "bukit_batok" | "nanyang" | null;
+  service: string | null;
 };

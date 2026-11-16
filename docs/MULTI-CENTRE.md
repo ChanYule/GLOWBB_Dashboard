@@ -4,6 +4,8 @@
 
 The existing application now serves GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nanyang and SEEN Nanyang under **Programme & Outreach Dashboard**. All existing analysis pages share one interface. This is a repository implementation; no hosted deployment or historical allocation was performed.
 
+See the [source workbook reconciliation and location-alias update](CENTRE-IMPORT-ALIASES.md) for the latest import preview and verified source totals.
+
 ## Staff workflow
 
 1. Select an authorised centre in the persistent header. Dates carry across; programme-specific filters and page drafts reset. The selected centre appears in the header, browser title and reports.
@@ -23,7 +25,7 @@ The existing application now serves GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nan
 | Nanyang               | GLOW Kopi Talk        | GLOW Nanyang     |
 | Nanyang               | Art and Craft         | SEEN Nanyang     |
 
-Location matching trims whitespace and ignores casing. Only the exact two locations are accepted; conflicting Centre/Centres columns require review. GLOW must be the initial standalone prefix, ignoring case and leading spaces. GLOWING, GLOW2 and names containing GLOW only in the middle default to SEEN. Blank names remain invalid even with a centre override.
+Location matching uses verified short/full aliases, including Tzu Chi SEEN @ Bukit Batok and Tzu Chi SEEN @ Nanyang, and normalises whitespace and casing. Unknown or conflicting locations require review. GLOW must be the initial standalone prefix, ignoring case and leading spaces; underscore is a verified separator (GLOW_). GLOWING, GLOW2 and names containing GLOW only in the middle default to SEEN. Blank names remain invalid even with a centre override.
 
 Administrators can override individual rows or explicitly apply one evidenced centre to all unresolved rows. Source names, raw locations and reviewed reasons remain preserved; no prefix is removed. Existing Member ID matching and session validation are retained. Imports support Add/Merge and preserve other centres and prior records. Full replacement through the mixed-centre importer is disabled; reviewed deletion/recovery remains available within each centre.
 

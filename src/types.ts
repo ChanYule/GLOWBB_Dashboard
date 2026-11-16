@@ -157,6 +157,9 @@ export type Insight = {
 };
 export type Preview = {
   centreCounts?: Record<string,number>;
+  centreSummaries?:Record<string,{rawRows:number;ready:number;duplicates:number;skipped:number;invalid:number;profileUpdates:number;sessionUpdates:number;resultingAttendance?:number;resultingProfiles?:number}>;
+  classificationRevision?:number;
+  flaggedRows?:number;
   unclassified?: number;
   deniedCentres?: string[];
   classificationReview?: {row:number;activity:string;location:string;reason:string}[];
@@ -188,6 +191,8 @@ export type Preview = {
     warnings: string[];
     eventType?:string;
     centreId?:string;
+    location?:string;
+    status?:string;
   }[];
   reference: Record<string, string | number | null>;
   expectedReference: Record<string, string | number>;

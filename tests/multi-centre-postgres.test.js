@@ -88,8 +88,8 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
       ];
     const matrix = [
       [...HEADERS, "Centres"],
-      [...row, "Bukit Batok"],
-      [...row, "Nanyang"],
+      [...row, "Tzu Chi SEEN @ Bukit Batok"],
+      [...row, "Tzu Chi SEEN @ Nanyang"],
     ];
     form.append(
       "file",

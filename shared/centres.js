@@ -27,14 +27,33 @@ export const CENTRES = Object.freeze([
 export function centreById(id) {
   return CENTRES.find((c) => c.id === id) || null;
 }
+// Verified source location labels. SEEN within a venue label is not a service.
+const locationAliases = new Map([
+  ["bukit batok", "bukit_batok"],
+  ["tzu chi seen @ bukit batok", "bukit_batok"],
+  ["nanyang", "nanyang"],
+  ["tzu chi seen @ nanyang", "nanyang"],
+]);
+export function normalizeCentreLocation(value) {
+  const normalized = String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/gu, " ")
+    .replace(/\s*@\s*/gu, " @ ")
+    .toLowerCase();
+  return locationAliases.get(normalized) || null;
+}
 export function classifyCentre(location, activity, override) {
   const name = String(activity ?? "").trim();
+  const place = normalizeCentreLocation(location);
   if (!name)
     return {
       centreId: null,
       reason: "Activity Name is missing.",
       locationRaw: location ?? "",
       activityRaw: activity ?? "",
+      location: place,
+      service: null,
     };
   if (override) {
     const c = centreById(override.centreId);
@@ -50,24 +69,19 @@ export function classifyCentre(location, activity, override) {
       overridden: true,
       locationRaw: location ?? "",
       activityRaw: activity,
+      location: c.location === "Bukit Batok" ? "bukit_batok" : "nanyang",
+      service: c.classification.toLowerCase(),
     };
   }
-  const normalized = String(location ?? "")
-    .trim()
-    .toLowerCase();
-  const place =
-    normalized === "bukit batok"
-      ? "bukit_batok"
-      : normalized === "nanyang"
-        ? "nanyang"
-        : null;
-  const brand = /^GLOW(?=$|[^\p{L}\p{N}_])/iu.test(name) ? "glow" : "seen";
+  const brand = /^GLOW(?=$|[^\p{L}\p{N}])/iu.test(name) ? "glow" : "seen";
   return {
     centreId: place ? brand + "_" + place : null,
     reason: place
       ? null
-      : "Centres must be Bukit Batok or Nanyang; missing, unknown or ambiguous values require review.",
+      : "Centre location is missing, unknown or ambiguous. Choose a verified Bukit Batok or Nanyang location, or review the source row.",
     locationRaw: location ?? "",
     activityRaw: activity,
+    location: place,
+    service: brand,
   };
 }

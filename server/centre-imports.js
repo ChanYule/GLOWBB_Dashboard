@@ -3,7 +3,11 @@ import multer from "multer";
 import { readMatrix, parseRows, inspectImport } from "./domain.js";
 import { readData, getSettings } from "./db.js";
 import { sqlitePreviews } from "./previews.js";
-import { CENTRES, classifyCentre } from "../shared/centres.js";
+import {
+  CENTRES,
+  classifyCentre,
+  normalizeCentreLocation,
+} from "../shared/centres.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
 export function classifyMatrix(matrix, overrides = {}) {
   if (!matrix.length) throw fail(400, "The file is empty.");
@@ -16,15 +20,23 @@ export function classifyMatrix(matrix, overrides = {}) {
   for (let i = 1; i < matrix.length; i++) {
     if (matrix[i].every((v) => String(v ?? "").trim() === "")) continue;
     const values = indices.map((j) => String(matrix[i][j] ?? ""));
+    const canonical = values.map(normalizeCentreLocation);
     const location =
       values.length > 1 &&
-      new Set(values.map((v) => v.trim().toLowerCase())).size > 1
+      (canonical.some((v) => !v) || new Set(canonical).size > 1)
         ? "Ambiguous Centre/Centres columns"
         : values[0];
-    classifications.set(
-      i + 1,
-      classifyCentre(location, matrix[i][activity], overrides[String(i + 1)]),
-    );
+    classifications.set(i + 1, {
+      ...classifyCentre(
+        location,
+        matrix[i][activity],
+        overrides[String(i + 1)],
+      ),
+      sourceLocations: indices.map((j) => ({
+        header: headers[j],
+        value: matrix[i][j] ?? "",
+      })),
+    });
   }
   let parsed;
   try {
@@ -66,6 +78,7 @@ export function classifyMatrix(matrix, overrides = {}) {
     });
   return {
     parsed,
+    classifications,
     counts,
     unclassified,
     review: [...classifications]
@@ -74,7 +87,7 @@ export function classifyMatrix(matrix, overrides = {}) {
       .map(([row, c]) => ({
         row,
         activity: String(c.activityRaw ?? ""),
-        location: String(c.locationRaw ?? ""),
+        location: c.sourceLocations.length>1?c.sourceLocations.map(s=>s.header+': '+String(s.value)).join(' / '):String(c.locationRaw ?? ""),
         reason: c.reason,
       })),
   };
@@ -116,6 +129,41 @@ export function mountCentreImports(
       skipped = 0,
       matched = 0,
       missing = 0;
+    const centreSummaries = Object.fromEntries(
+      CENTRES.map((c) => [
+        c.id,
+        {
+          rawRows: result.counts[c.id],
+          ready: 0,
+          duplicates: 0,
+          skipped: 0,
+          invalid: 0,
+          profileUpdates: 0,
+          sessionUpdates: 0,
+        },
+      ]),
+    );
+    const invalidRows = new Set(
+      result.parsed.issues.filter((i) => i.code !== "centre").map((i) => i.row),
+    );
+    const rowOutcomes = Object.fromEntries(
+      [...result.classifications].map(([row, c]) => [
+        row,
+        {
+          centreId: c.centreId,
+          status: invalidRows.has(row)
+            ? "invalid"
+            : !c.centreId
+              ? "unclassified"
+              : !allowed.ids.includes(c.centreId)
+                ? "restricted"
+                : "pending",
+        },
+      ]),
+    );
+    for (const outcome of Object.values(rowOutcomes))
+      if (outcome.status === "invalid" && outcome.centreId)
+        centreSummaries[outcome.centreId].invalid++;
     const issues = [...result.parsed.issues],
       sessionChanges = [];
     for (const centre of CENTRES) {
@@ -128,16 +176,37 @@ export function mountCentreImports(
       const existing = new Map(current.participants.map((p) => [p.id, p]));
       for (const r of rows)
         r.participant.client = existing.get(r.participant.id)?.client ?? null;
+      const sourceRows = new Set(rows.map((r) => r.row));
+      const sourceSessions = new Map();
+      for (const row of rows)
+        if (!sourceSessions.has(row.session.id))
+          sourceSessions.set(row.session.id, row);
       const parsed = {
         ...result.parsed,
         rows,
         mode: p.mode,
         platformImportId: id,
-        issues: result.parsed.issues.filter((i) =>
-          rows.some((r) => r.row === i.row),
-        ),
+        issues: result.parsed.issues.filter((i) => sourceRows.has(i.row)),
       };
       const inspection = inspectImport(parsed, current);
+      const summary = centreSummaries[centre.id];
+      Object.assign(summary, {
+        ready: inspection.fresh.length,
+        duplicates: inspection.duplicates.length,
+        skipped: inspection.conflicts.filter((c) => c.action !== "update")
+          .length,
+        profileUpdates: inspection.updates.length,
+        sessionUpdates: inspection.sessionUpdates.length,
+        resultingAttendance: inspection.resultingAttendance,
+        resultingProfiles: inspection.resultingParticipants,
+      });
+      for (const row of inspection.fresh)
+        rowOutcomes[row.row].status = "insert";
+      for (const row of inspection.duplicates)
+        rowOutcomes[row].status = "duplicate";
+      for (const conflict of inspection.conflicts)
+        if (conflict.action !== "update")
+          rowOutcomes[conflict.row].status = "skipped";
       parsed.fingerprint = inspection.fingerprint;
       const childId = id + "-" + centre.id;
       const previews = db.previews || sqlitePreviews(db);
@@ -159,8 +228,15 @@ export function mountCentreImports(
       matched += inspection.matched;
       missing += inspection.missing.length;
       issues.push(...inspection.conflicts, ...inspection.warnings);
+      issues.push(
+        ...inspection.duplicates.map((row) => ({
+          row,
+          message:
+            "Duplicate attendance: already saved or repeated in this file. No new attendance entry will be inserted.",
+        })),
+      );
       for (const update of inspection.sessionUpdates) {
-        const source = rows.find((r) => r.session.id === update.id);
+        const source = sourceSessions.get(update.id);
         sessionChanges.push({
           programme:
             centre.name +
@@ -178,6 +254,8 @@ export function mountCentreImports(
     p.denied = denied;
     p.counts = result.counts;
     p.unclassified = result.unclassified;
+    p.rowOutcomes = rowOutcomes;
+    p.classificationRevision = (p.classificationRevision || 0) + 1;
     await control
       .prepare("UPDATE import_previews SET payload=? WHERE id=? AND user_id=?")
       .run(JSON.stringify(p), id, req.user.id);
@@ -187,9 +265,12 @@ export function mountCentreImports(
       rawRows: result.parsed.rawRows,
       ready,
       duplicates,
-      invalid: result.parsed.issues.length,
+      invalid: invalidRows.size,
       unclassified: result.unclassified,
       centreCounts: result.counts,
+      centreSummaries,
+      classificationRevision: p.classificationRevision,
+      flaggedRows: new Set(issues.map((i) => i.row)).size,
       classificationReview: result.review,
       deniedCentres: denied,
       issues,
@@ -202,6 +283,11 @@ export function mountCentreImports(
         start: r.session.start,
         end: r.session.end,
         warnings: r.warnings,
+        location: String(
+          r.session.optional?.centreClassification.locationRaw ?? "",
+        ),
+        eventType: r.session.optional?.eventTypeRaw || "",
+        status: rowOutcomes[r.row]?.status,
       })),
       updatedProfiles,
       updatedSessions,
@@ -288,6 +374,64 @@ export function mountCentreImports(
       p.overrides[String(o.row)] = { centreId: o.centreId, reason: o.reason };
     }
     res.json(await preview(req, p, req.body.id));
+  });
+  app.get("/api/centres/import/rows", async (req, res) => {
+    admin(req);
+    const { id, centreId, page = "1" } = req.query,
+      allowed = await access(req.user);
+    if (
+      typeof id !== "string" ||
+      typeof centreId !== "string" ||
+      !CENTRES.some((c) => c.id === centreId) ||
+      !/^[1-9]\d*$/.test(String(page)) ||
+      Object.keys(req.query).some(
+        (k) => !["id", "centreId", "page"].includes(k),
+      )
+    )
+      throw fail(400, "Choose a valid preview, centre and page.");
+    if (!allowed.ids.includes(centreId))
+      throw fail(
+        403,
+        "Centre access is required to inspect these source rows.",
+      );
+    const p = await load(req, id);
+    if (!p.rowOutcomes)
+      throw fail(409, "Upload a fresh preview to inspect source rows.");
+    const selected = Object.entries(p.rowOutcomes).filter(
+        ([, o]) => o.centreId === centreId,
+      ),
+      pages = Math.max(1, Math.ceil(selected.length / 25)),
+      number = Number(page);
+    if (number > pages)
+      throw fail(400, "Choose a page within this centre preview.");
+    const headers = p.matrix[0].map((h) => String(h ?? "").trim()),
+      cell = (source, header) => String(source[headers.indexOf(header)] ?? "");
+    res.json({
+      centreId,
+      page: number,
+      pages,
+      total: selected.length,
+      rows: selected
+        .slice((number - 1) * 25, number * 25)
+        .map(([row, outcome]) => {
+          const source = p.matrix[Number(row) - 1];
+          return {
+            row: Number(row),
+            centreId,
+            status: outcome.status,
+            activity: cell(source, "Activity Name"),
+            location: headers
+              .map((h, i) =>
+                /^(centre|centres)$/i.test(h) ? String(source[i] ?? "") : null,
+              )
+              .filter((v) => v !== null)
+              .join(" / "),
+            domain: cell(source, "AAP Domain"),
+            eventType: cell(source, "Activity Name/Event Type"),
+            session: cell(source, "Session Detail"),
+          };
+        }),
+    });
   });
   app.delete("/api/import/preview/:id", async (req, res) => {
     admin(req);

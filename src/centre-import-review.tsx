@@ -1,7 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./api";
 import type { Preview } from "./types";
 import { CENTRES } from "../shared/centres.js";
+type SourceRows = {
+  centreId: string;
+  page: number;
+  pages: number;
+  total: number;
+  rows: {
+    row: number;
+    activity: string;
+    location: string;
+    domain: string;
+    eventType: string;
+    session: string;
+    status: string;
+  }[];
+};
+const fmt = (n: number | undefined) =>
+  new Intl.NumberFormat("en-SG").format(n ?? 0);
+const rowStatus: Record<string, string> = {
+  insert: "Insert",
+  duplicate: "Duplicate - no new attendance",
+  skipped: "Skip conflicting row",
+  invalid: "Invalid - correct source",
+  unclassified: "Review centre",
+  restricted: "Centre access required",
+};
 export function CentreImportReview({
   preview,
   onReviewed,
@@ -14,6 +39,43 @@ export function CentreImportReview({
     [bulk, setBulk] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [inspectCentre, setInspectCentre] = useState(""),
+    [page, setPage] = useState(1),
+    [inspection, setInspection] = useState<{
+      key: string;
+      data?: SourceRows;
+      error?: string;
+    } | null>(null);
+  const inspectKey =
+    preview.id +
+    "/" +
+    (preview.classificationRevision || 0) +
+    "/" +
+    inspectCentre +
+    "/" +
+    page;
+  useEffect(() => {
+    if (!inspectCentre) return;
+    let live = true;
+    api<SourceRows>(
+      "/api/centres/import/rows?" +
+        new URLSearchParams({
+          id: preview.id,
+          centreId: inspectCentre,
+          page: String(page),
+        }),
+    )
+      .then((data) => {
+        if (live) setInspection({ key: inspectKey, data });
+      })
+      .catch((e) => {
+        if (live) setInspection({ key: inspectKey, error: e.message });
+      });
+    return () => {
+      live = false;
+    };
+  }, [preview.id, inspectCentre, page, inspectKey]);
+  const inspected = inspection?.key === inspectKey ? inspection : null;
   if (!preview.centreCounts) return null;
   const rows = [
     ...new Map(
@@ -25,7 +87,7 @@ export function CentreImportReview({
         ...preview.preview.map((r) => ({
           row: r.row,
           activity: r.programme,
-          location: "Classified source row",
+          location: r.location || "Classified source row",
           centreId: r.centreId || "",
           reason: "",
         })),
@@ -58,21 +120,133 @@ export function CentreImportReview({
     <section className="panel">
       <h3>Centre classification review</h3>
       <p>
-        Location comes from Centre/Centres. Only a standalone GLOW prefix
-        selects GLOW; other valid names select SEEN. Original programme names
-        are preserved.
+        Centre/Centres identifies the location, including Tzu Chi SEEN @ Bukit
+        Batok and Tzu Chi SEEN @ Nanyang. Only a standalone GLOW prefix in
+        Activity Name selects GLOW; other valid names select SEEN. Original
+        programme names are preserved. Underscore is a supported prefix
+        separator (GLOW_).
       </p>
-      {CENTRES.map((c) => (
-        <p key={c.id}>
-          <strong>{c.name}</strong>: {preview.centreCounts![c.id] || 0} source
-          rows
-        </p>
-      ))}
       <p>
-        Unclassified: {preview.unclassified || 0}. Duplicates:{" "}
-        {preview.duplicates}. Invalid/warning rows remain in the validation
-        report.
+        <strong>Total records: {fmt(preview.rawRows)}</strong>. Duplicate rows:{" "}
+        {fmt(preview.duplicates)} (exact source duplicates:{" "}
+        {fmt(preview.exactDuplicates)}). Unclassified records:{" "}
+        {fmt(preview.unclassified)}.
       </p>
+      <div className="centre-import-summary">
+        {CENTRES.map((c) => (
+          <section key={c.id} aria-label={c.name + " import summary"}>
+            <h4>{c.name}</h4>
+            <strong>{fmt(preview.centreCounts![c.id])}</strong>
+            <span>source rows</span>
+            {preview.centreSummaries?.[c.id] && (
+              <p>
+                {fmt(preview.centreSummaries[c.id].ready)} insert ·{" "}
+                {fmt(preview.centreSummaries[c.id].duplicates)} duplicate ·{" "}
+                {fmt(preview.centreSummaries[c.id].skipped)} skip ·{" "}
+                {fmt(preview.centreSummaries[c.id].invalid)} invalid
+              </p>
+            )}
+            {!!preview.centreSummaries?.[c.id]?.profileUpdates && (
+              <p>
+                {fmt(preview.centreSummaries[c.id].profileUpdates)} profile
+                updates
+              </p>
+            )}
+            {!!preview.centreSummaries?.[c.id]?.sessionUpdates && (
+              <p>
+                {fmt(preview.centreSummaries[c.id].sessionUpdates)} session
+                classification updates
+              </p>
+            )}
+            <button
+              className="button"
+              disabled={
+                !preview.centreCounts![c.id] ||
+                preview.deniedCentres?.includes(c.id)
+              }
+              onClick={() => {
+                setInspectCentre(c.id);
+                setPage(1);
+              }}
+            >
+              Inspect {c.name} rows
+            </button>
+          </section>
+        ))}
+      </div>
+      {inspectCentre && (
+        <section className="centre-source-rows">
+          <h4>
+            Source rows for {CENTRES.find((c) => c.id === inspectCentre)?.name}
+          </h4>
+          <p>
+            Programme and source-location details only. Member IDs are omitted.
+          </p>
+          {!inspected && <p role="status">Loading source rows...</p>}
+          {inspected?.error && <p role="alert">{inspected.error}</p>}
+          {inspected?.data && (
+            <>
+              <p>
+                {fmt(inspected.data.total)} source rows · Page{" "}
+                {inspected.data.page} of {inspected.data.pages}
+              </p>
+              <div className="work-table">
+                <table aria-label="Centre import source rows">
+                  <thead>
+                    <tr>
+                      <th>Row</th>
+                      <th>Original activity / location</th>
+                      <th>AAP Domain / Event Type</th>
+                      <th>Session</th>
+                      <th>Import action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inspected.data.rows.map((r) => (
+                      <tr key={r.row}>
+                        <td>{r.row}</td>
+                        <td>
+                          {r.activity || "Missing activity"}
+                          <small>
+                            {r.location || "Missing centre location"}
+                          </small>
+                        </td>
+                        <td>
+                          {r.domain || "Unclassified"}
+                          <small>
+                            {r.eventType || "No Event Type recorded"}
+                          </small>
+                        </td>
+                        <td>{r.session || "Missing session details"}</td>
+                        <td>{rowStatus[r.status] || r.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="work-actions">
+                <button
+                  className="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous source rows
+                </button>
+                <button
+                  className="button"
+                  disabled={page >= inspected.data.pages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next source rows
+                </button>
+              </div>
+            </>
+          )}
+          <button className="text-button" onClick={() => setInspectCentre("")}>
+            Close source rows
+          </button>
+        </section>
+      )}
       {!!preview.deniedCentres?.length && (
         <p role="alert">
           This upload includes centres outside your access:{" "}

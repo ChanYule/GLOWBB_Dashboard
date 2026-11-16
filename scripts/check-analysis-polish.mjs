@@ -1,4 +1,5 @@
-// Isolated synthetic browser QA. Never opens data/glowbb.sqlite or source workbooks.
+// Isolated in-memory browser QA. Never opens saved dashboard databases.
+// A source workbook is read only when explicitly supplied with --import-preview.
 import { spawn } from "node:child_process";
 import {
   existsSync,
@@ -25,6 +26,7 @@ const profile = mkdtempSync(join(tmpdir(), "glow-analysis-polish-browser-"));
 const fixture = await centreQaFixture();
 const {db,app}=fixture;
 const state = diagnosticFixture();
+const importWorkbook=process.argv.find(v=>v.startsWith('--import-preview='))?.slice('--import-preview='.length);
 state.registry.forEach((r, i) => {
   const p = JSON.parse(r.details);
   if (i < 30) p.age = null;
@@ -179,6 +181,25 @@ try {
       "!!document.querySelector('nav')&&!document.querySelector('.fetch-status')",
       "main app",
     );
+    if(importWorkbook){
+      await evaluate("[...document.querySelectorAll('.heading-actions button')].find(b=>b.textContent.includes('Import attendance')).click()");
+      await wait("!!document.querySelector('input[name=file]')",'attendance upload');
+      const {root}=await command('DOM.getDocument');const {nodeId}=await command('DOM.querySelector',{nodeId:root.nodeId,selector:'input[name=file]'});await command('DOM.setFileInputFiles',{nodeId,files:[resolve(importWorkbook)]});
+      await evaluate("[...document.querySelectorAll('dialog button')].find(b=>b.textContent.includes('Preview import')).click()");
+      await wait("document.querySelectorAll('.centre-import-summary>section').length===4",'four centre import cards');
+      const counts=await evaluate("[...document.querySelectorAll('.centre-import-summary>section>strong')].map(e=>e.textContent)");
+      if(JSON.stringify(counts)!==JSON.stringify(['3,610','0','0','0']))throw Error('Wrong source centre counts '+JSON.stringify(counts));
+      await evaluate("[...document.querySelectorAll('.centre-import-summary button')].find(b=>b.textContent==='Inspect GLOW Bukit Batok rows').click()");
+      await wait("document.querySelectorAll('.centre-source-rows tbody tr').length===25",'source rows');
+      await evaluate("[...document.querySelectorAll('.centre-source-rows button')].find(b=>b.textContent==='Next source rows').click()");
+      await wait("document.querySelector('.centre-source-rows tbody td')?.textContent==='27'",'source page 2');
+      const layout=await evaluate("({width:innerWidth,body:document.documentElement.scrollWidth,cardWidths:[...document.querySelectorAll('.centre-import-summary>section')].map(e=>e.getBoundingClientRect().width),dialogWidth:document.querySelector('dialog').getBoundingClientRect().width})");if(layout.body>width+2)throw Error('Import page overflow '+JSON.stringify(layout));
+      await evaluate("document.querySelector('.centre-import-summary').scrollIntoView({block:'start'})");
+      await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-centre-import.png'),Buffer.from(r.data,'base64')));
+      await evaluate("document.querySelector('dialog [aria-label=\"Close dialog\"]').click()");
+      await wait("!document.querySelector('dialog[open]')",'discard source preview');
+      results.push({...layout,importPreview:true,sourcePage:2,centreCounts:counts});continue;
+    }
     await navigate("Participation Patterns");
     await wait(
       "!!document.querySelector('[aria-label=\"Analysis population\"]')&&!document.querySelector('.patterns-page[aria-busy=true]')",
@@ -273,8 +294,8 @@ try {
   }
   if (errors.length) throw Error("Browser errors: " + errors.join("; "));
   writeFileSync(
-    join(output, process.argv.includes("--print-only")?"print-results.json":"results.json"),
-    JSON.stringify({ syntheticOnly: true, results, errors }, null, 2),
+    join(output, importWorkbook?'import-results.json':process.argv.includes("--print-only")?"print-results.json":"results.json"),
+    JSON.stringify({ isolated:true, syntheticOnly:!importWorkbook, sourceWorkbookRead:!!importWorkbook, results, errors }, null, 2),
   );
   process.stdout.write(
     JSON.stringify(

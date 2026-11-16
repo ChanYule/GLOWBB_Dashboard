@@ -109,9 +109,24 @@ test("centre classification uses exact verified locations and only a standalone 
     ["Nanyang", "GLOWING Stars", "seen_nanyang"],
     ["Nanyang", "A GLOW activity", "seen_nanyang"],
     ["Nanyang", "GLOW2", "seen_nanyang"],
+    ["Tzu Chi SEEN @ Bukit Batok", "GLOW - Stretch & Flow", "glow_bukit_batok"],
+    ["Tzu Chi SEEN @ Bukit Batok", "Stretch & Flow", "seen_bukit_batok"],
+    ["Tzu Chi SEEN @ Nanyang", "GLOW - Kopi Talk", "glow_nanyang"],
+    ["Tzu Chi SEEN @ Nanyang", "Kopi Talk", "seen_nanyang"],
+    ["  tzu  chi seen@ nAnYaNg  ", "  glow_Healthy Cooking ", "glow_nanyang"],
+    ["Tzu Chi SEEN @ Bukit Batok", "GLOWING", "seen_bukit_batok"],
+    ["Tzu Chi SEEN @ Bukit Batok", "A GLOW activity", "seen_bukit_batok"],
   ])
     assert.equal(classifyCentre(location, name).centreId, id);
-  for (const location of [null, "BB", "Bukit Batok / Nanyang", ""])
+  for (const location of [
+    null,
+    "BB",
+    "Bukit Batok / Nanyang",
+    "",
+    "Tzu Chi SEEN @ Bukit Batok / Nanyang",
+    "Not Bukit Batok",
+    "Tzu Chi SEEN @ Unknown",
+  ])
     assert.equal(classifyCentre(location, "GLOW Kopi Talk").centreId, null);
   assert.equal(classifyCentre("Nanyang", "").centreId, null);
   assert.equal(
@@ -129,6 +144,13 @@ test("centre classification uses exact verified locations and only a standalone 
   m[0][m[0].length - 1] = "Centre";
   assert.equal(classifyMatrix(m).counts.glow_nanyang, 1);
   assert.equal(classifyMatrix([HEADERS, attendance()]).unclassified, 1);
+  const aliases = matrix();
+  aliases[0].push("Centre");
+  for (let i = 1; i < aliases.length; i++)
+    aliases[i].push("Tzu Chi SEEN @ " + aliases[i].at(-1));
+  assert.equal(classifyMatrix(aliases).unclassified, 0);
+  aliases[1][aliases[1].length - 1] = "Nanyang";
+  assert.equal(classifyMatrix(aliases).unclassified, 1);
 });
 
 test("mixed-centre imports preserve names, scope programme identity, prevent duplicates and do not infer client affiliation", async () => {
@@ -659,5 +681,73 @@ test("production opens the shared four-centre workspace without login even with 
     await f.close();
     if (previous === undefined) delete process.env.DASHBOARD_AUTH;
     else process.env.DASHBOARD_AUTH = previous;
+  }
+});
+
+test("centre preview actions reconcile all source rows and paginated inspection omits member IDs and enforces current grants", async () => {
+  const f = await app();
+  try {
+    const m = [
+      [...HEADERS, "Centres"],
+      ...Array.from({ length: 28 }, () => [
+        ...attendance("GLOW_Underscore source"),
+        "Tzu Chi SEEN @ Bukit Batok",
+      ]),
+    ];
+    const invalid = [
+      ...attendance("GLOW Missing member"),
+      "Tzu Chi SEEN @ Bukit Batok",
+    ];
+    invalid[0] = "";
+    m.push(invalid);
+    const badDate = [
+      ...attendance("GLOW Invalid date"),
+      "Tzu Chi SEEN @ Bukit Batok",
+    ];
+    badDate[9] = "not a session date";
+    m.push(badDate);
+    const p = await preview(f, m),
+      summary = p.centreSummaries.glow_bukit_batok;
+    assert.equal(p.rawRows, 30);
+    assert.equal(p.ready, 1);
+    assert.equal(p.duplicates, 27);
+    assert.equal(p.invalid, 2);
+    assert.equal(p.unclassified, 0);
+    assert.equal(
+      summary.ready + summary.duplicates + summary.invalid + summary.skipped,
+      summary.rawRows,
+    );
+    const url =
+        "/api/centres/import/rows?" +
+        new URLSearchParams({
+          id: p.id,
+          centreId: "glow_bukit_batok",
+          page: "2",
+        }),
+      r = await f.request(url),
+      body = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(body.total, 30);
+    assert.equal(body.rows.length, 5);
+    assert.equal(body.rows[0].row, 27);
+    assert.equal(body.rows.at(-1).status, "invalid");
+    assert.equal(body.rows[0].location, "Tzu Chi SEEN @ Bukit Batok");
+    assert.equal(JSON.stringify(body).includes(member), false);
+    assert.ok(
+      p.issues.some((i) => i.message.startsWith("Duplicate attendance")),
+    );
+    assert.equal(
+      (await f.request(url.replace("page=2", "page=3"))).status,
+      400,
+    );
+    const actor = f.db
+      .prepare("SELECT id FROM users WHERE username='__local_workspace__'")
+      .get();
+    f.db
+      .prepare("DELETE FROM centre_access WHERE user_id=? AND centre_id=?")
+      .run(actor.id, "glow_bukit_batok");
+    assert.equal((await f.request(url)).status, 403);
+  } finally {
+    await f.close();
   }
 });

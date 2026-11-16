@@ -1,5 +1,7 @@
 # Programme & Outreach Dashboard
 
+**Attendance import fix:** Full Tzu Chi SEEN location labels now route by physical location, while Activity Name determines GLOW or SEEN, including verified GLOW_ names. [Source reconciliation and staff import guide](docs/CENTRE-IMPORT-ALIASES.md). No new SQL migration beyond 006.
+
 **Multi-centre upgrade:** GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nanyang and SEEN Nanyang now share one staff platform. Start with the [multi-centre setup and staff guide](docs/MULTI-CENTRE.md) for migration 006, staff grants, reviewed historical allocation, centre registries and hosting requirements. The dashboard opens directly without sign-in. Older release notes below describe earlier versions and their former setup.
 
 > **Client outreach priorities:** Full-registry age profiles and block-level gaps for young seniors, minority seniors, seniors living alone and previously attending inactive clients, with recorded working status and existing reviewed follow-up. [Staff workflow, source counts and validation](docs/OUTREACH-PRIORITIES.md). No additional SQL migration is required.
