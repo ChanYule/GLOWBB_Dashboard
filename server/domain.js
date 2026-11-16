@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import unzipper from "unzipper";
 import { parse } from "csv-parse/sync";
 import { EVENT_TYPE_HEADER, parseEventTypes,sessionEventTypes } from './event-types.js';
+import { DEFAULT_RELIABILITY } from '../shared/participation-reliability.js';
 export const HEADERS = [
   "Name/Member ID",
   "Gender",
@@ -30,6 +31,7 @@ export const defaults = {
   minSessions: 3,
   minParticipants: 5,
   privacyMinimum: 5,
+  reliability: { ...DEFAULT_RELIABILITY },
   riskMappings: {},
   multipleRiskFactors: false,
   timeBands: [720, 1080],

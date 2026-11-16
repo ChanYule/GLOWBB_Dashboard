@@ -6,6 +6,19 @@ import {eventTypeReport} from '../server/event-report.js';
 import {locationFixture} from './fixtures/location-state.js';
 import {createApp} from '../server/app.js';
 import {openDb} from '../server/db.js';
+import {defaults} from '../server/domain.js';
+test('reliability settings validate both thresholds, retain legacy saves and preserve staff visibility policy', async () => {
+ const db=openDb(':memory:'), app=createApp(db), server=app.listen(0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
+ const base='http://127.0.0.1:'+server.address().port;
+ const save=body=>fetch(base+'/api/settings',{method:'PUT',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ try {
+  for(const reliability of [null,{cautionMinimum:20,comparisonFloor:21},{cautionMinimum:1,comparisonFloor:1},{cautionMinimum:20,comparisonFloor:0},{cautionMinimum:20.5,comparisonFloor:10},{cautionMinimum:20,comparisonFloor:10,extra:true}]) assert.equal((await save({...defaults,reliability})).status,400);
+  const response=await save({...defaults,reliability:{cautionMinimum:30,comparisonFloor:12}}); assert.equal(response.status,200); assert.equal((await response.json()).reliability.comparisonFloor,12);
+  const {reliability:_omitted,...legacy}=defaults;void _omitted;assert.equal((await save(legacy)).status,200);
+  const stored=JSON.parse(db.prepare('SELECT value FROM settings WHERE id=1').get().value);
+  assert.deepEqual(stored.reliability,{cautionMinimum:30,comparisonFloor:12});assert.equal(stored.privacyMinimum,5);assert.equal(stored.staffAnalysisFull,undefined);
+ }finally{server.closeAllConnections();await new Promise(r=>server.close(r));db.close();}
+});
 function fixture(){const s=locationFixture();s.data.participants.forEach((p,i)=>{p.riskRaw=i===0?'>1':i<3?'1':'0';s.registry[i].details=JSON.stringify(p);});for(const session of s.data.sessions)session.optional={eventTypes:['Learning'],eventTypeRaw:'Learning'};return s;}
 test('staff analysis releases single-person groups, related totals, repeats and combined slices without inventing registry rates',()=>{
  for(const role of ['admin','planner']){const original=fixture(),state=staffAnalysisState(original,{role});assert.equal(original.settings.privacyMinimum,5);const r=participationPatterns(state,{dimension:'risk',scope:'overall',from:'2026-11-01',to:'2026-11-02'});const one=r.groups.find(g=>g.label==='>1');assert.equal(one.suppressed,false);assert.equal(one.unique,1);assert.equal(one.attendance,2);assert.equal(one.averageSessions,2);assert.equal(one.repeat,1);assert.equal(one.registered,null);assert.equal(one.rate,null);assert.equal(r.rankings.suppressed,false);const combined=participationPatterns(state,{dimension:'risk',scope:'clients',second:'age'});assert.equal(combined.combined.suppressed,false);assert.equal(combined.groups.find(g=>g.label==='>1').registered,1);const event=eventTypeReport(state,{scope:'clients',factor:'risk',group:'>1',target:'all'});assert.equal(event.types[0].unique,1);assert.equal(event.types[0].suppressed,false);assert.equal(event.registered,1);assert.equal(event.types[0].repeat,1);}

@@ -3568,6 +3568,14 @@ function SettingsDialog({
           Original imported demographics and attendance remain intact. UNKNOWN
           is excluded from minority categories and known-race denominators.
         </Note>
+        <fieldset>
+          <legend>Participation comparison reliability</legend>
+          <p>These thresholds flag uncertainty and limit automatic comparisons. All recorded staff groups remain visible; privacy settings are unchanged.</p>
+          <div className="form-row">
+            <label className="field"><span>Caution below this registered group size</span><input type="number" min="2" max="1000" required value={s.reliability?.cautionMinimum ?? 20} onChange={e => setS({ ...s, reliability: { cautionMinimum: Number(e.target.value), comparisonFloor: s.reliability?.comparisonFloor ?? 10 } })} /></label>
+            <label className="field"><span>Minimum registered group size for automatic comparisons</span><input type="number" min="1" max={s.reliability?.cautionMinimum ?? 20} required value={s.reliability?.comparisonFloor ?? 10} onChange={e => setS({ ...s, reliability: { cautionMinimum: s.reliability?.cautionMinimum ?? 20, comparisonFloor: Number(e.target.value) } })} /></label>
+          </div>
+        </fieldset>
         {error && (
           <p className="error" role="alert">
             {error}

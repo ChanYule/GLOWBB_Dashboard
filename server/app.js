@@ -1,6 +1,7 @@
 import { mountReporting } from "./reporting.js";
 import {activityDomains} from '../shared/activity-domains.js';
 import {withoutRoutingQuery} from './request-url.js';
+import { reliabilityOptions } from '../shared/participation-reliability.js';
 import { mountPatterns } from "./pattern-routes.js";
 import { mountEventTypes } from './event-routes.js';
 import { mountLocations } from "./location-routes.js";
@@ -475,6 +476,11 @@ export function createApp(
   );
   app.put("/api/settings", async (req, res) => {
     const s = req.body;
+    if (s.reliability !== undefined && (!s.reliability || typeof s.reliability !== 'object' || Array.isArray(s.reliability) ||
+      Object.keys(s.reliability).some(k => !['cautionMinimum', 'comparisonFloor'].includes(k)) ||
+      !Number.isInteger(s.reliability.cautionMinimum) || s.reliability.cautionMinimum < 2 || s.reliability.cautionMinimum > 1000 ||
+      !Number.isInteger(s.reliability.comparisonFloor) || s.reliability.comparisonFloor < 1 || s.reliability.comparisonFloor > s.reliability.cautionMinimum))
+      throw error(400, 'Set a caution group size of 2–1000 and a comparison floor of 1 up to the caution group size.');
     if (
       !Number.isInteger(s.seniorAge) ||
       s.seniorAge < 1 ||
@@ -512,6 +518,7 @@ export function createApp(
       ageBands: s.ageBands,
       minSessions: s.minSessions,
       minParticipants: s.minParticipants,
+      ...(s.reliability ? { reliability: reliabilityOptions(s.reliability) } : {}),
     };
     await db
       .prepare("UPDATE settings SET value=? WHERE id=1")

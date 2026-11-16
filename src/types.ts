@@ -6,6 +6,7 @@ export type Settings = {
   minSessions: number;
   minParticipants: number;
   privacyMinimum: number;
+  reliability?: { cautionMinimum: number; comparisonFloor: number };
   riskMappings?: Record<
     string,
     { label: string; meaning: string; categories: string[]; noRisk: boolean }

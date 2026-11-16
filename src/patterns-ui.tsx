@@ -6,6 +6,8 @@ import type { User } from "./types";
 import "./patterns.css";
 import { PatternControls } from "./pattern-controls";
 import { AttendanceQuestions } from "./attendance-questions-ui";
+import { ParticipationRateChart } from "./participation-rate-chart";
+import type { Reliability } from "./participation-rate-chart";
 import { Under60Participants } from "./under60-participants";
 import {
   compatibleAnalysis,
@@ -106,6 +108,7 @@ export type Report = {
   minimum: number;
   ratesAvailable: boolean;
   registryComplete: boolean;
+  reliability?: Reliability;
   population: number | null;
   completeness: number | null;
   comparisonSuppressed: boolean;
@@ -286,6 +289,9 @@ export function ParticipationPatterns({
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [ready, setReady] = useState(false);
+  const [comparisonSort, setComparisonSort] = useState("label");
+  const [poolSmall, setPoolSmall] = useState(false);
+  const [printComparison, setPrintComparison] = useState({ sort: "label", pool: false });
   const [metric, setMetric] = useState("rate"),
     [advanced, setAdvanced] = useState(false),
     [printReport, setPrintReport] = useState<Report | null>(null);
@@ -397,6 +403,7 @@ export function ParticipationPatterns({
       const r = await api<Report>(
         "/api/participation-patterns/export?" + query,
       );
+      setPrintComparison({ sort: comparisonSort, pool: poolSmall });
       setPrintReport(r);
     } catch (e) {
       setMessage((e as Error).message);
@@ -699,6 +706,7 @@ export function ParticipationPatterns({
                 <div className="note"><p>This metric is unavailable or withheld for these groups. Unique participant reach remains available where privacy permits.</p><button className="button" onClick={()=>setMetric('unique')}>Show unique participants</button></div>
               ) : (
                 <>
+                  {comparisonMetric === 'rate' ? <ParticipationRateChart groups={report.groups} dimension={report.dimension} reliability={report.reliability} sort={comparisonSort} pool={poolSmall} onSort={setComparisonSort} onPool={setPoolSmall} /> : (
                   <ReportBars
                     maxValue={
                       ["rate", "repeatRate"].includes(comparisonMetric)
@@ -713,6 +721,7 @@ export function ParticipationPatterns({
                         detail: `${fmt(g.unique)} participating${g.registered == null ? "" : ` / ${fmt(g.registered)} registered`}${report.ratesAvailable ? ` · ${fmt(g.rate, "%")} client rate` : ""}`,
                       }))}
                   />
+                  )}
                   {!report.ratesAvailable && report.scope === "clients" && (
                     <p className="note">
                       A complete, verified client registry and delivered
@@ -1238,6 +1247,7 @@ export function ParticipationPatterns({
               {printReport.comparisonSuppressed ? (
                 <p>{denied}</p>
               ) : (
+                printReport.ratesAvailable ? <ParticipationRateChart groups={printReport.groups} dimension={printReport.dimension} reliability={printReport.reliability} sort={printComparison.sort} pool={printComparison.pool} printing /> : (
                 <ReportBars
                   maxValue={printReport.ratesAvailable ? 100 : undefined}
                   rows={printReport.groups
@@ -1253,6 +1263,7 @@ export function ParticipationPatterns({
                       detail: `${fmt(g.unique)} participating${printReport.ratesAvailable?` / ${fmt(g.registered)} registered`:''}`,
                     }))}
                 />
+                )
               )}
             </section>
             <section className="report-slide">

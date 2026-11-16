@@ -78,6 +78,39 @@ const { ParticipationPatterns } = await tsImport(
   import.meta.url,
 );
 const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+const { ParticipationRateChart } = await tsImport('../src/participation-rate-chart.tsx', import.meta.url);
+test('participation ranges keep all groups, sort naturally, pool without replacing originals and retain print evidence', () => {
+  const groups = [
+    { label: 'Block 100', registered: 40, unique: 20, rate: 50 },
+    { label: 'Block 9', registered: 5, unique: 1, rate: 20 },
+    { label: 'Block 10', registered: 15, unique: 2, rate: 13.3333 },
+    { label: 'Missing', registered: 0, unique: 0, rate: null },
+  ];
+  const reliability = { cautionMinimum: 20, comparisonFloor: 10, overall: { rate: 38.3333 } };
+  let props = { groups, dimension: 'block', reliability, sort: 'label', pool: false };
+  let view;
+  props.onSort = sort => { props = { ...props, sort }; view.rerender(React.createElement(ParticipationRateChart, props)); };
+  props.onPool = pool => { props = { ...props, pool }; view.rerender(React.createElement(ParticipationRateChart, props)); };
+  try {
+    view = render(React.createElement(ParticipationRateChart, props));
+    assert.deepEqual([...document.querySelectorAll('.reliability-row-heading strong')].map(el => el.textContent), ['Block 9', 'Block 10', 'Block 100', 'Missing']);
+    assert.equal(screen.getAllByRole('img').length, 3);
+    assert.equal(document.querySelectorAll('.reliability-reference').length, 3);
+    assert.ok(screen.getByText(/\+11.7 pp vs overall/));
+    assert.ok(screen.getByText(/Excluded from automatic highest\/lowest comparisons/));
+    fireEvent.change(screen.getByLabelText('Sort participation groups'), { target: { value: 'size' } });
+    assert.equal(document.querySelector('.reliability-row-heading strong').textContent, 'Block 100');
+    fireEvent.click(screen.getByRole('button', { name: 'Pool small groups' }));
+    assert.equal(document.querySelectorAll('.reliability-row').length, 5);
+    assert.ok(screen.getByText('Other (small groups combined)'));
+    assert.ok(screen.getByRole('img', { name: /Other.*3 of 20, 15%/ }));
+    view.rerender(React.createElement(ParticipationRateChart, { ...props, printing: true }));
+    assert.equal(screen.queryByLabelText('Sort participation groups'), null);
+    assert.equal(document.querySelectorAll('.reliability-row').length, 5);
+    assert.ok(screen.getByText(/Pooled comparison:/));
+    assert.ok(screen.getAllByText(/plausible range/).length >= 3);
+  } finally { cleanup(); }
+});
 test('registered age view includes younger attendance separately and selecting Below 60 opens their programmes', async () => {
   const original = globalThis.fetch, state = locationFixture(), queries = [];
   state.settings.staffAnalysisFull = true;
@@ -451,6 +484,9 @@ test("participation patterns loads one dimension, saves the staff view and print
         .textContent.includes("participant_id"),
       false,
     );
+    assert.ok(document.querySelector('.presentation .reliability-interval'));
+    assert.match(document.querySelector('.presentation').textContent, /n=20/);
+    assert.match(document.querySelector('.presentation').textContent, /95% plausible range/);
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       assert.equal(document.querySelectorAll(".presentation").length, 0),

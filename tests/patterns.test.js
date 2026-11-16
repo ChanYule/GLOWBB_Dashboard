@@ -359,7 +359,7 @@ test("findings are calculated, do not force a CFS trend and do not invent barrie
     r = participationPatterns(s, { ...query, dimension: "cfs" }, now);
   assert.ok(
     r.findings.some((f) =>
-      f.evidence.includes("do not establish a consistent decreasing pattern"),
+      f.evidence.includes("does not establish a trend or cause") && f.evidence.includes("plausible range"),
     ),
   );
   assert.deepEqual(r.reportedBarriers.rows, []);
@@ -371,6 +371,27 @@ test("findings are calculated, do not force a CFS trend and do not invent barrie
     now,
   );
   assert.match(empty.findings[0].title, /Insufficient evidence/);
+});
+test('reliability uses the full period registry, preserves tiny staff groups and does not expose suppressed totals', () => {
+  const s = fixture(); s.settings.staffAnalysisFull = true; s.settings.reliability = { cautionMinimum: 30, comparisonFloor: 15 };
+  let r = participationPatterns(s, { ...query, dimension: 'cfs', group: 'CFS 1 to 3' }, now);
+  assert.equal(r.reliability.cautionMinimum, 30); assert.equal(r.reliability.comparisonFloor, 15);
+  assert.equal(r.reliability.overall.n_registered, 80); assert.equal(r.reliability.overall.n_participating, 40); assert.equal(r.reliability.overall.rate, 50);
+  assert.ok(r.reliability.overall.lower < 50 && r.reliability.overall.upper > 50);
+  assert.match(r.findings[0].evidence, /plausible range/);
+  for (let i = 1; i < s.registry.length; i++) {
+    const d = JSON.parse(s.registry[i].details); d.cfs = '4'; s.registry[i].details = JSON.stringify(d);
+  }
+  r = participationPatterns(s, { ...query, dimension: 'cfs', group: 'CFS 1 to 3' }, now);
+  assert.equal(r.groups.find(g => g.label === 'CFS 1 to 3').registered, 1);
+  assert.ok(r.findings.every(f => !f.title.includes('Leading programme')));
+  assert.match(r.findings[0].evidence, /Not enough comparable groups/);
+  delete s.settings.staffAnalysisFull;
+  r = participationPatterns(s, { dimension: 'cfs' }, now);
+  assert.equal(r.reliability.overall, null, 'overall must not enable recovery of withheld cells');
+  const noRegistry = fixture(); noRegistry.settings.registry.complete = false;
+  assert.equal(participationPatterns(noRegistry, {}, now).reliability.overall, null);
+  assert.equal(participationPatterns(fixture(), { scope: 'overall' }, now).reliability.overall, null);
 });
 test("filters reject unsupported, sensitive arbitrary filters, invalid dates and future records", () => {
   for (const q of [

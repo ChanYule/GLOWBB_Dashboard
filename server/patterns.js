@@ -1,4 +1,5 @@
 import { defaults, todaySG } from "./domain.js";
+import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import {sessionEventTypes} from './event-types.js';
 import {
   populations,
@@ -733,47 +734,27 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       "Use a broader covered period and collect appropriate voluntary feedback.",
     );
   else {
-    const comparable = groups.filter(
-      (r) =>
-        !r.suppressed &&
-        !missing(r.label) &&
-        r.rate != null &&
-        r.registered >= Math.max(minimum, settings.minParticipants),
+    const reliabilityConfig = reliabilityOptions(settings.reliability);
+    const insight = comparisonInsight(groups, { dimension: q.dimension, options: reliabilityConfig });
+    finding(
+      q.dimension === 'cfs' ? 'CFS comparison' : 'Participation comparison and uncertainty',
+      ratesAvailable ? insight.answer : 'Client participation rates require a complete verified registry and recorded attendance history.',
+      ratesAvailable ? insight.note : 'Attendance-only reach has no registered-client denominator. Missing values are not zero.',
+      'Review group sizes, plausible ranges, programme opportunities and missing registration dates.',
+      'Review sourced feedback before prioritising outreach; recorded differences do not establish causes.',
     );
-    if (comparable.length > 1) {
-      const ranked = [...comparable].sort((a, b) => b.rate - a.rate),
-        high = ranked[0],
-        low = ranked.at(-1);
-      finding(
-        high.rate === low.rate
-          ? "Recorded participation rates are equal."
-          : `${low.label} has lower recorded participation than ${high.label}.`,
-        `${low.unique} of ${low.registered} (${low.rate}%) compared with ${high.unique} of ${high.registered} (${high.rate}%).`,
-        "These are associations within the current registered-client population, not reasons for non-participation.",
-        "Check programme availability, recorded preferences and missing registration dates.",
-        "Review reported barriers and ask clients what would help them take part.",
-      );
-    } else
-      finding(
-        "Participation denominator",
-        ratesAvailable
-          ? "Compare the attending and registered counts shown for each group."
-          : "A complete verified client registry is required for client participation rates; overall scope shows attendance reach only.",
-        "Attendance reach and registered-client participation rates answer different questions.",
-        "Check registry completeness and historical membership coverage.",
-        "Verify the registry before using rates to prioritise outreach.",
-      );
     const g = groups.find((r) => r.label === group);
+    const selectedInsightEligible = !selectedBlocked && members.length >= reliabilityConfig.comparisonFloor;
     finding(
       "Repeat engagement and delivery opportunity",
-      g && !g.suppressed && g.repeat != null
+      selectedInsightEligible && g && !g.suppressed && g.repeat != null
         ? `${group}: ${g.repeat} repeat participants among ${g.opportunity} people attending programmes with more than one delivered session; ${g.repeatRate == null ? "Not applicable" : g.repeatRate + "%"}.`
-        : "Repeat metrics are unavailable or withheld under privacy rules.",
+        : `Repeat insight unavailable: this group is below the ${reliabilityConfig.comparisonFloor}-person comparison floor, or its figures are unavailable/withheld. Recorded figures remain in the group table.`,
       "A one-off workshop has no opportunity for same-programme repeat attendance.",
       "Compare delivery frequency and programme purpose before deciding what to expand.",
       "Review repeat engagement alongside unique reach and participant feedback.",
     );
-    if (!rankingsBlocked && sorted.length) {
+    if (selectedInsightEligible && !rankingsBlocked && sorted.length && sorted[0].unique >= reliabilityConfig.comparisonFloor) {
       const p = sorted[0];
       finding(
         "Leading programme for the selected metric",
@@ -792,24 +773,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       "Check the source and assessment dates of missing or current attributes.",
       "Update records through existing staff-reviewed profile and feedback workflows.",
     );
-    if (q.dimension === "cfs") {
-      const ordered = cfsLabels
-        .map((label) => comparable.find((r) => r.label === label))
-        .filter(Boolean);
-      const down =
-        ordered.length >= 3 &&
-        ordered.every((r, i) => !i || r.rate <= ordered[i - 1].rate) &&
-        ordered[0].rate > ordered.at(-1).rate;
-      finding(
-        "CFS comparison",
-        down
-          ? "Participation rates decrease across the observed ordered CFS categories."
-          : "The available ordered CFS rates do not establish a consistent decreasing pattern.",
-        "CFS is not a causal explanation for attendance differences.",
-        "Compare age and delivery opportunities where protected sample sizes allow.",
-        "Review structured accessibility requirements and staff assessment; attendance alone does not establish suitability.",
-      );
-    }
+
   }
   const selectedProgramme =
     !rankingsBlocked && q.programme
@@ -973,7 +937,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         const rows = combined.rows.filter(
           (r) =>
             r.groups[1] === stratum &&
-            r.registered >= Math.max(minimum, settings.minParticipants) &&
+            r.registered >= Math.max(minimum, reliabilityOptions(settings.reliability).comparisonFloor) &&
             r.rate != null,
         );
         const order = distanceLabels(
@@ -984,24 +948,11 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
           (a, b) => order.indexOf(a.groups[0]) - order.indexOf(b.groups[0]),
         );
         const comparable = rows.filter((r) => order.includes(r.groups[0]));
-        const decreasing =
-          comparable.length >= 3 &&
-          comparable.every((r, i) => !i || r.rate <= comparable[i - 1].rate) &&
-          comparable[0].rate > comparable.at(-1).rate;
+        const withinInsight = comparisonInsight(comparable.map(r => ({ ...r, label: r.groups[0] })), { dimension: 'distance', options: reliabilityOptions(settings.reliability) });
         findings.unshift({
           title: `Distance within ${stratum || "the selected characteristic"}`,
-          evidence:
-            comparable.length > 1
-              ? comparable
-                  .map(
-                    (r) =>
-                      `${r.groups[0]}: ${r.unique}/${r.registered} (${r.rate}%)`,
-                  )
-                  .join("; ")
-              : "Insufficient protected sample sizes for a reliable within-group distance comparison.",
-          interpretation: decreasing
-            ? "Recorded participation decreases across the supported farther bands within this characteristic. This remains an association, not a causal effect."
-            : "A consistent decreasing distance relationship is not established within this characteristic.",
+          evidence: withinInsight.answer,
+          interpretation: withinInsight.note,
           investigate:
             "Check missing addresses, programme opportunities, assessment dates and sourced feedback before interpreting the difference.",
           action:
@@ -1018,28 +969,14 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
           (g) =>
             g &&
             !g.suppressed &&
-            g.registered >= Math.max(minimum, settings.minParticipants) &&
+            g.registered >= Math.max(minimum, reliabilityOptions(settings.reliability).comparisonFloor) &&
             g.rate != null,
         );
-      const down =
-        ordered.length >= 3 &&
-        ordered.every((g, i) => !i || g.rate <= ordered[i - 1].rate) &&
-        ordered[0].rate > ordered.at(-1).rate;
-      const evidence =
-        ordered.length > 1
-          ? ordered
-              .map(
-                (g) => `${g.label}: ${g.unique}/${g.registered} (${g.rate}%)`,
-              )
-              .join("; ")
-          : "Insufficient verified distance groups for a reliable comparison.";
+      const distanceInsight = comparisonInsight(ordered, { dimension: 'distance', options: reliabilityOptions(settings.reliability) });
       findings.unshift({
-        title: down
-          ? "Lower recorded participation in farther groups"
-          : "Distance does not establish a consistent participation decline",
-        evidence,
-        interpretation:
-          "Observed association only. Possible explanations such as programme awareness, transport or accessibility require separate evidence.",
+        title: 'Distance group comparison and uncertainty',
+        evidence: distanceInsight.answer,
+        interpretation: distanceInsight.note,
         investigate:
           "Compare CFS or age within distance bands where sample sizes allow, and review sourced transport feedback.",
         action:
@@ -1059,6 +996,12 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         });
     }
   }
+  const reliabilityConfig = reliabilityOptions(settings.reliability);
+  const overallSafe = ratesAvailable && !comparisonBlocked && !groups.some(g => g.suppressed) &&
+    ![people.filter(p => selected.has(p.id)).length, people.filter(p => !selected.has(p.id)).length].some(nonzeroSmall);
+  const overall = overallSafe ? participationProportion(people.filter(p => selected.has(p.id)).length, people.length) : null;
+  const reliabilityFinding = findings.find(f => ['CFS comparison', 'Participation comparison and uncertainty'].includes(f.title));
+  if (reliabilityFinding) { findings.splice(findings.indexOf(reliabilityFinding), 1); findings.unshift(reliabilityFinding); }
   return {
     dimension: q.dimension,
     location,
@@ -1072,6 +1015,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     minimum,
     ratesAvailable,
     registryComplete,
+    reliability: { ...reliabilityConfig, overall },
     population:
       comparisonBlocked || nonzeroSmall(people.length) ? null : people.length,
     completeness,
@@ -1099,6 +1043,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       ...new Set(state.data.programmes.map((p) => p.domain)),
     ].sort(),
     limitations: [
+      "Plausible ranges are 95% model-based ranges around recorded client proportions. They indicate small-group instability, not missing-data bias or changes to exact counts; overlapping ranges are not a formal significance test. Group and overall rates are not independent. Differences do not prove cause.",
       ...(locationMode
         ? [
             "Residential verification and distance caches reflect current building information, not a historical journey. Unverified clients remain in the denominator with distance unknown.",
