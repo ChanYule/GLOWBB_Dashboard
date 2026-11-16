@@ -17,6 +17,10 @@ Open **Staff Tools → Participation Patterns & Insights**. The three main pages
 
 ## Calculations and definitions
 
+### Selected group and overall context
+
+Primary KPI figures refer to the selected group, with the group's denominator stated explicitly. Muted secondary lines give overall figures for the same period/domain/population. The primary session measure is now the median and middle-50% range among attendees, with the mean available in **Definition and mean** and a tooltip. A six-bin histogram shows sessions per attendee. [Phase 2 staff workflow, definitions, privacy and validation](PHASE-2-GROUP-CONTEXT.md).
+
 ### Participants below 60
 
 The registered-client age view also shows **Below 60 · attendance participants** as a separate attendance summary. **View below-60 attendance and programmes**, or selecting **Below 60** in the group selector, opens all-age attendance analysis focused on that group. Saved client-only Below 60 selections open this attendance view too. Dates, domain and profile basis are retained. Counts use distinct people and person-session pairs; unknown ages stay separate. This does not add anyone to the client registry or change client participation-rate denominators. No registered-client participation rate is shown for the attendance-only group.

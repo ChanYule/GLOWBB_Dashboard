@@ -1,5 +1,6 @@
 import { defaults, todaySG } from "./domain.js";
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
+import { sessionDistribution } from './session-distribution.js';
 import {sessionEventTypes} from './event-types.js';
 import {
   populations,
@@ -399,6 +400,8 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       domains: domains.size,
       averageDomains: average(domainSum, attending.length),
       averageSessions: average(attendance, attending.length),
+      sessionDistribution: settings.staffAnalysisFull && coverage.from
+        ? sessionDistribution(attending.map(p => selected.get(p.id).length)) : null,
       repeat,
       opportunity,
       repeatRate: ratio(repeat, opportunity),
@@ -485,6 +488,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         "repeatRate",
         "attendance",
         "averageSessions",
+        "sessionDistribution",
       ])
         out[key] = null;
     if ([r.firstObserved, r.returning].some(nonzeroSmall)) {
@@ -576,6 +580,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       for (const key of [
         "attendance",
         "averageSessions",
+        "sessionDistribution",
         "repeat",
         "opportunity",
         "repeatRate",
@@ -1000,6 +1005,18 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
   const overallSafe = ratesAvailable && !comparisonBlocked && !groups.some(g => g.suppressed) &&
     ![people.filter(p => selected.has(p.id)).length, people.filter(p => !selected.has(p.id)).length].some(nonzeroSmall);
   const overall = overallSafe ? participationProportion(people.filter(p => selected.has(p.id)).length, people.length) : null;
+  // These new detail aggregates follow the deliberately enabled staff policy.
+  // Conservative/default reports must not reveal a withheld child through a
+  // histogram, quantile or overall total. Never return person-level counts.
+  const overallStats = settings.staffAnalysisFull && !comparisonBlocked ? stats(people) : null;
+  const overallContext = overallStats ? {
+    registered: overallStats.registered,
+    unique: coverage.from ? overallStats.unique : null,
+    attendance: coverage.from ? overallStats.attendance : null,
+    programmes: coverage.from ? overallStats.programmes : null,
+    rate: overallStats.rate,
+    sessionDistribution: overallStats.sessionDistribution,
+  } : null;
   const reliabilityFinding = findings.find(f => ['CFS comparison', 'Participation comparison and uncertainty'].includes(f.title));
   if (reliabilityFinding) { findings.splice(findings.indexOf(reliabilityFinding), 1); findings.unshift(reliabilityFinding); }
   return {
@@ -1016,6 +1033,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     ratesAvailable,
     registryComplete,
     reliability: { ...reliabilityConfig, overall },
+    overallContext,
     population:
       comparisonBlocked || nonzeroSmall(people.length) ? null : people.length,
     completeness,
@@ -1043,6 +1061,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       ...new Set(state.data.programmes.map((p) => p.domain)),
     ].sort(),
     limitations: [
+      "Session medians and the interquartile range (middle 50%) use participating people only, with linear interpolation for quartiles. The histogram uses distinct person-session counts; nonattenders remain in client-rate denominators and are excluded from this distribution. No attendance history means unavailable, not zero sessions.",
       "Plausible ranges are 95% model-based ranges around recorded client proportions. They indicate small-group instability, not missing-data bias or changes to exact counts; overlapping ranges are not a formal significance test. Group and overall rates are not independent. Differences do not prove cause.",
       ...(locationMode
         ? [
@@ -1065,6 +1084,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       rate: "Participating registered clients / eligible current registered clients in the group",
       averageSessions:
         "Distinct person-session attendance entries / participating people",
+      medianSessions: "Median distinct sessions per participating person in the selected period; IQR spans the 25th–75th percentiles using linear interpolation. Nonattenders are excluded.",
       repeatRate:
         "Same-programme repeat participants / people with a multi-session opportunity",
     },

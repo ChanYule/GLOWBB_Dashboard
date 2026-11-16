@@ -9,6 +9,8 @@ import { AttendanceQuestions } from "./attendance-questions-ui";
 import { ParticipationRateChart } from "./participation-rate-chart";
 import type { Reliability } from "./participation-rate-chart";
 import { Under60Participants } from "./under60-participants";
+import { ParticipationGroupSummary } from './participation-group-summary';
+import type { SessionDistribution, OverallContext } from './participation-group-summary';
 import {
   compatibleAnalysis,
   normalizePatternPreferences,
@@ -45,6 +47,7 @@ type Group = {
   domains?: number;
   averageDomains?: number | null;
   averageSessions?: number | null;
+  sessionDistribution?: SessionDistribution | null;
   repeat?: number;
   opportunity?: number;
   repeatRate?: number | null;
@@ -109,6 +112,7 @@ export type Report = {
   ratesAvailable: boolean;
   registryComplete: boolean;
   reliability?: Reliability;
+  overallContext?: OverallContext | null;
   population: number | null;
   completeness: number | null;
   comparisonSuppressed: boolean;
@@ -551,59 +555,8 @@ export function ParticipationPatterns({
               : "Current recorded attributes"}
             {q.domain ? ` / Domain: ${q.domain}` : ""}
           </p>
-          <div className="patterns-kpis">
-            {(report.dimension === "distance" && report.location
-              ? [
-                  [
-                    "Verified residential locations",
-                    fmt(report.location.verifiedClients),
-                  ],
-                  ["Clients with attendance", fmt(report.location.attending)],
-                  ["No recorded attendance", fmt(report.location.noAttendance)],
-                  [
-                    "Selected distance-group rate",
-                    selected?.suppressed
-                      ? "Withheld"
-                      : fmt(selected?.rate, "%"),
-                  ],
-                ]
-              : [
-                  [
-                    report.scope === "clients"
-                      ? "Registered clients"
-                      : "Unique participants",
-                    fmt(report.population),
-                  ],
-                  [
-                    "Selected group participants",
-                    selected?.suppressed ? "Withheld" : fmt(selected?.unique),
-                  ],
-                  [
-                    report.ratesAvailable
-                      ? "Group participation rate"
-                      : "Programmes attended by group",
-                    selected?.suppressed
-                      ? "Withheld"
-                      : report.ratesAvailable
-                        ? fmt(selected?.rate, "%")
-                        : fmt(selected?.programmes),
-                  ],
-                  [
-                    selected?.averageSessions==null?'Known characteristic':'Average sessions / participant',
-                    selected?.suppressed
-                      ? "Withheld"
-                      : selected?.averageSessions==null?fmt(report.completeness,'%'):fmt(selected?.averageSessions),
-                  ],
-                ]
-            ).map(([label, value]) => (
-              <article className="panel" key={label}>
-                <span>{label}</span>
-                <strong title={String(value)}>
-                  {value === "Unavailable / withheld" ? "Unavailable" : value}
-                </strong>
-              </article>
-            ))}
-          </div>
+          <ParticipationGroupSummary report={report} />
+          {report.dimension === 'distance' && report.location && <p className="note"><strong>Verified residential locations</strong>: {fmt(report.location.verifiedClients)} of {fmt(report.location.registered)} registered clients. Overall clients with attendance: {fmt(report.location.attending)}; no recorded attendance: {fmt(report.location.noAttendance)}.</p>}
           {!report.registryComplete && q.scope === "clients" && (
             <section className="panel patterns-prerequisite">
               <h2>
@@ -1217,15 +1170,7 @@ export function ParticipationPatterns({
                 {dimensions[printReport.dimension]} · {printReport.group} ·{" "}
                 {populations[printReport.scope]?.label || printReport.scope}
               </p>
-              <p>
-                Population: {fmt(printReport.population)} · Selected group
-                {printReport.ratesAvailable?'participation rate':'unique participants'}:{" "}
-                {fmt(
-                  printReport.groups.find((g) => g.label === printReport.group)
-                    ?.[printReport.ratesAvailable?'rate':'unique'],
-                  printReport.ratesAvailable?'%':'',
-                )}
-              </p>
+              <ParticipationGroupSummary report={printReport} />
               {printReport.location && (
                 <p>
                   Measure:{" "}

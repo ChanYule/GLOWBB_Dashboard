@@ -78,6 +78,49 @@ const { ParticipationPatterns } = await tsImport(
   import.meta.url,
 );
 const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+const { ParticipationGroupSummary } = await tsImport('../src/participation-group-summary.tsx', import.meta.url);
+test('group KPIs state selected denominators, keep overall context secondary and show median, IQR and histogram', () => {
+  const distribution = { participants: 26, median: 2, q1: 1, q3: 3, mean: 8,
+    bins: [{ label: '1', count: 8 }, { label: '2–3', count: 12 }, { label: '4–5', count: 4 }, { label: '6–10', count: 1 }, { label: '11–20', count: 0 }, { label: '21+', count: 1 }] };
+  const report = { scope: 'clients', group: 'CFS 5', coverage: { from: '2026-05-04', to: '2026-11-06' }, ratesAvailable: true,
+    population: 1473, completeness: 100, groups: [{ label: 'CFS 5', registered: 74, unique: 26, rate: 35.1, sessionDistribution: distribution }],
+    overallContext: { registered: 1473, unique: 166, rate: 11.3, attendance: 300, programmes: 10, sessionDistribution: { ...distribution, participants: 166, median: 1.5 } } };
+  try {
+    const view = render(React.createElement(ParticipationGroupSummary, { report }));
+    const registered = screen.getByRole('article', { name: 'Group registered clients' });
+    assert.equal(registered.querySelector('strong').textContent, '74');
+    assert.match(registered.querySelector('small').textContent, /1,473 registered clients/);
+    const participants = screen.getByRole('article', { name: 'Group participants' });
+    assert.equal(participants.querySelector('strong').textContent, '26');
+    assert.ok(within(participants).getByText('26 of 74 group registered clients attended at least once.'));
+    assert.match(participants.querySelector('small').textContent, /166 of 1,473/);
+    const rate = screen.getByRole('article', { name: 'Group participation rate' });
+    assert.equal(rate.querySelector('strong').textContent, '35.1%'); assert.match(rate.querySelector('small').textContent, /11.3%/);
+    const median = screen.getByRole('article', { name: 'Median sessions per participant' });
+    assert.equal(median.querySelector('strong').textContent, '2'); assert.match(median.textContent, /IQR\): 1–3 sessions/);
+    assert.ok(within(median).getByLabelText('How median sessions per participant is calculated'));
+    assert.match(median.querySelector('strong').title, /Mean.*8/);
+    assert.equal(within(screen.getByRole('list', { name: 'Session count distribution' })).getAllByRole('listitem').length, 6);
+    assert.ok(screen.getByText('12 participants (46.2%)'));
+    view.rerender(React.createElement(ParticipationGroupSummary, { report: { ...report, scope: 'overall', overallContext: { ...report.overallContext, registered: null, rate: null }, groups: [{ ...report.groups[0], registered: null, rate: null }] } }));
+    assert.equal(screen.queryByRole('article', { name: 'Group registered clients' }), null);
+    assert.equal(screen.queryByRole('article', { name: 'Group participation rate' }), null);
+    assert.ok(screen.getByRole('article', { name: 'Group attendance entries' }));
+  } finally { cleanup(); }
+});
+test('missing history and withheld distributions never render fabricated zero medians or histograms', () => {
+  const report = { scope: 'clients', group: '60 to 69', coverage: { from: null, to: null }, ratesAvailable: false, population: 74, completeness: 100,
+    groups: [{ label: '60 to 69', registered: 74, unique: 0, rate: null, attendance: 0, sessionDistribution: null }] };
+  try {
+    const view = render(React.createElement(ParticipationGroupSummary, { report }));
+    assert.equal(screen.getByRole('article', { name: 'Group participants' }).querySelector('strong').textContent, 'Unavailable');
+    assert.equal(screen.getByRole('article', { name: 'Median sessions per participant' }).querySelector('strong').textContent, 'Unavailable');
+    assert.equal(screen.queryByRole('list', { name: 'Session count distribution' }), null);
+    view.rerender(React.createElement(ParticipationGroupSummary, { report: { ...report, coverage: { from: '2026-11-01', to: '2026-11-03' }, groups: [{ label: '60 to 69', suppressed: true }] } }));
+    assert.equal(screen.getByRole('article', { name: 'Group participants' }).querySelector('strong').textContent, 'Withheld');
+    assert.equal(screen.queryByRole('list', { name: 'Session count distribution' }), null);
+  } finally { cleanup(); }
+});
 const { ParticipationRateChart } = await tsImport('../src/participation-rate-chart.tsx', import.meta.url);
 test('participation ranges keep all groups, sort naturally, pool without replacing originals and retain print evidence', () => {
   const groups = [
@@ -368,6 +411,8 @@ test("participation patterns loads one dimension, saves the staff view and print
     programmes: 1,
     domains: 1,
     averageSessions: 2,
+    sessionDistribution: { participants: 10, median: 2, q1: 2, q3: 2, mean: 2,
+      bins: [{ label: '1', count: 0 }, { label: '2–3', count: 10 }, { label: '4–5', count: 0 }, { label: '6–10', count: 0 }, { label: '11–20', count: 0 }, { label: '21+', count: 0 }] },
     repeat: 5,
     opportunity: 10,
     repeatRate: 50,
@@ -386,6 +431,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     ratesAvailable: true,
     registryComplete: true,
     population: 20,
+    overallContext: { registered: 20, unique: 10, attendance: 20, programmes: 1, rate: 50, sessionDistribution: group.sessionDistribution },
     completeness: 100,
     comparisonSuppressed: false,
     groups: [group],
@@ -487,6 +533,9 @@ test("participation patterns loads one dimension, saves the staff view and print
     assert.ok(document.querySelector('.presentation .reliability-interval'));
     assert.match(document.querySelector('.presentation').textContent, /n=20/);
     assert.match(document.querySelector('.presentation').textContent, /95% plausible range/);
+    assert.ok(document.querySelector('.presentation .session-histogram'));
+    assert.equal(document.querySelector('.presentation [aria-label="Median sessions per participant"] strong').textContent, '2');
+    assert.match(document.querySelector('.presentation').textContent, /Middle 50% \(IQR\): 2–2 sessions/);
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       assert.equal(document.querySelectorAll(".presentation").length, 0),

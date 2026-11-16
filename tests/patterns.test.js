@@ -72,6 +72,42 @@ function fixture() {
 }
 const now = "2026-11-05",
   query = { from: "2026-11-01", to: "2026-11-03" };
+test('group and overall session distributions use deduplicated selected-period attendees with separate registry denominators', () => {
+  const s = fixture(); s.settings.staffAnalysisFull = true;
+  s.data.attendance.push({ participantId: 'literal-1-0', sessionId: 'a1' });
+  const snapshot = JSON.stringify(s);
+  const r = participationPatterns(s, { ...query, group: '60 to 69' }, now), g = r.groups.find(g => g.label === r.group);
+  assert.equal(g.registered, 20); assert.equal(g.unique, 10); assert.equal(g.rate, 50);
+  assert.equal(g.sessionDistribution.participants, 10); assert.equal(g.sessionDistribution.median, 2);
+  assert.equal(g.sessionDistribution.q1, 1); assert.equal(g.sessionDistribution.q3, 3); assert.equal(g.sessionDistribution.mean, 2);
+  assert.deepEqual(g.sessionDistribution.bins.map(b => b.count), [5, 5, 0, 0, 0, 0]);
+  assert.equal(r.overallContext.registered, 80); assert.equal(r.overallContext.unique, 40); assert.equal(r.overallContext.attendance, 80);
+  assert.equal(r.overallContext.rate, 50); assert.equal(r.overallContext.sessionDistribution.participants, 40);
+  assert.equal(JSON.stringify(s), snapshot);
+  const physical = participationPatterns(s, { ...query, domain: 'Physical', group: '60 to 69' }, now);
+  assert.equal(physical.groups.find(g => g.label === r.group).sessionDistribution.median, 1.5);
+  assert.equal(physical.overallContext.attendance, 60);
+  const earlier = participationPatterns(s, { from: '2026-10-01', to: '2026-10-01', group: '60 to 69' }, now);
+  assert.equal(earlier.groups.find(g => g.label === r.group).sessionDistribution.median, 1);
+  assert.equal(earlier.overallContext.unique, 20);
+  const all = participationPatterns(s, { ...query, scope: 'overall' }, now);
+  assert.equal(all.overallContext.registered, null); assert.equal(all.overallContext.rate, null); assert.equal(all.overallContext.unique, 40);
+});
+test('new distribution aggregates do not reveal protected groups or turn missing attendance history into zero medians', () => {
+  const s = fixture();
+  let r = participationPatterns(s, { ...query, group: '60 to 69' }, now);
+  assert.equal(r.overallContext, null); assert.ok(r.groups.every(g => g.sessionDistribution == null));
+  s.settings.staffAnalysisFull = true;
+  s.data.sessions = []; s.data.attendance = [];
+  r = participationPatterns(s, { group: '60 to 69' }, now);
+  assert.equal(r.overallContext.registered, 80); assert.equal(r.overallContext.unique, null);
+  assert.equal(r.overallContext.attendance, null); assert.equal(r.overallContext.sessionDistribution, null);
+  assert.ok(r.groups.every(g => g.sessionDistribution == null));
+  const nonattending = fixture(); nonattending.settings.staffAnalysisFull = true;
+  r = participationPatterns(nonattending, { from: '2026-09-01', to: '2026-09-30', group: '60 to 69' }, now);
+  const g = r.groups.find(g => g.label === '60 to 69');
+  assert.equal(g.registered, 20); assert.equal(g.unique, 0); assert.equal(g.sessionDistribution.participants, 0); assert.equal(g.sessionDistribution.median, null);
+});
 test('below-60 selections use attendance without changing client totals or assigning client rates', () => {
   const s = fixture(); s.settings.staffAnalysisFull = true;
   const before = participationPatterns(s, { ...query, scope: 'clients' }, now);
