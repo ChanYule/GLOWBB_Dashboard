@@ -114,7 +114,7 @@ export function PatternControls({
               ["cfs", "CFS Participation Patterns"],
               ["risk", "SRF Participation Patterns"],
               ["race", "Race and Minority Outreach"],
-              ["living", "Living Arrangement Participation"],
+              ["living", "Living arrangement"],
               ["repeat", "Repeat Programme Engagement"],
               ["overall", "Overall Programme Planning"],
               ["gender", "Gender Participation"],

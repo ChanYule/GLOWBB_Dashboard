@@ -1,4 +1,5 @@
 import { defaults, hash, todaySG, matchesSelection } from "./domain.js";
+import { registrationContext } from '../shared/registration-context.js';
 import {
   materializeProfiles,
   interests,
@@ -952,6 +953,7 @@ export function clientReport(
       source: settings.registry?.source || null,
     },
     summary: metrics,
+    registrationContext: registrationContext(selected,p=>p.selectedSessions>0,ctx.coverage.from,settings.staffAnalysisFull && !suppressed && state.settings.registry?.complete===true),
     suppressed,
     minimum,
     privacyNote: settings.staffAnalysisFull?'Staff analysis displays all recorded group counts. Unknown fields and unavailable attendance history are identified separately.':suppressed

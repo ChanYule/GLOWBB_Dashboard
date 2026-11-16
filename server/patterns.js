@@ -2,6 +2,8 @@ import { defaults, todaySG } from "./domain.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
 import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
 import { monthlyClientTrends, comparisonWindow, periodChanges } from './analysis-trends.js';
+import { dataQualitySummary } from './data-quality.js';
+import { registrationContext } from '../shared/registration-context.js';
 import { outreachRules, supportIndicators } from '../shared/outreach-priority-rules.js';
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import { sessionDistribution } from './session-distribution.js';
@@ -153,6 +155,8 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
     );
   if (q.destination && !/^[a-zA-Z0-9-]{1,100}$/.test(q.destination))
     throw fail("Choose a verified destination.");
+  if (['block','locationBlock'].includes(q.dimension) && q.group)
+    q.group = q.group.replace(/ \(unverified; address not assumed\)$/, '');
   if (
     q.blockPage &&
     (!/^\d+$/.test(q.blockPage) || Number(q.blockPage) > 10000)
@@ -1081,6 +1085,9 @@ export function participationPatterns(state, input = {}, now = todaySG(), { incl
   }
   return {
     trendAnalysis,
+    metadata: state.metadata,
+    dataQuality: q.scope === 'clients' && settings.staffAnalysisFull ? dataQualitySummary(clients,state.locations,q.to||now) : null,
+    registrationContext: registrationContext(people,p=>selected.has(p.id),coverage.from,ratesAvailable && settings.staffAnalysisFull && !comparisonBlocked),
     dimension: q.dimension,
     location,
     minority,

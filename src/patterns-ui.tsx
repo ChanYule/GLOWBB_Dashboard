@@ -14,6 +14,11 @@ import type { TwoFactorReport } from '../shared/two-factor-analysis.js';
 import { ProgrammeDiagnosticLabels, ProgrammeDomainMix } from './programme-diagnostic-ui';
 import { AnalysisTrends } from './analysis-trends';
 import type { TrendAnalysis } from './analysis-trends';
+import { DataCompleteness, AddressVerification } from './data-completeness';
+import type { QualitySummary } from './data-completeness';
+import { RegistrationRate } from './registration-rate';
+import type { RegistrationContext } from '../shared/registration-context.js';
+import { AnalysisStamp } from './analysis-stamp';
 import type { ProgrammeDiagnostic, Representation, DomainMix } from '../shared/programme-diagnostics.js';
 import { ParticipationGroupSummary } from './participation-group-summary';
 import type { SessionDistribution, OverallContext } from './participation-group-summary';
@@ -78,6 +83,9 @@ type Programme = {
   averageSessions: number | null;
 };
 export type Report = {
+  metadata?: {lastUpdatedAt?:string|null;generatedAt?:string};
+  dataQuality?: QualitySummary | null;
+  registrationContext?: RegistrationContext | null;
   trendAnalysis?: TrendAnalysis | null;
   domainMix?: DomainMix;
   twoFactor?: TwoFactorReport | null;
@@ -576,7 +584,11 @@ export function ParticipationPatterns({
               : "Current recorded attributes"}
             {q.domain ? ` / Domain: ${q.domain}` : ""}
           </p>
+          <AnalysisStamp metadata={report.metadata} coverage={report.coverage} />
           <ParticipationGroupSummary report={report} />
+          {report.dataQuality && ['block','locationBlock','distance'].includes(report.dimension) && <AddressVerification summary={report.dataQuality} />}
+
+          <RegistrationRate value={report.registrationContext} populationLabel="Overall eligible registry, across groups" />
           <EngagementPanel groups={report.groups} metadata={report.engagement} dimension={report.dimension} populationLabel={populations[report.scope]?.label || report.scope} />
           {report.dimension === 'distance' && report.location && <p className="note"><strong>Verified residential locations</strong>: {fmt(report.location.verifiedClients)} of {fmt(report.location.registered)} registered clients. Overall clients with attendance: {fmt(report.location.attending)}; no recorded attendance: {fmt(report.location.noAttendance)}.</p>}
           {!report.registryComplete && q.scope === "clients" && (
@@ -1036,6 +1048,7 @@ export function ParticipationPatterns({
             ))}
           </section>
           {report.trendAnalysis && loadedQuery === query && !loading && !error && <AnalysisTrends value={report.trendAnalysis} />}
+          {report.dataQuality && loadedQuery === query && !loading && !error && <DataCompleteness showVerification={!['block','locationBlock','distance'].includes(report.dimension)} user={user} asOf={report.dataQuality.asOf} summary={report.dataQuality} revision={revision+locationRevision} onDistance={()=>{setQ(old=>({...old,dimension:'distance',scope:'clients',group:'',second:'',programme:''}));}}/>}
           <details
             className="panel"
             onToggle={(e) => {
@@ -1202,6 +1215,8 @@ export function ParticipationPatterns({
                 {populations[printReport.scope]?.label || printReport.scope}
               </p>
               <ParticipationGroupSummary report={printReport} />
+              <AnalysisStamp metadata={printReport.metadata} coverage={printReport.coverage} />
+              <RegistrationRate value={printReport.registrationContext} populationLabel="Overall eligible registry, across groups" printing />
               {printReport.location && (
                 <p>
                   Measure:{" "}
@@ -1259,6 +1274,7 @@ export function ParticipationPatterns({
             {printReport.engagement && <section className="report-slide"><EngagementPanel groups={printReport.groups} metadata={printReport.engagement} dimension={printReport.dimension} populationLabel={populations[printReport.scope]?.label || printReport.scope} printing /></section>}
             {printReport.twoFactor && <section className="report-slide"><TwoFactorPanel report={printReport.twoFactor} printing /></section>}
             {printReport.trendAnalysis && <section className="report-slide"><AnalysisTrends value={printReport.trendAnalysis} printing /></section>}
+            {printReport.dataQuality && <section className="report-slide"><DataCompleteness user={user} asOf={printReport.dataQuality.asOf} summary={printReport.dataQuality} printing /></section>}
             <section className="report-slide">
               <h2>Findings and planning implications</h2>
               {printReport.findings.slice(0, 3).map((f) => (

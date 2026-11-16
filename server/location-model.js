@@ -221,7 +221,7 @@ export function locatedPerson(
     buildingId: verified ? building.id : null,
     blockLabel: verified
       ? building.address
-      : `Block ${p.blockRaw || "unknown"} (unverified; address not assumed)`,
+      : `Block ${p.blockRaw || "unknown"}`,
     distance: value,
     band: distanceBand(value, store, distanceMetric),
     method:

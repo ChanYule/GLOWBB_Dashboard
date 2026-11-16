@@ -1,5 +1,9 @@
 # Participation Patterns & Insights
 
+[Implementation status, remaining decisions and follow-up](IMPLEMENTATION-STATUS.md).
+
+Monthly trends and equivalent-period changes are documented in [Phase 7](PHASE-7-TRENDS.md). Completeness, address-verification progress, optional known-registration comparison, definitions and source dates are documented in [Phase 8](PHASE-8-DATA-QUALITY.md).
+
 Programme rankings now include explicit repeat-attendance diagnostics, small-sample cautions, registered-client representation and selected-group primary-domain mix. [Phase 6 definitions and staff workflow](PHASE-6-PROGRAMME-DIAGNOSTICS.md).
 
 **Advanced comparison (optional)** now includes a two-factor participation matrix and a cautious support-needs review panel. [Phase 5 workflow, decision rules and export/privacy limits](PHASE-5-TWO-FACTOR-VIEWS.md).

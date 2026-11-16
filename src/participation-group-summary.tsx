@@ -1,4 +1,5 @@
 import { useId } from "react";
+import {MetricHelp} from './metric-help';
 import type { Report } from "./patterns-ui";
 import "./participation-group-summary.css";
 
@@ -125,7 +126,7 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
       <div className="patterns-kpis">
         {cards.map((card) => (
           <article className="panel" key={card.title} aria-label={card.title}>
-            <span>{card.title}</span>
+            <span>{card.title}</span><MetricHelp label={card.title} definition={card.detail+' Selected reporting period and programme-domain filter apply. Muted overall lines use the same population basis.'}/>
             <strong>{card.value}</strong>
             <p>{card.detail}</p>
             <small className="patterns-kpi-overall">{card.overall}</small>

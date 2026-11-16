@@ -1,4 +1,5 @@
 import { useState } from "react";
+import {MetricHelp} from './metric-help';
 import "./analysis-trends.css";
 export type TrendAnalysis = {
   monthly: {
@@ -71,6 +72,7 @@ export function AnalysisTrends({
   return (
     <section className="panel analysis-trends">
       <h2>Monthly client trends</h2>
+      <MetricHelp label="Monthly client metrics" definition="Active: eligible clients with a full-history visit within the configured active band of each monthly anchor. First observed/returning: eligible clients attending in that month, split by earliest available attendance. Sessions: distinct delivered sessions in that month's covered dates and domain. Counts are not rates and have no per-session denominator."/>
       <p>
         Full attendance coverage {value.monthly.from || "Unavailable"} to{" "}
         {value.monthly.to || "Unavailable"}, independent of selected

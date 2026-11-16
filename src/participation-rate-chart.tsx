@@ -1,3 +1,4 @@
+import {MetricHelp} from './metric-help';
 import { useMemo } from "react";
 import {
   comparisonInsight,
@@ -56,7 +57,7 @@ export function ParticipationRateChart({
   const displayed =
     pool && pooled ? [...rows, reliableGroup(pooled, options)] : rows;
   return (
-    <div className="participation-reliability">
+    <div className="participation-reliability"><MetricHelp label="Participation rate and plausible range" definition="Clients attending at least once divided by eligible registered clients in the group, for the selected period/domain. n is the registered denominator. The 95% plausible range indicates model-based instability, not missing-data bias or a formal causal test."/>
       {!printing && (
         <div className="reliability-controls">
           <label>

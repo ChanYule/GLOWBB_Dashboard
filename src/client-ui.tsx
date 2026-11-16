@@ -1,4 +1,7 @@
 import { Coverage } from "./management";
+import { DataCompleteness } from './data-completeness';
+import { RegistrationRate } from './registration-rate';
+import type { RegistrationContext } from '../shared/registration-context.js';
 import { useEffect, useRef, useState,lazy,Suspense } from "react";
 import type { ReactNode } from "react";
 import {
@@ -55,6 +58,7 @@ type Finding = {
   next: string;
 };
 export type ClientReport = {
+  registrationContext?: RegistrationContext | null;
   attendanceAvailable: boolean;
   available: boolean;
   complete: boolean;
@@ -670,7 +674,7 @@ export function ClientEngagement({
   }, [user.role]);
   useEffect(() => {
     if (!ready || user.role === "viewer") return;
-    if(['outreach','priorities'].includes(tab)){setBusy(false);return;}
+    if(['outreach','priorities','quality'].includes(tab)){setBusy(false);return;}
     let live = true;
     const controller = new AbortController();
     setBusy(true);
@@ -796,6 +800,7 @@ export function ClientEngagement({
         {[
           ["outreach", "Outreach priorities"],
           ["priorities", "Follow-up priorities"],
+          ["quality", "Data completeness"],
           ["analysis", "Client participation"],
           ["explore", "Explore client participation gaps"],
           ["followups", "Client follow-up list"],
@@ -1061,7 +1066,7 @@ export function ClientEngagement({
               onChange={(e) => filter("asOf", e.target.value)}
             />
           </label>
-          {!['outreach','priorities'].includes(tab)&&<label className="field">
+          {!['outreach','priorities','quality'].includes(tab)&&<label className="field">
             <span>Participation status</span>
             <select
               value={q.status || ""}
@@ -1084,7 +1089,7 @@ export function ClientEngagement({
           </label>}
         </div>
         <div className="client-actions">
-          {!['outreach','priorities'].includes(tab)&&<button
+          {!['outreach','priorities','quality'].includes(tab)&&<button
             className="text-button"
             aria-expanded={advanced}
             onClick={() => setAdvanced((v) => !v)}
@@ -1100,7 +1105,7 @@ export function ClientEngagement({
             Reset client filters
           </button>
         </div>
-        {!['outreach','priorities'].includes(tab) && advanced && report && (
+        {!['outreach','priorities','quality'].includes(tab) && advanced && report && (
           <div className="client-filter-grid client-advanced">
             {[
               ["gender", "Gender"],
@@ -1226,7 +1231,8 @@ export function ClientEngagement({
           />
         </Suspense>
       )}
-      {tab !== "priorities" && error && (
+      {tab === 'quality' && <DataCompleteness user={user} asOf={q.asOf} revision={revision+dataRevision} onDistance={onLocations} onReview={setSelected} />}
+      {!["priorities","quality"].includes(tab) && error && (
         <div className="error" role="alert">
           {error}
           <button
@@ -1242,7 +1248,7 @@ export function ClientEngagement({
           Calculating linked client participation…
         </p>
       )}
-      {!['outreach','priorities'].includes(tab) && report && reportQuery === JSON.stringify(q) && !error && (
+      {!['outreach','priorities','quality'].includes(tab) && report && reportQuery === JSON.stringify(q) && !error && (
         <>
           <div className="client-scope">
             <span>
@@ -1281,6 +1287,7 @@ export function ClientEngagement({
                   whole-centre coverage.
                 </p>
               )}
+              <RegistrationRate value={report.registrationContext} />
               {!report.attendanceAvailable && (
                 <section className="panel client-notice">
                   <h2>Add attendance to calculate participation coverage</h2>

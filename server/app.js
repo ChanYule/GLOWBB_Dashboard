@@ -1,4 +1,5 @@
 import { mountReporting } from "./reporting.js";
+import { analysisMetadata } from './analysis-metadata.js';
 import {activityDomains} from '../shared/activity-domains.js';
 import {withoutRoutingQuery} from './request-url.js';
 import { reliabilityOptions } from '../shared/participation-reliability.js';
@@ -171,29 +172,7 @@ export function createApp(
     });
     return {
       ...report,
-      metadata: {
-        lastUpdatedAt:
-          [
-            settings.registry?.importedAt,
-            (
-              await db
-                .prepare(
-                  "SELECT MAX(stamp) AS stamp FROM (SELECT MAX(created) AS stamp FROM imports UNION ALL SELECT MAX(updated) AS stamp FROM participant_profiles UNION ALL SELECT MAX(updated) AS stamp FROM needs_actions UNION ALL SELECT MAX(created) AS stamp FROM participant_feedback) AS changes",
-                )
-                .get()
-            )?.stamp,
-          ]
-            .filter(Boolean)
-            .sort()
-            .at(-1) || null,
-        lastImportAt:
-          (
-            await db
-              .prepare("SELECT created FROM imports ORDER BY id DESC LIMIT 1")
-              .get()
-          )?.created || null,
-        generatedAt: new Date().toISOString(),
-      },
+      metadata: await analysisMetadata(db,settings),
       settings,
       targets,
       decisions: (["overview", "context"].includes(f.view)

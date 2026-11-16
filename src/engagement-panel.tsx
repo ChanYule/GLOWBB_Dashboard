@@ -1,3 +1,4 @@
+import {MetricHelp} from './metric-help';
 import { useId, useState } from "react";
 import { engagementLabels } from "../shared/engagement-depth.js";
 import type {
@@ -139,7 +140,7 @@ export function EngagementPanel({
         );
         return (
           <div key={view} className="engagement-view">
-            <h3>{title}</h3>
+            <h3>{title}</h3><MetricHelp label={title} definition="Depth: distinct sessions in the selected period/domain, as a count and percentage of this population. Recency: days since latest full-history attendance, anchored to coverage end. No recorded history and no matching attendance are separate; unavailable/withheld values are not zero."/>
             <ul className="engagement-legend" aria-label={`${title} legend`}>
               {labels[view].map((cell) => (
                 <li key={cell.id}>

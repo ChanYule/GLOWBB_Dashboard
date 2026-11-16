@@ -3,6 +3,7 @@ import type {
   Representation,
   DomainMix,
 } from "../shared/programme-diagnostics.js";
+import {MetricHelp} from './metric-help';
 import "./programme-diagnostics.css";
 const fmt = (n: number | null | undefined) =>
   n == null
@@ -31,6 +32,7 @@ export function ProgrammeDiagnosticLabels({
         </strong>{" "}
         · {audience} attending 2+ sessions ÷ unique {audience}
       </span>
+      <MetricHelp label="Programme repeat attendance" definition="Unique programme attendees with two or more distinct sessions divided by all unique programme attendees in the selected reporting period and filters. The senior-based Programme Analysis table and the selected-group view retain their labelled audiences; one delivered session has limited repeat opportunity."/>
       {diagnostics.singleSession && (
         <small>One delivered session: repeat opportunity was limited.</small>
       )}
@@ -55,6 +57,7 @@ export function ProgrammeDiagnosticLabels({
       {showRepresentation &&
         (representation ? (
           <div className="programme-representation">
+            <MetricHelp label="Representation" definition="The selected group's unique registered-client programme attendees divided by all eligible registered-client attendees of that programme, compared with the group's registered clients divided by the same eligible registry. The selected period/domain applies. Differences are percentage points; the ratio is not a causal or significance test."/>
             <strong>Representation</strong>: group is{" "}
             {representation.groupAttendees} /{" "}
             {representation.programmeAttendees} registered-client attendees (

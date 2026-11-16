@@ -1,4 +1,5 @@
 import { participationPatterns } from "./patterns.js";
+import { analysisMetadata } from './analysis-metadata.js';
 import {staffAnalysisState} from './staff-analysis.js';
 import { dataTransaction } from "./data-management.js";
 import { todaySG } from "./domain.js";
@@ -22,12 +23,8 @@ export function mountPatterns(app, { db, storage }) {
         ),
         { status: 400 },
       );
-    if (
-      [query.dimension, query.second].some((d) =>
-        ["distance", "locationBlock", "block"].includes(d),
-      )
-    )
-      await ensureLocations(db);
+    const needsLocations = !query.scope || query.scope === 'clients' || [query.dimension, query.second].some(d => ['distance','locationBlock','block'].includes(d));
+    if (needsLocations) await ensureLocations(db);
     return dataTransaction(
       db,
       function* (tx) {
@@ -50,12 +47,9 @@ export function mountPatterns(app, { db, storage }) {
               "SELECT participant_id,details,effective_date,created,id FROM profile_history WHERE effective_date IS NOT NULL AND effective_date<=?",
             )
             .all(query.to || todaySG());
-        if (
-          [query.dimension, query.second].some((d) =>
-            ["distance", "locationBlock", "block"].includes(d),
-          )
-        )
+        if (needsLocations)
           state.locations = decodeLocations(yield locationRow(tx));
+        state.metadata = yield analysisMetadata(tx,state.settings);
         return participationPatterns(staffAnalysisState(state,user), query);
       },
       true,

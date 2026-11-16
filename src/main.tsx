@@ -1,5 +1,8 @@
 import { OutreachRulesFields } from "./outreach-rules-fields";
 import { ProgrammeDiagnosticLabels } from './programme-diagnostic-ui';
+import { AnalysisStamp } from './analysis-stamp';
+import { MetricHelp } from './metric-help';
+import './analysis-quality.css';
 import type { Briefing } from "./management";
 import {activityDomains} from '../shared/activity-domains.js';
 import { ImportProgress } from "./import-progress";
@@ -21,7 +24,6 @@ import {
   ArrowDownToLine,
   ArrowRight,
   BarChart3,
-  CalendarDays,
   ChartNoAxesCombined,
   Check,
   ChevronRight,
@@ -819,23 +821,7 @@ function App() {
                 }
                 aria-busy={loading}
               >
-                {![
-                  "Data management",
-                  "Client Engagement",
-                  "Participation Patterns & Insights",
-                ].includes(tab) && (
-                  <div className="period-caption">
-                    <span>
-                      <CalendarDays size={15} />
-                      {pretty(data.period.from)} — {pretty(data.period.to)}
-                    </span>
-                    <span>
-                      {data.metadata?.lastUpdatedAt
-                        ? `Last updated: ${new Date(data.metadata.lastUpdatedAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" })}`
-                        : "Available records - Singapore time"}
-                    </span>
-                  </div>
-                )}
+                {!['Data management','Participation Patterns & Insights'].includes(tab) && <AnalysisStamp metadata={data.metadata} coverage={data.coverage} />}
                 <Suspense
                   fallback={
                     <div className="panel" role="status">
@@ -1849,7 +1835,7 @@ function Programmes({
                 {columns
                   .filter((k) => metrics[k])
                   .map((k) => (
-                    <th scope="col" key={k}>{metrics[k][0]}</th>
+                    <th scope="col" key={k}>{metrics[k][0]}<MetricHelp label={metrics[k][0]} definition={metrics[k][1]+" Selected reporting period and filters apply."}/></th>
                   ))}
               </tr>
             </thead>

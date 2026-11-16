@@ -2,6 +2,9 @@ import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
 import {clientOutreach} from './client-outreach.js';
 import { outreachPriorities } from "./outreach-priorities.js";
+import { dataQualityReport } from './data-quality.js';
+import { ensureLocations, locationRow } from './location-store.js';
+import { decodeLocations } from './location-model.js';
 import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
@@ -413,6 +416,18 @@ export function mountClients(app, { db, storage, upload }) {
       false,
       ["audit"],
     );
+    res.json(result);
+  });
+  app.post('/api/clients/data-quality',async(req,res)=>{
+    privileged(req);
+    await ensureLocations(db);
+    const result=await dataTransaction(db,function*(tx){
+      const state=yield* readState(tx,storage);
+      state.locations=decodeLocations(yield locationRow(tx));
+      const value=dataQualityReport(state,req.body||{},todaySG());
+      yield* audit(tx,req.user.id,'client.data-quality.viewed',{field:value.missingField||'summary',count:value.missingField?value.total:value.summary.total,page:value.page});
+      return value;
+    },false,['audit']);
     res.json(result);
   });
   app.post("/api/clients/priorities/export", async (req) => {

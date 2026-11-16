@@ -3,6 +3,8 @@ import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
 import { participationProportion } from '../shared/participation-reliability.js';
 import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
 import { diagnosticFixture } from './fixtures/programme-diagnostics-state.js';
+import {dataQualityReport} from '../server/data-quality.js';
+import {registrationContext} from '../shared/registration-context.js';
 import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -92,6 +94,33 @@ const { TwoFactorPanel } = await tsImport('../src/two-factor-panel.tsx', import.
 const { ProgrammeDiagnosticLabels, ProgrammeDomainMix } = await tsImport('../src/programme-diagnostic-ui.tsx', import.meta.url);
 const { ProgrammeGroupDiagnostics } = await tsImport('../src/programme-group-diagnostics.tsx', import.meta.url);
 const { AnalysisTrends } = await tsImport('../src/analysis-trends.tsx', import.meta.url);
+const {DataCompleteness}=await tsImport('../src/data-completeness.tsx',import.meta.url);
+const {RegistrationRate}=await tsImport('../src/registration-rate.tsx',import.meta.url);
+const {AnalysisStamp}=await tsImport('../src/analysis-stamp.tsx',import.meta.url);
+
+test('data completeness opens only an audited missing-field list, paginates and reuses client review; print omits personal rows',async()=>{
+ const original=globalThis.fetch,state=diagnosticFixture(),calls=[];let reviewed;
+ state.registry.forEach((r,i)=>{if(i<30){const p=JSON.parse(r.details);p.age=null;r.details=JSON.stringify(p);}});
+ const summary=dataQualityReport(state,{asOf:'2026-11-06'},'2026-11-06').summary;
+ globalThis.fetch=async(url,options)=>{assert.equal(url,'/api/clients/data-quality');const input=JSON.parse(options.body);calls.push(input);return Response.json(dataQualityReport(state,input,'2026-11-06'));};
+ try{const view=render(React.createElement(DataCompleteness,{user:{role:'planner'},asOf:'2026-11-06',summary,onReview:r=>{reviewed=r;},onDistance:()=>{}}));
+ assert.equal(calls.length,0);assert.equal(screen.getByRole('progressbar',{name:'Clients with verified addresses'}).value,80);assert.equal(screen.getByRole('button',{name:'Open Distance analysis'}).disabled,false);
+ fireEvent.click(screen.getByRole('button',{name:'Review missing age'}));await waitFor(()=>assert.ok(screen.getByRole('table',{name:'Clients missing the selected attribute'})));
+ assert.equal(screen.getByRole('table',{name:'Clients missing the selected attribute'}).querySelectorAll('tbody tr').length,25);assert.equal(calls[0].missingField,'age');
+ fireEvent.click(screen.getByRole('button',{name:'Next missing clients'}));await waitFor(()=>assert.equal(screen.getByRole('table',{name:'Clients missing the selected attribute'}).querySelectorAll('tbody tr').length,5));
+ fireEvent.click(screen.getAllByRole('button',{name:'Review client / plan follow-up'})[0]);assert.ok(reviewed);assert.equal(screen.queryByRole('dialog',{name:'Clients with missing information'}),null);
+ view.rerender(React.createElement(DataCompleteness,{user:{role:'planner'},asOf:'2026-11-06',summary,printing:true}));assert.equal(screen.queryByRole('button',{name:/Review missing/}),null);assert.equal(document.body.textContent.includes('MEMBER-'),false);
+ view.rerender(React.createElement(DataCompleteness,{user:{role:'viewer'},asOf:'2026-11-06'}));assert.equal(document.body.textContent,'');
+ }finally{cleanup();globalThis.fetch=original;}
+});
+
+test('registration comparison is optional, names both exclusions and prints its own denominator; update stamp never substitutes generation time',()=>{
+ const value=registrationContext([{id:'a',registrationDate:'2026-05-04'},{id:'b',registrationDate:'2026-05-03'},{id:'c'}],p=>p.id==='a','2026-05-04',true);
+ try{const view=render(React.createElement(RegistrationRate,{value}));assert.equal(screen.queryByText('Known registered by coverage start'),null);fireEvent.click(screen.getByRole('checkbox',{name:'Show known-registration comparison rate'}));assert.ok(screen.getByText(/50%.*1 \/ 2 clients/));assert.ok(screen.getByText(/Excluded: 1 missing\/invalid dates/));assert.ok(screen.getByText('Info').closest('summary').getAttribute('title').includes('full-registry participation rate remains unchanged'));
+ view.rerender(React.createElement(RegistrationRate,{value,printing:true}));assert.equal(screen.queryByRole('checkbox'),null);assert.ok(screen.getByText(/50%.*1 \/ 2 clients/));
+ view.rerender(React.createElement(AnalysisStamp,{metadata:{lastUpdatedAt:null,generatedAt:'2026-11-06T10:00:00Z'},coverage:{from:'2026-05-04',to:'2026-11-03'}}));assert.ok(screen.getByText('Data last updated: Unavailable'));assert.ok(screen.getByText('Attendance coverage: 2026-05-04 to 2026-11-03'));
+ }finally{cleanup();}
+});
 
 test('monthly client trends expose count tables, partial anchors and print definitions without inventing prior comparisons',()=>{
   const state=diagnosticFixture(),report=participationPatterns(state,{scope:'clients',dimension:'age'},'2026-11-06');
