@@ -9,6 +9,8 @@ import { AttendanceQuestions } from "./attendance-questions-ui";
 import { ParticipationRateChart } from "./participation-rate-chart";
 import type { Reliability } from "./participation-rate-chart";
 import { Under60Participants } from "./under60-participants";
+import { TwoFactorPanel } from './two-factor-panel';
+import type { TwoFactorReport } from '../shared/two-factor-analysis.js';
 import { ParticipationGroupSummary } from './participation-group-summary';
 import type { SessionDistribution, OverallContext } from './participation-group-summary';
 import { EngagementPanel } from './engagement-panel';
@@ -70,6 +72,7 @@ type Programme = {
   averageSessions: number | null;
 };
 export type Report = {
+  twoFactor?: TwoFactorReport | null;
   dimension: keyof typeof dimensions;
   location?: null | {
     centre: { address: string; status: string };
@@ -299,6 +302,7 @@ export function ParticipationPatterns({
     [ready, setReady] = useState(false);
   const [comparisonSort, setComparisonSort] = useState("label");
   const [poolSmall, setPoolSmall] = useState(false);
+  const [loadedQuery, setLoadedQuery] = useState('');
   const [printComparison, setPrintComparison] = useState({ sort: "label", pool: false });
   const [metric, setMetric] = useState("rate"),
     [advanced, setAdvanced] = useState(false),
@@ -354,6 +358,7 @@ export function ParticipationPatterns({
         .then((r) => {
           if (!c.signal.aborted) {
             setReport(r);
+            setLoadedQuery(query);
             setError("");
           }
         })
@@ -1033,6 +1038,11 @@ export function ParticipationPatterns({
             </summary>
             {advanced && (
               <>
+                <p>Choose two characteristics to compare client participation in each combination.</p>
+                <button className="button" onClick={() => {
+                  setMetric('rate');
+                  setQ(old => ({ ...old, dimension: 'cfs', second: 'living', scope: 'clients', group: '', programme: '', stratum: '', page: '0' }));
+                }}>Compare CFS × living arrangement</button>
                 <div className="patterns-filter-grid">
                   <label>
                     Second characteristic
@@ -1107,11 +1117,12 @@ export function ParticipationPatterns({
                       </select>
                     </label>
                   )}
+                {report.twoFactor && loadedQuery === query && !loading && !error && <TwoFactorPanel key={report.twoFactor.dimensions.join('|')} report={report.twoFactor} />}
                 {report.combined &&
                   (report.combined.suppressed ? (
                     <p className="note">{denied}</p>
                   ) : (
-                    <div className="work-table">
+                    <details><summary>Additional combined measures</summary><div className="work-table">
                       <table>
                         <thead>
                           <tr>
@@ -1142,7 +1153,7 @@ export function ParticipationPatterns({
                             ))}
                         </tbody>
                       </table>
-                    </div>
+                    </div></details>
                   ))}
               </>
             )}
@@ -1231,6 +1242,7 @@ export function ParticipationPatterns({
               </p>
             </section>
             {printReport.engagement && <section className="report-slide"><EngagementPanel groups={printReport.groups} metadata={printReport.engagement} dimension={printReport.dimension} populationLabel={populations[printReport.scope]?.label || printReport.scope} printing /></section>}
+            {printReport.twoFactor && <section className="report-slide"><TwoFactorPanel report={printReport.twoFactor} printing /></section>}
             <section className="report-slide">
               <h2>Findings and planning implications</h2>
               {printReport.findings.slice(0, 3).map((f) => (

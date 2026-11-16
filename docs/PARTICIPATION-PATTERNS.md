@@ -1,5 +1,7 @@
 # Participation Patterns & Insights
 
+**Advanced comparison (optional)** now includes a two-factor participation matrix and a cautious support-needs review panel. [Phase 5 workflow, decision rules and export/privacy limits](PHASE-5-TWO-FACTOR-VIEWS.md).
+
 This guide describes the original participation-patterns release. For the subsequent location extension, migration 005 and current validation, see [Location, distance and participation](LOCATION-PARTICIPATION.md).
 
 Open **Staff Tools → Participation Patterns & Insights**. The three main pages and the main summary without an Inactive column are preserved.

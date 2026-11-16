@@ -1,4 +1,6 @@
 import { outreachPriorities } from "../server/outreach-priorities.js";
+import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
+import { participationProportion } from '../shared/participation-reliability.js';
 import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -84,6 +86,59 @@ const { OutreachPriorities } = await tsImport(
   "../src/outreach-priorities-ui.tsx",
   import.meta.url,
 );
+const { TwoFactorPanel } = await tsImport('../src/two-factor-panel.tsx', import.meta.url);
+
+test('two-factor matrix labels small and zero cells, paginates both axes, and prints every recorded combination', () => {
+  const rows = Array.from({length:14},(_,i)=>({groups:['Row '+i,'Column '+i],registered:i===1?1:20,unique:0,rate:0,supportIndicators:['Recorded living alone']}));
+  const report=twoFactorAnalysis({combined:{suppressed:false,rows},dimensions:['cfs','living'],ratesAvailable:true,overall:participationProportion(70,100)});
+  try {
+    const view=render(React.createElement(TwoFactorPanel,{report}));
+    const table=screen.getByRole('table',{name:/client participation rate and n/});
+    assert.match(table.textContent,/n=20/);assert.match(table.textContent,/n=0/);assert.match(table.textContent,/0%/);
+    assert.match(table.querySelector('.matrix-small').textContent,/Small group/);
+    assert.equal(table.querySelector('.matrix-small').style.backgroundColor,'');
+    assert.ok(screen.getByText(/not a formal significance test/));
+    assert.ok(screen.getByText(/below the comparison floor/));
+    assert.equal(within(table).queryByText('Row 13'),null);
+    fireEvent.click(screen.getByRole('button',{name:'Next matrix rows'}));
+    assert.ok(within(table).getByText('Row 13'));
+    fireEvent.click(screen.getByRole('button',{name:'Next matrix columns'}));
+    assert.ok(within(table).getByText('Column 6'));
+    view.rerender(React.createElement(TwoFactorPanel,{report,printing:true}));
+    assert.equal(screen.queryByRole('button',{name:'Next matrix rows'}),null);
+    assert.equal(screen.getByRole('table',{name:/all recorded combinations/}).querySelectorAll('tbody tr').length,14);
+    view.rerender(React.createElement(TwoFactorPanel,{report:{...report,status:'withheld',cells:[],findings:[],rows:[],columns:[]}}));
+    assert.equal(screen.queryByRole('table'),null);assert.ok(screen.getByText(/withheld by the existing privacy rules/));
+  } finally { cleanup(); }
+});
+
+test('advanced comparison shortcut requests CFS and living, hides stale matrix results and includes cells in the protected presentation', async () => {
+  const original=globalThis.fetch, state=locationFixture(), calls=[];
+  state.settings.staffAnalysisFull=true;
+  globalThis.fetch=async(url)=>{
+    if(url==='/api/preferences')return Response.json({patterns:{scope:'clients',dimension:'age',basis:'current'}});
+    const q=Object.fromEntries(new URL(String(url),'http://localhost').searchParams);
+    calls.push(String(url));return Response.json(participationPatterns(state,q,'2026-11-06'));
+  };
+  try {
+    render(React.createElement(ParticipationPatterns,{user:{role:'admin'},revision:0}));
+    await waitFor(()=>assert.equal(document.querySelector('.patterns-page').getAttribute('aria-busy'),'false'));
+    const details=screen.getByText('Advanced comparison (optional)').closest('details');details.open=true;fireEvent(details,new Event('toggle'));
+    fireEvent.click(screen.getByRole('button',{name:'Compare CFS × living arrangement'}));
+    await waitFor(()=>assert.ok(screen.getByRole('table',{name:/CFS × Living arrangement.*client participation/})));
+    assert.ok(calls.some(u=>u.includes('dimension=cfs')&&u.includes('second=living')&&u.includes('scope=clients')));
+    fireEvent.change(screen.getByLabelText('Second characteristic'),{target:{value:'age'}});
+    assert.equal(screen.queryByRole('table',{name:/CFS × Living arrangement.*client participation/}),null);
+    await waitFor(()=>assert.ok(screen.getByRole('table',{name:/CFS × Age group.*client participation/})));
+    fireEvent.click(screen.getByRole('button',{name:'Presentation / PDF'}));
+    await waitFor(()=>assert.ok(document.querySelector('.presentation .two-factor-panel')));
+    const presentation=document.querySelector('.presentation');
+    assert.ok(within(presentation).getByRole('table',{name:/CFS × Age group.*all recorded combinations/}));
+    assert.match(presentation.textContent,/n=100/);assert.match(presentation.textContent,/not a formal significance test/);
+    assert.equal(presentation.textContent.includes('MEMBER-'),false);
+    assert.ok(calls.some(u=>u.includes('/api/participation-patterns/export?')&&u.includes('second=age')));
+  }finally{cleanup();globalThis.fetch=original;}
+});
 test("definitions load saved admin-only SRF selections before editing and preserve them on unrelated changes", async () => {
   const original = globalThis.fetch;
   const rules = { ...defaults.outreachRules, riskCodes: ["approved"], highCfsFrom: 6 };

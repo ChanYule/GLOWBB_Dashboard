@@ -1,0 +1,70 @@
+.matrix-scroll {
+  overflow: auto;
+  max-width: 100%;
+  max-height: 640px;
+}
+.participation-matrix {
+  border-collapse: collapse;
+  width: 100%;
+  color: #17314b;
+}
+.two-factor-panel td,
+.two-factor-panel th {
+  padding: 0.75rem;
+  border: 1px solid #c7d2dd;
+  vertical-align: top;
+  text-align: left;
+  min-width: 145px;
+}
+.two-factor-panel caption {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.6rem 0;
+}
+.two-factor-panel small {
+  display: block;
+  line-height: 1.45;
+  margin-top: 0.2rem;
+}
+.matrix-small {
+  background: repeating-linear-gradient(
+    135deg,
+    #f0f2f5,
+    #f0f2f5 7px,
+    #dfe4e9 7px,
+    #dfe4e9 9px
+  );
+  color: #17314b;
+}
+.matrix-unavailable {
+  background: #edf0f3;
+  color: #17314b;
+}
+.matrix-pages {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.matrix-findings li {
+  margin: 0.8rem 0;
+}
+@media print {
+  .two-factor-panel tr {
+    break-inside: avoid;
+  }
+  .matrix-pages {
+    display: none;
+  }
+  .two-factor-panel .work-table {
+    overflow: visible;
+  }
+  .two-factor-panel td,
+  .two-factor-panel th {
+    min-width: 0;
+  }
+  .two-factor-panel {
+    break-inside: auto;
+  }
+}

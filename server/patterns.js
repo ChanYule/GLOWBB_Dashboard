@@ -1,4 +1,6 @@
 import { defaults, todaySG } from "./domain.js";
+import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
+import { outreachRules, supportIndicators } from '../shared/outreach-priority-rules.js';
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import { sessionDistribution } from './session-distribution.js';
 import { engagementOptions, summariseEngagement } from '../shared/engagement-depth.js';
@@ -701,9 +703,19 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       if (!crossed.has(key)) crossed.set(key, []);
       crossed.get(key).push(p);
     }
+    const supportRules = outreachRules(settings.outreachRules);
+    const supportKeys = [
+      ['cfs', 'cfs', 'Recorded CFS at or above ' + supportRules.highCfsFrom],
+      ['living', 'alone', 'Recorded living alone'],
+      ['risk', 'srf', 'Documented SRF indicator selected in settings'],
+    ];
     const rows = [...crossed].map(([key, ms]) => ({
       groups: JSON.parse(key),
       ...stats(ms),
+      supportIndicators: supportKeys.filter(([dimension, indicator]) =>
+        [q.dimension, q.second].includes(dimension) && ms.length > 0 &&
+        ms.every(p => supportIndicators({ ...p, asOf: q.basis === 'dated' ? q.to || now : now }, settings, supportRules).indicators.some(i => i.key === indicator))
+      ).map(([, , label]) => label),
     }));
     const blocked =
       comparisonBlocked ||
@@ -1062,6 +1074,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       rows: domainsBlocked ? [] : domainRows,
     },
     combined,
+    twoFactor: twoFactorAnalysis({ combined, dimensions: [q.dimension, q.second], ratesAvailable, overall, reliability: reliabilityConfig }),
     programmeDetail,
     reportedBarriers: {
       suppressed: barriersBlocked,
