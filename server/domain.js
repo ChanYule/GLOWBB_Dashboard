@@ -109,7 +109,7 @@ export function parseRows(matrix) {
     }
     const raw = Object.fromEntries(headers.map((h, j) => [h, str(values[j])]));
     const signature = hash(
-      [...HEADERS, RISK_HEADER, EVENT_TYPE_HEADER, ...Object.values(OPTIONAL_PROFILE_HEADERS)].map(
+      [...HEADERS, RISK_HEADER, EVENT_TYPE_HEADER, ...Object.values(OPTIONAL_PROFILE_HEADERS), ...headers.filter(h=>/^(centre|centres)$/i.test(h))].map(
         (h) => raw[h],
       ),
     );

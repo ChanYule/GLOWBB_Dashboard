@@ -106,7 +106,7 @@ export function mountPatterns(app, { db, storage }) {
       value.location.destination =
         req.query.destination && req.query.destination !== "centre"
           ? "Selected verified programme venue"
-          : "Main GLOW BB centre";
+          : "Selected centre reference location";
     }
     // Export exactly the same protected aggregate contract as the screen.
     await storage.audit(db, req.user.id, "patterns.summary.exported", {

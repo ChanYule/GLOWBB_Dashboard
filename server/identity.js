@@ -3,7 +3,7 @@ import { hash } from "./domain.js";
 import { passwordHash, verifyPassword } from "./db.js";
 
 const fail = (status, message) => Object.assign(Error(message), { status });
-export function mountIdentity(app, db, { required, production }) {
+export function mountIdentity(app, db, { required, production, resolveUser }) {
   const attempts = new Map();
   app.post("/api/login", async (req, res) => {
     const key = req.ip;
@@ -41,14 +41,14 @@ export function mountIdentity(app, db, { required, production }) {
     const token = req
       .get("cookie")
       ?.match(/(?:^|;\s*)glow_session=([a-f0-9]{64})(?:;|$)/)?.[1];
-    let user;
-    if (token)
+    let user = resolveUser ? await resolveUser(req) : null;
+    if (token && !resolveUser)
       user = await db
         .prepare(
           "SELECT users.id,users.username,users.role FROM users JOIN logins ON logins.user_id=users.id WHERE logins.token=? AND logins.expires>?",
         )
         .get(hash(token), Date.now());
-    if (!user && !required)
+    if (!user && !required && !resolveUser)
       user = await db
         .prepare("SELECT id,username,role FROM users WHERE username=?")
         .get("__local_workspace__");
@@ -72,6 +72,7 @@ export function mountIdentity(app, db, { required, production }) {
       !["GET", "HEAD"].includes(req.method) &&
       req.user.role === "viewer" &&
       !path.startsWith("/api/preferences") &&
+      path !== "/api/centres/preference" &&
       path !== "/api/logout"
     )
       throw fail(403, "This account has read-only access.");

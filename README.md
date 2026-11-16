@@ -1,3 +1,7 @@
+# Programme & Outreach Dashboard
+
+**Multi-centre upgrade:** GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nanyang and SEEN Nanyang now share one staff platform. Start with the [multi-centre setup and staff guide](docs/MULTI-CENTRE.md) for migration 006, staff grants, reviewed historical allocation, centre registries and hosting requirements. Production requires sign-in. Older release notes below describe earlier versions and their former setup.
+
 > **Client outreach priorities:** Full-registry age profiles and block-level gaps for young seniors, minority seniors, seniors living alone and previously attending inactive clients, with recorded working status and existing reviewed follow-up. [Staff workflow, source counts and validation](docs/OUTREACH-PRIORITIES.md). No additional SQL migration is required.
 
 > **Participation analysis fix and compact interface:** Compatible populations/metrics, repaired legacy preferences, a compact analysis selector and side-by-side comparison/ranking panels. [Diagnosis, population definitions, staff workflow and validation](docs/PARTICIPATION-REDESIGN.md). No additional SQL migration is required.
@@ -37,7 +41,7 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Open http://127.0.0.1:3000. The dashboard opens directly without an account or sign-in. Import, settings, targets and planning actions are available in this local workspace.
+Open http://127.0.0.1:3000. Without DASHBOARD_AUTH=1, local development opens directly on loopback. Production requires staff sign-in and assigned centre access; see the multi-centre guide above.
 
 ```powershell
 npm.cmd run build

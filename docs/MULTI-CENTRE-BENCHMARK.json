@@ -1,0 +1,34 @@
+{
+  "syntheticOnly": true,
+  "environment": "Local Windows Node v24.19.0",
+  "participants": 1000,
+  "entries": 1110,
+  "centresOpen": 4,
+  "method": "Same synthetic selected-centre records; legacy createApp versus platform; three warmups, seven HTTP samples. No hosted or concurrent-load claim.",
+  "results": {
+    "before": {
+      "overview": {
+        "medianMs": 17.15,
+        "bytes": 7054,
+        "samples": 7
+      },
+      "patterns": {
+        "medianMs": 26.36,
+        "bytes": 14741,
+        "samples": 7
+      }
+    },
+    "after": {
+      "overview": {
+        "medianMs": 15.68,
+        "bytes": 7194,
+        "samples": 7
+      },
+      "patterns": {
+        "medianMs": 31.26,
+        "bytes": 14851,
+        "samples": 7
+      }
+    }
+  }
+}

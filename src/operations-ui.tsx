@@ -1,3 +1,4 @@
+import {centreUrl} from "./api";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -1434,7 +1435,7 @@ export function OperationsPage({
                 ) && filters.target === "all" ? (
                   <a
                     className="button"
-                    href={"/api/operations/export?" + query}
+                    href={centreUrl("/api/operations/export?" + query)}
                   >
                     <Download size={16} />
                     Export aggregate CSV

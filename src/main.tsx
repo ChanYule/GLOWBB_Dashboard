@@ -1,3 +1,5 @@
+import {CentreImportReview} from './centre-import-review';
+import {centreUrl} from "./api";
 import { OutreachRulesFields } from "./outreach-rules-fields";
 import { ProgrammeDiagnosticLabels } from './programme-diagnostic-ui';
 import { AnalysisStamp } from './analysis-stamp';
@@ -6,7 +8,7 @@ import './analysis-quality.css';
 import type { Briefing } from "./management";
 import {activityDomains} from '../shared/activity-domains.js';
 import { ImportProgress } from "./import-progress";
-import { api } from "./api";
+import { api, currentCentre } from "./api";
 import { metrics, reportingFilters } from "./view-config";
 import { ManagementHome, DomainPortfolio } from "./management";
 import {
@@ -367,13 +369,13 @@ function Brand() {
         <HeartHandshake size={25} />
       </div>
       <span>
-        GLOW<span className="brand-dot">.</span>
-        <small>BUKIT BATOK</small>
+        Programme<span className="brand-dot">.</span>
+        <small>&amp; Outreach</small>
       </span>
     </div>
   );
 }
-function App() {
+function App({initialDates,onDates,onAuthChanged}:{initialDates?:Partial<Filters>;onDates?:(dates:Partial<Filters>)=>void;onAuthChanged?:()=>void}={}) {
   const [user, setUser] = useState<User | null>(null),
     [authError, setAuthError] = useState(""),
     [needsLogin, setNeedsLogin] = useState(false);
@@ -393,7 +395,7 @@ function App() {
   const [planSearch, setPlanSearch] = useState("");
   const [patternsInitial, setPatternsInitial] = useState("");
   const [tab, setTab] = useState("Overview"),
-    [filters, setFilters] = useState<Filters>(emptyFilters),
+    [filters, setFilters] = useState<Filters>({...emptyFilters,...initialDates}),
     [data, setData] = useState<Dashboard | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(false),
@@ -413,6 +415,7 @@ function App() {
     "Social Risk Analysis",
     "Programme Alignment",
   ].includes(tab);
+  useEffect(()=>{onDates?.({from:filters.from,to:filters.to,interval:filters.interval});},[filters.from,filters.to,filters.interval,onDates]);
   const reportView = contextOnly
     ? "context"
     : tab === "Overview"
@@ -440,6 +443,7 @@ function App() {
             if (controller.signal.aborted) return;
             if (e.status === 401) {
               setUser(null);
+              onAuthChanged?.();
               setNeedsLogin(true);
             }
             setError(e.message);
@@ -454,20 +458,20 @@ function App() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, revision, user, reportView]);
+  }, [filters, revision, user, reportView,onAuthChanged]);
   useEffect(() => {
     if (!user) return;
     let live = true;
     api<Preferences>("/api/preferences")
       .then((p) => {
         if (live && p.draft)
-          setFilters(reportingFilters(p.draft, emptyFilters));
+          setFilters({...reportingFilters(p.draft, emptyFilters),...initialDates});
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [user]);
+  }, [user,initialDates]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(""), 6000);
@@ -687,6 +691,7 @@ function App() {
                   className="text-button"
                   onClick={async () => {
                     await api("/api/logout", { method: "POST" });
+                    onAuthChanged?.();
                     setData(null);
                     setUser(null);
                     setNeedsLogin(true);
@@ -708,7 +713,7 @@ function App() {
             <div className="page-heading">
               <div>
                 <div className="eyebrow">
-                  GLOW BUKIT BATOK <span>/</span> PLANNING WITH PURPOSE
+                  CENTRE INTELLIGENCE <span>/</span> PLANNING WITH PURPOSE
                 </div>
                 <h1>{title}</h1>
                 <p className="muted">
@@ -795,6 +800,7 @@ function App() {
                 setFilters={setFilters}
               />
             )}
+            {data && currentCentre() && !data.coverage.from && <section className="panel centre-empty"><h2>No programme attendance data has been imported for this centre.</h2><p>{currentCentre()!.name}. Registered-client participation rates require a verified centre client registry. Other centres and the unassigned legacy archive are excluded.</p>{user.role==='admin'&&<Button primary onClick={()=>setModal('import')}>Import centre attendance</Button>}</section>}
             {error && (
               <div className="error" role="alert">
                 {error}
@@ -868,7 +874,7 @@ function App() {
                       user={user}
                       onRefresh={() => refresh()}
                     />
-                  ) : data.coverage.from === null &&
+                  ) : currentCentre() && !data.coverage.from && tab === "Overview" ? null : data.coverage.from === null &&
                     ![
                       "Overview",
                       "Planning & Recommendations",
@@ -1150,7 +1156,7 @@ function App() {
               <div className="export-options">
                 <a
                   className="export-option"
-                  href={"/api/export/csv?" + new URLSearchParams(filters)}
+                  href={centreUrl("/api/export/csv?" + new URLSearchParams(filters))}
                 >
                   <ArrowDownToLine />
                   <span>
@@ -1165,7 +1171,7 @@ function App() {
                   className="export-option"
                   target="_blank"
                   rel="noreferrer"
-                  href={"/api/export/report?" + new URLSearchParams(filters)}
+                  href={centreUrl("/api/export/report?" + new URLSearchParams(filters))}
                 >
                   <ClipboardList />
                   <span>
@@ -3078,6 +3084,7 @@ function ImportDialog({
   )
     ? 8
     : 4;
+  const [receipt,setReceipt]=useState<Record<string,{imported:number}>|null>(null);
   const [preview, setPreview] = useState<Preview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -3115,10 +3122,11 @@ function ImportDialog({
     setBusy(true);
     setError("");
     try {
-      await api("/api/import/confirm", {
+      const result=await api<{centres?:Record<string,{imported:number}>}>("/api/import/confirm", {
         method: "POST",
-        body: JSON.stringify({ id: preview!.id, confirmation }),
+        body: JSON.stringify({ id: preview!.id, confirmation, confirmed:true }),
       });
+      if(result.centres){setReceipt(result.centres);return;}
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -3146,6 +3154,7 @@ function ImportDialog({
         () => {},
       );
   };
+  if(receipt)return <Modal title="Import receipt by centre" onClose={onDone}><h3>Attendance imported</h3>{Object.entries(receipt).map(([id,r])=><p key={id}>{id}: {r.imported} entries imported</p>)}<Button primary onClick={onDone}>Done and refresh selected centre</Button></Modal>;
   return (
     <Modal
       title={preview ? "Review attendance import" : "Import attendance"}
@@ -3163,9 +3172,9 @@ function ImportDialog({
               Add New Records ? retain existing profiles
             </option>
             <option value="merge">Merge and Update Existing Records</option>
-            <option value="replace">
+            {!currentCentre() && <option value="replace">
               Full Replacement ? attendance only, backup required
-            </option>
+            </option>}
           </Select>
           <p>
             Merge keeps historical attendance, updates nonblank profile values
@@ -3203,9 +3212,10 @@ function ImportDialog({
             </p>
           </details>
           <Note>
+            {currentCentre() ? 'Centres (or Centre) is required for automatic location classification. Unknown locations need a reviewed row override. Attendance does not establish client affiliation. ' : ''}
             Attendance is added only after you review and confirm. A temporary
             preview expires after 20 minutes. Raw Member IDs are hashed for
-            matching and are not retained; the file itself is not stored.
+            matching. Temporary import source data expires after 20 minutes.
           </Note>
           <Button primary type="submit" disabled={busy}>
             {busy ? "Validating file…" : "Preview import"}
@@ -3234,6 +3244,7 @@ function ImportDialog({
               </div>
             ))}
           </div>
+          <CentreImportReview preview={preview} onReviewed={p=>{setPreview(p);setConsent(false);}}/>
           <Note>
             Attendance identity uses Member ID, exact trimmed programme name,
             date and both session times. Separate sessions on the same day
@@ -3357,7 +3368,7 @@ function ImportDialog({
               primary
               disabled={
                 busy ||
-                !consent ||
+                !consent || !!preview.unclassified || !!preview.deniedCentres?.length ||
                 (!preview.ready && !preview.updatedProfiles && !preview.updatedSessions) ||
                 (mode === "replace" && confirmation !== "REPLACE ATTENDANCE")
               }

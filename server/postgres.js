@@ -5,7 +5,7 @@ import { inspectImport, defaults, hash } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
-  /\b(schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
+  /\b(legacy_allocations|centres|centre_access|platform_preferences|platform_configuration|schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
@@ -57,14 +57,21 @@ export function postgresStatement(statement) {
   return sql;
 }
 
-export function openPostgres(connectionString, { pool } = {}) {
+export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {}) {
   if (!pool) {
     pool = new pg.Pool(postgresOptions(connectionString));
     pool.on("error", () =>
       console.error("Dashboard database connection interrupted."),
     );
   }
+  if(!/^(glowbb|centre_(?:glow|seen)_(?:bukit_batok|nanyang))$/.test(schema))throw Error('Unsupported workspace schema.');
+  const rawPool=pool;
+  if(schema!=='glowbb'){
+    const wrap=client=>({query:(sql,values)=>client.query(sql.replace(/\bglowbb\./g,schema+'.'),values),release:()=>client.release()});
+    pool={query:(sql,values)=>rawPool.query(sql.replace(/\bglowbb\./g,schema+'.'),values),connect:async()=>wrap(await rawPool.connect()),end:()=>Promise.resolve()};
+  }
   const db = adapter(pool);
+  db.centreConnection = id => openPostgres(connectionString,{pool:rawPool,schema:'centre_'+id});
   db.close = () => pool.end();
   db.transaction = async (work, { readOnly = false } = {}) => {
     const client = await pool.connect();
@@ -250,6 +257,7 @@ async function saveImport(db, parsed, inspection, user) {
     await db.prepare("DELETE FROM attendance").run();
   }
   const summary = {
+    ...(parsed.platformImportId ? {platformImportId:parsed.platformImportId} : {}),
     updatedSessions: inspection.sessionUpdates?.length || 0,
     updatedProfiles: inspection.updates?.length || 0,
     mode: inspection.mode || "add",

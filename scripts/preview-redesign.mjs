@@ -1,11 +1,11 @@
 // Isolated, synthetic browser-QA fixture. Never opens a local or hosted database.
 import express from "express";
 import { readFileSync } from "node:fs";
-import { createApp } from "../server/app.js";
-import { openDb, readData, saveImport } from "../server/db.js";
+import { centreQaFixture } from "./centre-qa-fixture.mjs";
+import { readData, saveImport } from "../server/db.js";
 import { HEADERS, parseRows, inspectImport } from "../server/domain.js";
-const db = openDb(":memory:");
-const app = createApp(db, { production: true, authRequired: false });
+const fixture=await centreQaFixture();
+const {db,app}=fixture;
 const actor = db
   .prepare("SELECT id FROM users WHERE username=?")
   .get("__local_workspace__").id;
@@ -56,8 +56,8 @@ const server = app.listen(3100, "127.0.0.1", () =>
 );
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () =>
-    server.close(() => {
-      db.close();
+    server.close(async () => {
+      await fixture.close();
       process.exit(0);
     }),
   );

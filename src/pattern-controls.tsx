@@ -219,7 +219,7 @@ export function PatternControls({
                 >
                   {(destinations.length
                     ? destinations
-                    : [{ id: "centre", label: "Main GLOW BB centre" }]
+                    : [{ id: "centre", label: "Selected centre reference location" }]
                   ).map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.label}

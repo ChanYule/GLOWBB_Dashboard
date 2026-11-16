@@ -1,4 +1,14 @@
-﻿async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+import type {Centre} from '../shared/centres.js';
+let selectedCentre: Centre | null = null;
+let centreGeneration = 0;
+export const currentCentre = () => selectedCentre;
+export function setCentreContext(centre:Centre|null){selectedCentre=centre;centreGeneration++;inFlight.clear();}
+export function centreUrl(url:string){
+  if(!selectedCentre||!url.startsWith('/api/')||/^\/api\/(me|login|logout|users|centres)(?:[/?]|$)/.test(url))return url;
+  const parsed=new URL(url,'http://centre.local');parsed.searchParams.set('centre',selectedCentre.id);return parsed.pathname+parsed.search;
+}
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const generation=centreGeneration;
   const timeoutMessage =
     url.split("?")[0] === "/api/client-registry/confirm"
       ? "The save request timed out. Refresh the dashboard and check whether the registry was saved before trying again. If it was not saved, preview the file again."
@@ -48,6 +58,7 @@
       "The dashboard data service returned an unreadable response. Please try again.",
     );
   }
+  if(generation!==centreGeneration)throw new DOMException('Centre changed; obsolete response discarded.','AbortError');
   if (!res.ok) {
     const timeout =
       data &&
@@ -77,6 +88,7 @@
 // and never share a cancellable request with another caller.
 const inFlight = new Map<string, Promise<unknown>>();
 export function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+  url=centreUrl(url);
   if ((options.method || "GET") !== "GET") {
     inFlight.clear();
     return request<T>(url, options);

@@ -46,7 +46,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
     if (target.origin !== base.origin || !target.pathname.startsWith("/api/"))
       return json(res, 400, "Invalid API path.");
     const headers = new Headers();
-    for (const key of ["content-type", "accept", "origin", "cookie"])
+    for (const key of ["content-type", "accept", "origin", "cookie", "x-centre-id"])
       if (req.headers[key]) headers.set(key, req.headers[key]);
     let body;
     if (!["GET", "HEAD"].includes(req.method)) {
@@ -166,11 +166,11 @@ export function createHostedHandler({ databaseUrl, backendUrl, loadApp } = {}) {
       application ||= loadApp
         ? loadApp()
         : (async () => {
-            const [{ createApp }, { openPostgres }] = await Promise.all([
-              import("../server/app.js"),
+            const [{ createPlatformApp }, { openPostgres }] = await Promise.all([
+              import("../server/platform.js"),
               import("../server/postgres.js"),
             ]);
-            return createApp(openPostgres(databaseUrl), { production: true });
+            return createPlatformApp(openPostgres(databaseUrl), { production: true });
           })();
       const app = await application;
       // Rewrite metadata can exist in both the URL and Vercel's own property.

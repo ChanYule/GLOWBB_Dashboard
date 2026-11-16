@@ -1,7 +1,7 @@
-import { createApp } from "./app.js";
+import { createPlatformApp } from "./platform.js";
 import { openPostgres } from "./postgres.js";
 const production = process.argv.includes("--production");
-const app = createApp(
+const app = createPlatformApp(
   process.env.DATABASE_URL ? openPostgres(process.env.DATABASE_URL) : undefined,
   { production },
 );

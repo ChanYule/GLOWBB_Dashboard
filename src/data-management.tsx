@@ -1,3 +1,4 @@
+import {centreUrl} from "./api";
 import { useEffect, useRef, useState } from "react";
 import {
   ArchiveRestore,
@@ -471,7 +472,7 @@ export function DataManagement({
                           )}
                         </div>
                         <div className="data-backup-actions">
-                          <a className="button" href={"/api/backups/" + b.id}>
+                          <a className="button" href={centreUrl("/api/backups/" + b.id)}>
                             <Download size={15} /> Download
                           </a>
                           {b.restorable && (

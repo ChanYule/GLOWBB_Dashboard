@@ -921,7 +921,7 @@ export function mountClients(app, { db, storage, upload }) {
         );
     else if (req.params.format === "report")
       res.type("html").send(
-        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>GLOW BB Client Engagement</title><style>body{font:16px system-ui;max-width:900px;margin:40px auto;padding:20px;color:#202c48}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}table{width:100%;border-collapse:collapse}@media print{button{display:none}}</style><h1>Client engagement and outreach</h1><p>${esc(r.populationNote)}</p><p>${esc(r.period.from)} to ${esc(r.period.to)}. Attendance coverage: ${esc(r.coverage.from)} to ${esc(r.coverage.to)}.</p><h2>Who are they?</h2><table>${Object.entries(
+        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Programme &amp; Outreach / Client Engagement</title><style>body{font:16px system-ui;max-width:900px;margin:40px auto;padding:20px;color:#202c48}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}table{width:100%;border-collapse:collapse}@media print{button{display:none}}</style><h1>Client engagement and outreach</h1><p>${esc(r.populationNote)}</p><p>${esc(r.period.from)} to ${esc(r.period.to)}. Attendance coverage: ${esc(r.coverage.from)} to ${esc(r.coverage.to)}.</p><h2>Who are they?</h2><table>${Object.entries(
           labels,
         )
           .map(

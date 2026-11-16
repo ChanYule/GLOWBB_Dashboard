@@ -266,7 +266,7 @@ export function publicLocationSummary(store) {
     bands: store.bands,
     timeBands: store.timeBands,
     destinations: [
-      { id: "centre", label: "Main GLOW BB centre" },
+      { id: "centre", label: "Selected centre reference location" },
       ...Object.values(store.venues)
         .filter((p) => p.status === "Verified")
         .map((p) => ({ id: p.id, label: p.venueName })),

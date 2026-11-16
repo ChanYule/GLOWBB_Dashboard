@@ -156,6 +156,10 @@ export type Insight = {
   programmeId?: string;
 };
 export type Preview = {
+  centreCounts?: Record<string,number>;
+  unclassified?: number;
+  deniedCentres?: string[];
+  classificationReview?: {row:number;activity:string;location:string;reason:string}[];
   updatedSessions?: number;
   sessionChanges?:{programme:string;date:string;before:string;after:string}[];
   id: string;
@@ -183,6 +187,7 @@ export type Preview = {
     end: number;
     warnings: string[];
     eventType?:string;
+    centreId?:string;
   }[];
   reference: Record<string, string | number | null>;
   expectedReference: Record<string, string | number>;

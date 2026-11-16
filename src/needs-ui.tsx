@@ -1,4 +1,5 @@
-﻿import { useEffect, useState, useCallback, useRef } from "react";
+import {centreUrl} from "./api";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api } from "./api";
 import { ClientRegistryImport } from "./client-import";
@@ -696,13 +697,13 @@ export function NeedsPage({
           )}
           <a
             className="button"
-            href={"/api/needs/export/csv?" + new URLSearchParams(filters)}
+            href={centreUrl("/api/needs/export/csv?" + new URLSearchParams(filters))}
           >
             Export summary CSV
           </a>
           <a
             className="button"
-            href={"/api/needs/export/report?" + new URLSearchParams(filters)}
+            href={centreUrl("/api/needs/export/report?" + new URLSearchParams(filters))}
             target="_blank"
             rel="noreferrer"
           >

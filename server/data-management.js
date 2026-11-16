@@ -75,6 +75,7 @@ const tables = {
   location_store: ["id", "revision", "value"],
 };
 const names = Object.keys(tables);
+export { tables as workspaceTables, snapshot as workspaceSnapshot };
 const reversed = [...names].reverse();
 const backupKind = "workspace-data-v1";
 // Existing client workflows run before optional location storage is initialized.

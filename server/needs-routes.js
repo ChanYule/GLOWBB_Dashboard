@@ -1217,7 +1217,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
       ];
     });
     const rows = [
-      ["GLOW BB needs-based management summary"],
+      ["Programme & Outreach needs-based management summary"],
       ["Period", r.period.from, r.period.to],
       ["Active filters", JSON.stringify(filters(req))],
       ["WHO ARE THEY?"],
@@ -1340,7 +1340,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>GLOW BB management summary</title><style>body{font:15px system-ui;color:#16304c;max-width:1100px;margin:30px auto;padding:20px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}tr{break-inside:avoid}h1{font-size:28px}@media print{body{margin:0;padding:0}}</style><h1>GLOW BB · Needs-based programme planning</h1><p>Generated ${esc(r.generatedAt)} · latest-known profiles; not historical assessments. Print → Save as PDF.</p><table>${rows.map((row) => `<tr>${row.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</table></html>`,
+        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Programme & Outreach management summary</title><style>body{font:15px system-ui;color:#16304c;max-width:1100px;margin:30px auto;padding:20px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #ddd;overflow-wrap:anywhere}tr{break-inside:avoid}h1{font-size:28px}@media print{body{margin:0;padding:0}}</style><h1>Needs-based programme planning</h1><p>Generated ${esc(r.generatedAt)} · latest-known profiles; not historical assessments. Print → Save as PDF.</p><table>${rows.map((row) => `<tr>${row.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</table></html>`,
       );
   });
 }

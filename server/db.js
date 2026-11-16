@@ -112,6 +112,7 @@ export function saveImport(db, parsed, inspection, user) {
         id,
       );
     const summary = {
+      ...(parsed.platformImportId ? {platformImportId:parsed.platformImportId} : {}),
       updatedSessions: inspection.sessionUpdates?.length || 0,
       updatedProfiles: inspection.updates?.length || 0,
       mode: inspection.mode || "add",

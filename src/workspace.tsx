@@ -1,3 +1,4 @@
+import {centreUrl} from "./api";
 import { metrics, reportingFilters } from "./view-config";
 export { metrics, reportingFilters } from "./view-config";
 import type { NeedsReport, ProtectedSeries } from "./needs-ui";
@@ -346,14 +347,12 @@ function Chart({
         !["male", "minority"].includes(chart.metric) && (
           <a
             className="text-button"
-            href={
-              "/api/analysis/export?" +
+            href={centreUrl("/api/analysis/export?" +
               new URLSearchParams({
                 ...filters,
                 group: chart.group,
                 metric: chart.metric,
-              })
-            }
+              }))}
           >
             Export results as CSV
           </a>
@@ -809,9 +808,7 @@ export function PersonalWorkspace({
         {view.id && user.role !== "viewer" && (
           <a
             className="button"
-            href={
-              "/api/analysis/view/" + encodeURIComponent(view.id) + "/export"
-            }
+            href={centreUrl("/api/analysis/view/" + encodeURIComponent(view.id) + "/export")}
           >
             Export saved view as CSV
           </a>
@@ -1103,7 +1100,7 @@ export function Login({ onDone }: { onDone: (user: User) => void }) {
           }
         }}
       >
-        <span className="eyebrow">GLOW BUKIT BATOK</span>
+        <span className="eyebrow">Programme & Outreach Dashboard</span>
         <h1>Staff sign in</h1>
         <p>Programme impact & outreach</p>
         <label className="field">

@@ -1,3 +1,4 @@
+import {centreUrl} from "./api";
 import { Coverage } from "./management";
 import { DataCompleteness } from './data-completeness';
 import { RegistrationRate } from './registration-rate';
@@ -1682,14 +1683,12 @@ export function ClientEngagement({
                 <div className="client-actions">
                   <a
                     className="button"
-                    href={
-                      "/api/clients/export/csv?" +
+                    href={centreUrl("/api/clients/export/csv?" +
                       new URLSearchParams({
                         from: q.from || "",
                         to: q.to || "",
                         asOf: q.asOf,
-                      })
-                    }
+                      }))}
                   >
                     <Download size={16} /> Export centre summary CSV
                   </a>
@@ -1697,14 +1696,12 @@ export function ClientEngagement({
                     className="button"
                     target="_blank"
                     rel="noreferrer"
-                    href={
-                      "/api/clients/export/report?" +
+                    href={centreUrl("/api/clients/export/report?" +
                       new URLSearchParams({
                         from: q.from || "",
                         to: q.to || "",
                         asOf: q.asOf,
-                      })
-                    }
+                      }))}
                   >
                     Print management summary
                   </a>

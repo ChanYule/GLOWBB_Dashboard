@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import {currentCentre} from './api';
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { Cards, Coverage, ReportBars, useBriefing } from "./management";
@@ -12,7 +13,7 @@ const fmt = (n: number | null | undefined) =>
 function usePresentation(close: () => void) {
   useEffect(() => {
     const old = document.title;
-    document.title = "GLOW Bukit Batok — Management report";
+    document.title = (currentCentre()?.name || "Programme & Outreach Dashboard") + " / Management report";
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.body.classList.add("presenting");
@@ -81,6 +82,7 @@ export function PresentationFrame({
           Print / Save as PDF
         </button>
       </div>
+      {currentCentre() && <p className="centre-report-scope">Centre: {currentCentre()!.name}</p>}
       {children}
     </div>,
     document.body,
@@ -159,9 +161,9 @@ export function PresentationView({
         <>
           <section className="report-slide" id="report-0">
             <span className="eyebrow">
-              GLOW BUKIT BATOK · MANAGEMENT REPORT
+              PROGRAMME &amp; OUTREACH / MANAGEMENT REPORT
             </span>
-            <h1>{titles[0]}</h1>
+            <h1>{titles[0]}</h1>{currentCentre() && <p className="centre-report-scope">Centre: {currentCentre()!.name}</p>}
             <p>
               {data.period.from || "Available history"} to {data.period.to} ·
               Generated {new Date().toLocaleDateString("en-SG")}

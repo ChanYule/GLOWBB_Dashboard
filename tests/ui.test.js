@@ -5,6 +5,7 @@ import { programmeDiagnostics, programmeRepresentation } from '../shared/program
 import { diagnosticFixture } from './fixtures/programme-diagnostics-state.js';
 import {dataQualityReport} from '../server/data-quality.js';
 import {registrationContext} from '../shared/registration-context.js';
+import {CENTRES} from '../shared/centres.js';
 import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -97,6 +98,40 @@ const { AnalysisTrends } = await tsImport('../src/analysis-trends.tsx', import.m
 const {DataCompleteness}=await tsImport('../src/data-completeness.tsx',import.meta.url);
 const {RegistrationRate}=await tsImport('../src/registration-rate.tsx',import.meta.url);
 const {AnalysisStamp}=await tsImport('../src/analysis-stamp.tsx',import.meta.url);
+const {PlatformApp}=await tsImport('../src/platform.tsx',import.meta.url);
+const {CentreImportReview}=await tsImport('../src/centre-import-review.tsx',import.meta.url);
+const {api:centreApi,setCentreContext,centreUrl}=await tsImport('../src/api.ts',import.meta.url);
+
+test('centre API keys isolate concurrent requests and discard obsolete responses; export links retain explicit context',async()=>{
+ const original=globalThis.fetch,calls=[];let release;
+ globalThis.fetch=async url=>{calls.push(String(url));if(String(url).includes('glow_bukit_batok'))return new Promise(r=>{release=r;});return Response.json({scope:'new centre'});};
+ try{setCentreContext(CENTRES[0]);const old=centreApi('/api/dashboard');const rejected=assert.rejects(old,e=>e.name==='AbortError');setCentreContext(CENTRES[2]);const current=await centreApi('/api/dashboard');assert.equal(current.scope,'new centre');release(Response.json({scope:'old centre'}));await rejected;assert.equal(calls.length,2);assert.ok(calls[0].includes('centre=glow_bukit_batok'));assert.ok(calls[1].includes('centre=glow_nanyang'));assert.match(centreUrl('/api/export/report?from=2026-05-04'),/centre=glow_nanyang/);assert.equal(centreUrl('/api/centres/compare'),'/api/centres/compare');}finally{setCentreContext(null);globalThis.fetch=original;}
+});
+
+test('global centre selector shows authorised options, resets child views, preserves dates and cannot show a stale old-centre dashboard',async()=>{
+ const original=globalThis.fetch,calls=[],empty={...dashboard(),coverage:{from:null,to:null},summary:{...dashboard().summary,attendance:0}};let release;
+ const oldResponse=new Promise(resolve=>{release=resolve;});
+ globalThis.fetch=async(url)=>{
+  const text=String(url);calls.push(text);if(text==='/api/me')return Response.json({id:1,username:'manager',role:'planner',centres:[CENTRES[0],CENTRES[2]],preferredCentre:CENTRES[0].id,canCompare:false});
+  if(text==='/api/centres/preference')return Response.json({ok:true});
+  if(text.startsWith('/api/preferences'))return Response.json(text.includes('glow_bukit_batok')?{draft:{filters:{from:'2026-05-04',to:'2026-11-03',programme:'old-programme'}}}:{});
+  if(text.startsWith('/api/dashboard')&&text.includes('glow_bukit_batok'))return oldResponse;
+  return Response.json(empty);
+ };
+ try{render(React.createElement(PlatformApp));await waitFor(()=>assert.ok(screen.getByLabelText('Selected centre')));assert.equal(screen.getByLabelText('Selected centre').options.length,2);await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('from=2026-05-04'))));fireEvent.change(screen.getByLabelText('Selected centre'),{target:{value:'glow_nanyang'}});assert.equal(document.querySelector('.selected-centre-name').textContent,'GLOW Nanyang');await waitFor(()=>assert.ok(screen.getByText('No programme attendance data has been imported for this centre.')));release(Response.json({...empty,programmes:[{name:'STALE OLD CENTRE'}]}));await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('centre=glow_nanyang')&&u.includes('from=2026-05-04')&&!u.includes('old-programme'))));assert.equal(document.body.textContent.includes('STALE OLD CENTRE'),false);assert.equal(document.title,'GLOW Nanyang | Programme & Outreach Dashboard');}finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
+});
+
+test('centre administration tab switches never render the previous response shape or stale comparison scope',async()=>{
+ const original=globalThis.fetch;let release;
+ globalThis.fetch=async url=>String(url).includes('/compare')?new Promise(r=>{release=r;}):Response.json({programmes:[],attendance:0,note:'Reviewed source',users:[],grants:[],preferences:[]});
+ try{const {CentreTools}=await tsImport('../src/centre-tools.tsx',import.meta.url);render(React.createElement(CentreTools,{staff:{role:'admin',canCompare:true,centres:CENTRES},onChanged:()=>{}}));await waitFor(()=>assert.ok(screen.getByText('Historical records require reviewed centre allocation')));fireEvent.click(screen.getByRole('button',{name:'Compare authorised centres'}));assert.equal(screen.queryByText('Historical records require reviewed centre allocation'),null);await waitFor(()=>assert.ok(release));release(Response.json({rows:[],combined:{unique:null},note:'Exact ID verification required'}));await waitFor(()=>assert.ok(screen.getByText('Authorised centre comparison')));fireEvent.change(screen.getByLabelText('Cross-centre comparison scope'),{target:{value:'glow_nanyang,seen_nanyang'}});assert.equal(screen.queryByText('Exact ID verification required'),null);}finally{cleanup();globalThis.fetch=original;}
+});
+
+test('centre import review requires provenance and applies an explicit unresolved-row centre override',async()=>{
+ const original=globalThis.fetch;let sent,reviewed;const preview={id:'review',centreCounts:Object.fromEntries(CENTRES.map(c=>[c.id,0])),unclassified:1,duplicates:0,classificationReview:[{row:2,activity:'GLOW Movement',location:'',reason:'Missing centre'}],preview:[],deniedCentres:[]};
+ globalThis.fetch=async(url,options)=>{assert.equal(url,'/api/centres/import/review');sent=JSON.parse(options.body);return Response.json({...preview,unclassified:0});};
+ try{render(React.createElement(CentreImportReview,{preview,onReviewed:p=>{reviewed=p;}}));const button=screen.getByRole('button',{name:'Apply reviewed centre to all unclassified rows'});assert.equal(button.disabled,true);fireEvent.change(screen.getByLabelText('Source evidence / override reason'),{target:{value:'Source workbook confirms the location and GLOW programme'}});fireEvent.change(screen.getByLabelText('One verified centre for all unresolved rows'),{target:{value:'glow_nanyang'}});fireEvent.click(button);await waitFor(()=>assert.ok(reviewed));assert.equal(sent.unclassifiedCentre,'glow_nanyang');assert.equal(reviewed.unclassified,0);}finally{cleanup();globalThis.fetch=original;}
+});
 
 test('data completeness opens only an audited missing-field list, paginates and reuses client review; print omits personal rows',async()=>{
  const original=globalThis.fetch,state=diagnosticFixture(),calls=[];let reviewed;

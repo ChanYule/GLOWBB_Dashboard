@@ -910,7 +910,7 @@ export function participationPatterns(state, input = {}, now = todaySG(), { incl
     location = {
       ...publicLocationSummary(locationStore),
       metric: q.distanceMetric || "walking",
-      destination: destination.venueName || "Main GLOW BB centre",
+      destination: destination.venueName || "Selected centre reference location",
       verifiedClients: protect(verified),
       registered: comparisonBlocked ? null : people.length,
       attending: comparisonBlocked

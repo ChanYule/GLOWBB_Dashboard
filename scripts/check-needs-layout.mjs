@@ -11,8 +11,8 @@ import {
 import { resolve, join, relative, isAbsolute } from "node:path";
 import express from "express";
 import { gzipSync } from "node:zlib";
-import { createApp } from "../server/app.js";
-import { openDb, readData, saveImport } from "../server/db.js";
+import { centreQaFixture } from "./centre-qa-fixture.mjs";
+import { readData, saveImport } from "../server/db.js";
 import { readFile, inspectImport } from "../server/domain.js";
 const source = process.argv[2];
 const registrySource = process.argv[3];
@@ -30,8 +30,8 @@ mkdirSync(dataRoot, { recursive: true });
 const profileDir = mkdtempSync(join(dataRoot, "needs-headless-"));
 const output = join(dataRoot, "needs-layout-qa");
 mkdirSync(output, { recursive: true });
-const db = openDb(":memory:");
-const app = createApp(db, { production: true, authRequired: false });
+const fixture=await centreQaFixture();
+const {db,app}=fixture;
 const actor = db
   .prepare("SELECT id FROM users WHERE username='__local_workspace__'")
   .get().id;
@@ -59,7 +59,7 @@ if (registrySource) {
     new Blob([readFileSync(registrySource)]),
     "registry.xlsx",
   );
-  const previewResponse = await fetch(origin + "/api/client-registry/preview", {
+  const previewResponse = await fetch(origin + "/api/client-registry/preview?centre=glow_bukit_batok", {
     method: "POST",
     headers: { Origin: origin },
     body: form,
@@ -67,7 +67,7 @@ if (registrySource) {
   const preview = await previewResponse.json();
   if (!previewResponse.ok)
     throw Error("Registry fixture preview failed: " + JSON.stringify(preview));
-  const confirmation = await fetch(origin + "/api/client-registry/confirm", {
+  const confirmation = await fetch(origin + "/api/client-registry/confirm?centre=glow_bukit_batok", {
     method: "POST",
     headers: { Origin: origin, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -98,7 +98,7 @@ for (const dimension of [
   for (let run = 0; run < 5; run++) {
     const started = performance.now();
     const response = await fetch(
-      origin + "/api/participation-patterns?dimension=" + dimension,
+      origin + "/api/participation-patterns?centre=glow_bukit_batok&dimension=" + dimension,
     );
     summary = await response.json();
     if (!response.ok) throw Error("Pattern benchmark failed: " + dimension);
@@ -231,7 +231,7 @@ try {
       let bytes = 0;
       for (let i = 0; i < 8; i++) {
         const start = performance.now();
-        const response = await fetch(origin + url, {
+        const response = await fetch(origin + url+(url.includes("?")?"&":"?")+"centre=glow_bukit_batok", {
           ...(body
             ? {
                 method: "POST",
@@ -1062,7 +1062,7 @@ try {
   browser.kill();
   server.closeAllConnections();
   await new Promise((r) => server.close(r));
-  db.close();
+  await fixture.close();
   const safe = relative(dataRoot, resolve(profileDir));
   if (!safe || safe.startsWith("..") || isAbsolute(safe))
     console.error("Skipped unsafe browser-profile cleanup target.");

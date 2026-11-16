@@ -10,8 +10,7 @@ import {
 import { resolve, join } from "node:path";
 import express from "express";
 import { tmpdir } from "node:os";
-import { createApp } from "../server/app.js";
-import { openDb } from "../server/db.js";
+import { centreQaFixture } from "./centre-qa-fixture.mjs";
 import { ensureLocations } from "../server/location-store.js";
 import { diagnosticFixture } from "../tests/fixtures/programme-diagnostics-state.js";
 const executable = [
@@ -23,9 +22,9 @@ const root = resolve("data"),
   output = join(root, "analysis-polish-qa");
 mkdirSync(output, { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), "glow-analysis-polish-browser-"));
-const db = openDb(":memory:"),
-  app = createApp(db),
-  state = diagnosticFixture();
+const fixture = await centreQaFixture();
+const {db,app}=fixture;
+const state = diagnosticFixture();
 state.registry.forEach((r, i) => {
   const p = JSON.parse(r.details);
   if (i < 30) p.age = null;
@@ -62,7 +61,7 @@ for (const r of state.registry)
     r.details,
   );
 db.prepare("UPDATE settings SET value=? WHERE id=1").run(
-  JSON.stringify(state.settings),
+  JSON.stringify({...state.settings,centreId:"glow_bukit_batok"}),
 );
 await ensureLocations(db);
 db.prepare("UPDATE location_store SET value=? WHERE id=1").run(
@@ -121,7 +120,7 @@ try {
       if (m.error) p?.reject(Error(m.error.message));
       else p?.resolve(m.result);
     } else if (m.method === "Runtime.exceptionThrown")
-      errors.push(m.params.exceptionDetails.text);
+      errors.push(m.params.exceptionDetails.exception?.description||m.params.exceptionDetails.text);
   });
   const send = (method, params = {}, sessionId) =>
     new Promise((resolve, reject) => {
@@ -159,7 +158,7 @@ try {
       if (await evaluate(expression)) return;
       await pause(100);
     }
-    throw Error("Timed out: " + label);
+    throw Error("Timed out: " + label+" / "+errors.join("; ")+" / "+await evaluate("document.body.innerText.slice(0,3500)"));
   };
   await command("Runtime.enable");
   await command("Page.enable");
@@ -168,7 +167,7 @@ try {
       `(()=>{const menu=document.querySelector('.navigation-toggle');if(innerWidth<=650&&menu?.getAttribute('aria-expanded')==='false')menu.click();const button=[...document.querySelectorAll('nav button')].find(b=>b.textContent.includes(${JSON.stringify(name)}));if(!button)throw Error('Missing navigation');const parents=[];for(let d=button.closest('details');d;d=d.parentElement.closest('details'))parents.push(d);parents.reverse().forEach(d=>d.open=true);button.click();})()`,
     );
   };
-  for (const width of [1440, 1024, 768, 390]) {
+  for (const width of (process.argv.includes('--print-only')?[768]:[1440, 1024, 768, 390])) {
     await command("Emulation.setDeviceMetricsOverride", {
       width,
       height: 1000,
@@ -250,11 +249,31 @@ try {
         Buffer.from(r.data, "base64"),
       ),
     );
-    results.push({ ...layout, clientWidth });
+    for(const id of ['seen_bukit_batok','glow_nanyang','seen_nanyang']){
+      await evaluate(`(()=>{const el=document.querySelector('[aria-label="Selected centre"]');el.value='${id}';el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await wait("!!document.querySelector('.centre-empty')&&!document.querySelector('.fetch-status')",'empty centre '+id);
+      const scope=await evaluate("({selected:document.querySelector('[aria-label=\"Selected centre\"]').value,hasOldTable:!!document.querySelector('.data-completeness table'),overflow:document.documentElement.scrollWidth})");
+      if(scope.selected!==id||scope.hasOldTable||scope.overflow>width+2)throw Error('Centre switch leaked content or overflowed '+JSON.stringify(scope));
+    }
+    await command("Page.captureScreenshot",{format:"png",captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-centre-empty.png'),Buffer.from(r.data,'base64')));
+    await evaluate("(()=>{const el=document.querySelector('[aria-label=\"Selected centre\"]');el.value='glow_bukit_batok';el.dispatchEvent(new Event('change',{bubbles:true}));})()");
+    await wait("!!document.querySelector('nav')&&!document.querySelector('.fetch-status')",'return to populated centre');
+    await evaluate("[...document.querySelectorAll('.platform-header button')].find(b=>b.textContent.includes('administration')).click()");
+    await wait("!!document.querySelector('.centre-tools h2')",'centre administration');
+    await evaluate("[...document.querySelectorAll('.centre-tools button')].find(b=>b.textContent.includes('Compare authorised')).click()");
+    await wait("!!document.querySelector('.centre-tools tbody tr')",'cross-centre comparison');
+    if(await evaluate('document.documentElement.scrollWidth')>width+2)throw Error('Centre comparison page overflow '+width);
+    await command("Page.captureScreenshot",{format:"png",captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-centre-comparison.png'),Buffer.from(r.data,'base64')));
+    await command('Emulation.setEmulatedMedia',{media:'print'});
+    const printed=await evaluate("(()=>{const table=document.querySelector('.centre-tools table'),last=table.querySelector('thead th:last-child').getBoundingClientRect();return {columns:table.querySelectorAll('thead th').length,rows:table.querySelectorAll('tbody tr').length,lastRight:last.right,width:innerWidth,headerHidden:getComputedStyle(document.querySelector('.platform-header')).display==='none',text:table.innerText}})()");
+    if(printed.columns!==10||printed.rows!==4||printed.lastRight>width+2||!printed.headerHidden||!printed.text.includes('SEEN Nanyang'))throw Error('Comparison print layout failed '+JSON.stringify(printed));
+    await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-comparison-print.png'),Buffer.from(r.data,'base64')));
+    await command('Emulation.setEmulatedMedia',{media:''});
+    results.push({ ...layout, clientWidth,centreSwitches:3,comparison:true,printColumns:printed.columns });
   }
   if (errors.length) throw Error("Browser errors: " + errors.join("; "));
   writeFileSync(
-    join(output, "results.json"),
+    join(output, process.argv.includes("--print-only")?"print-results.json":"results.json"),
     JSON.stringify({ syntheticOnly: true, results, errors }, null, 2),
   );
   process.stdout.write(
@@ -275,6 +294,6 @@ try {
   browser.kill();
   server.closeAllConnections();
   await new Promise((r) => server.close(r));
-  db.close();
+  await fixture.close();
   // Retain this isolated OS-temp profile for manual cleanup; no recursive deletion.
 }
