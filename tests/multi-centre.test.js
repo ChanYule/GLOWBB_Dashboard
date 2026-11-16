@@ -41,7 +41,8 @@ async function app(options = {}) {
     stores = new Map();
   if (options.seed) options.seed(db);
   const application = createPlatformApp(db, {
-    authRequired: !!options.auth,
+    ...(options.auth === undefined ? {} : { authRequired: options.auth }),
+    production: !!options.production,
     openWorkspace: (id) => {
       const child = openDb(":memory:");
       stores.set(id, child);
@@ -627,5 +628,36 @@ test("partial multi-centre failure resumes the same preview without duplicating 
       assert.equal(readData(f.stores.get(c.id)).attendance.length, 1);
   } finally {
     await f.close();
+  }
+});
+
+test("production opens the shared four-centre workspace without login even with an old authentication environment setting", async () => {
+  const previous = process.env.DASHBOARD_AUTH;
+  process.env.DASHBOARD_AUTH = "1";
+  const f = await app({ production: true });
+  try {
+    const response = await f.request("/api/me");
+    assert.equal(response.status, 200);
+    const me = await response.json();
+    assert.equal(me.username, "Local workspace");
+    assert.equal(me.role, "admin");
+    assert.equal(me.centres.length, 4);
+    assert.equal(me.canCompare, true);
+    assert.equal(
+      (await f.request("/api/dashboard?centre=seen_nanyang")).status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.request("/api/me", undefined, {
+          cookie: "glow_session=" + "a".repeat(64),
+        })
+      ).status,
+      200,
+    );
+  } finally {
+    await f.close();
+    if (previous === undefined) delete process.env.DASHBOARD_AUTH;
+    else process.env.DASHBOARD_AUTH = previous;
   }
 });

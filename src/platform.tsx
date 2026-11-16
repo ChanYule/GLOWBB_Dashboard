@@ -12,9 +12,6 @@ import type { Filters, User } from "./types";
 import { api, setCentreContext } from "./api";
 import type { Centre } from "../shared/centres.js";
 import "./platform.css";
-const Login = lazy(() =>
-  import("./workspace").then((m) => ({ default: m.Login })),
-);
 const CentreTools = lazy(() =>
   import("./centre-tools").then((m) => ({ default: m.CentreTools })),
 );
@@ -28,7 +25,6 @@ export function PlatformApp() {
   const [staff, setStaff] = useState<Staff | null>(null),
     [centre, setCentre] = useState<Centre | null>(null),
     [error, setError] = useState(""),
-    [login, setLogin] = useState(false),
     [tools, setTools] = useState(false);
   const dates = useRef<Partial<Filters> | undefined>(undefined),
     header = useRef<HTMLElement>(null);
@@ -48,12 +44,10 @@ export function PlatformApp() {
         setCentreContext(c);
         setCentre(c);
         setStaff(value);
-        setLogin(false);
         setError("");
       })
       .catch((e) => {
-        if (e.status === 401) setLogin(true);
-        else setError(e.message);
+        setError(e.message);
       });
   }, []);
   useEffect(() => {
@@ -78,12 +72,6 @@ export function PlatformApp() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [staff]);
-  if (login)
-    return (
-      <Suspense fallback={<p>Loading sign in…</p>}>
-        <Login onDone={load} />
-      </Suspense>
-    );
   if (!staff)
     return (
       <main className="login-shell">

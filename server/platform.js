@@ -14,18 +14,32 @@ import { dataTransaction } from "./data-management.js";
 import { withoutRoutingQuery } from "./request-url.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
 export function createPlatformApp(control = openDb(), options = {}) {
+  const authRequired = options.authRequired ?? false;
   const app = express(),
     storage = control.storage || { readData, getSettings, audit: sqliteAudit };
-  if (!control.storage)
-    control
+  const ready = (async () => {
+    await control
       .prepare(
         "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
       )
       .run("__local_workspace__", "disabled");
-  const ready = (async () => {
     await ensureOperations(control);
     await ensureLocations(control);
     await setupCentres(control);
+    if (!authRequired) {
+      const user = await control
+        .prepare("SELECT id FROM users WHERE username=?")
+        .get("__local_workspace__");
+      for (const c of CENTRES)
+        await control
+          .prepare("INSERT OR IGNORE INTO centre_access VALUES(?,?)")
+          .run(user.id, c.id);
+      await control
+        .prepare(
+          "INSERT INTO platform_preferences(user_id,can_compare) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET can_compare=1",
+        )
+        .run(user.id);
+    }
   })();
   const workspaces = centreStore(control, options),
     apps = new Map();
@@ -56,10 +70,16 @@ export function createPlatformApp(control = openDb(), options = {}) {
     res.json({ ready: true, multiCentre: true });
   });
   mountIdentity(app, control, {
-    required:
-      options.authRequired ??
-      (!!options.production || process.env.DASHBOARD_AUTH === "1"),
+    required: authRequired,
     production: !!options.production,
+    ...(!authRequired
+      ? {
+          resolveUser: () =>
+            control
+              .prepare("SELECT id,username,role FROM users WHERE username=?")
+              .get("__local_workspace__"),
+        }
+      : {}),
   });
   async function access(user) {
     const rows = await control
@@ -369,7 +389,11 @@ export function createPlatformApp(control = openDb(), options = {}) {
             row
               .map(
                 (v) =>
-                  '"' + String(v ?? "Unavailable").replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"', '""') + '"',
+                  '"' +
+                  String(v ?? "Unavailable")
+                    .replace(/^[=+@\-\t\r]/, "'$&")
+                    .replaceAll('"', '""') +
+                  '"',
               )
               .join(","),
           )

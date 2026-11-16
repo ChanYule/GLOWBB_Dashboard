@@ -1,5 +1,7 @@
 # Multi-centre staff dashboard
 
+**Current access mode:** Sign-in has been removed. Local and production entry points open a shared administrator workspace with all four centres. Anyone who can access the website can use its editing and import tools. Individual role/access controls described below remain available internally for authenticated integrations and tests; they do not restrict this shared mode. No SQL change is needed for this access-mode update.
+
 The existing application now serves GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nanyang and SEEN Nanyang under **Programme & Outreach Dashboard**. All existing analysis pages share one interface. This is a repository implementation; no hosted deployment or historical allocation was performed.
 
 ## Staff workflow
@@ -54,7 +56,7 @@ Migration recovery downloads contain sensitive source records and settings. Keep
 
 Authentication and roles remain central. Existing administrators receive initial access to all four centres and comparison permission; existing non-admin accounts receive GLOW Bukit Batok only. New accounts receive no centre grant until an administrator assigns it. A viewer never gains protected management comparison through a grant. Every API request checks current grants, including exports, profiles, settings and imports. Centre context is mandatory; conflicting header/query context is rejected. Account/role checks remain authoritative in the root database.
 
-Production requires staff sign-in by default, even if `DASHBOARD_AUTH=0` was previously used. Local development can retain direct access without setting `DASHBOARD_AUTH=1`; keep that mode bound to loopback. Production administrators create staff through the existing `scripts/create-staff.mjs` workflow, then assign centre access in the new panel.
+The dashboard now opens directly without a login page, regardless of an older `DASHBOARD_AUTH` environment setting. Local development can retain direct access without setting `DASHBOARD_AUTH=1`; keep that mode bound to loopback. Production administrators create staff through the existing `scripts/create-staff.mjs` workflow, then assign centre access in the new panel.
 
 Global settings are branding, roles, access and the exact-ID verification policy. Metric definitions remain shared code. Centre settings are existing approved formula parameters, targets, mappings, reporting configuration, registry status and verified address. Personal saved views remain personal and centre-specific; the preferred centre is global per staff account. Changing a personal view cannot alter stored metric settings.
 
@@ -65,7 +67,7 @@ Combined senior reach is withheld until an administrator records source evidence
 ## Hosting and first use
 
 1. Back up the existing database and deployment configuration. Do not point a disposable development run at production.
-2. For PostgreSQL, retain migrations 001–005 and apply 006 using the trusted backend role. Set server-only `DATABASE_URL`, `APP_ORIGIN`, and staff sign-in configuration; the runtime also applies additive 006 setup. Confirm the role can create private centre schemas. No source records are allocated by running SQL.
+2. For PostgreSQL, retain migrations 001–005 and apply 006 using the trusted backend role. Set server-only `DATABASE_URL` and `APP_ORIGIN`; the runtime also applies additive 006 setup. Confirm the role can create private centre schemas. No source records are allocated by running SQL.
 3. For SQLite, persist and back up both the root database and **all** centre files together. `CENTRE_DATA_DIR` optionally changes the centre directory; otherwise it is beside `DB_PATH` in `centres/`. A Vercel filesystem is not durable SQLite hosting. Use PostgreSQL or the existing proxy to a persistent backend.
 4. Run `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd test`, `npm.cmd run build`, then start the server. Ensure the frontend and backend are upgraded together; old centre-less API clients are intentionally rejected.
 5. Assign staff access, review historical allocations, import the appropriate centre registries, and verify each centre's reference address before distance analysis. Do not attest global Member IDs without source evidence.
