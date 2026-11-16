@@ -1,5 +1,6 @@
 export type User = { username: string; role: "admin" | "planner" | "viewer" };
 export type Settings = {
+  outreachRules?: import("../shared/outreach-priority-rules.js").OutreachRules;
   seniorAge: number;
   minority: string[];
   ageBands: number[];

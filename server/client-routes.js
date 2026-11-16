@@ -1,6 +1,7 @@
 import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
 import {clientOutreach} from './client-outreach.js';
+import { outreachPriorities } from "./outreach-priorities.js";
 import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
 import { dataTransaction } from "./data-management.js";
@@ -392,6 +393,34 @@ export function mountClients(app, { db, storage, upload }) {
   app.post('/api/clients/outreach',async(req,res)=>{
     const result=await dataTransaction(db,function*(tx){const state=yield* readState(tx,storage);const value=clientOutreach(state,req.body||{});yield* audit(tx,req.user.id,'client.outreach.viewed',{cohort:value.cohort,count:value.people.total,page:value.people.page});return value;},false,['audit']);
     res.json(result);
+  });
+  app.post("/api/clients/priorities", async (req, res) => {
+    privileged(req);
+    const result = await dataTransaction(
+      db,
+      function* (tx) {
+        const value = outreachPriorities(
+          yield* readState(tx, storage),
+          req.body || {},
+        );
+        yield* audit(tx, req.user.id, "client.priorities.viewed", {
+          view: value.view,
+          count: value.people.total,
+          page: value.people.page,
+        });
+        return value;
+      },
+      false,
+      ["audit"],
+    );
+    res.json(result);
+  });
+  app.post("/api/clients/priorities/export", async (req) => {
+    privileged(req);
+    throw fail(
+      403,
+      "Identifiable outreach CSV exports are disabled by the current export policy. Aggregate centre summaries remain available.",
+    );
   });
   app.post("/api/clients/followups", async (req, res) => {
     const {

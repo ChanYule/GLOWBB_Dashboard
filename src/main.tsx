@@ -1,3 +1,4 @@
+import { OutreachRulesFields } from "./outreach-rules-fields";
 import type { Briefing } from "./management";
 import {activityDomains} from '../shared/activity-domains.js';
 import { ImportProgress } from "./import-progress";
@@ -3374,7 +3375,7 @@ function ImportDialog({
     </Modal>
   );
 }
-function SettingsDialog({
+export function SettingsDialog({
   data,
   onClose,
   refresh,
@@ -3384,6 +3385,7 @@ function SettingsDialog({
   refresh: (s?: string) => void;
 }) {
   const [s, setS] = useState<Settings>(data.settings),
+    [rulesLoaded, setRulesLoaded] = useState(false),
     [minority, setMinority] = useState(data.settings.minority.join(", ")),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -3402,12 +3404,24 @@ function SettingsDialog({
       audit: { created: string; action: string }[];
     } | null>(null);
   useEffect(() => {
+    let live = true;
+    api<NonNullable<Settings["outreachRules"]>>("/api/settings/outreach-rules")
+      .then((outreachRules) => {
+        if (!live) return;
+        setS((old) => ({ ...old, outreachRules }));
+        setRulesLoaded(true);
+      })
+      .catch((e) => {
+        if (live) setError(e.message);
+      });
     api<typeof quality>("/api/quality")
       .then(setQuality)
       .catch((e) => setError(e.message));
+    return () => { live = false; };
   }, []);
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (!rulesLoaded) return;
     setBusy(true);
     try {
       await api("/api/settings", {
@@ -3586,7 +3600,13 @@ function SettingsDialog({
             {error}
           </p>
         )}
-        <Button primary type="submit" disabled={busy}>
+        {rulesLoaded ? (
+          <OutreachRulesFields
+            value={s.outreachRules}
+            onChange={(outreachRules) => setS({ ...s, outreachRules })}
+          />
+        ) : <p role="status">Loading saved follow-up priority rules…</p>}
+        <Button primary type="submit" disabled={busy || !rulesLoaded}>
           Save definitions
         </Button>
       </form>

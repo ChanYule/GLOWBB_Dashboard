@@ -1,3 +1,4 @@
+import { outreachPriorities } from "../server/outreach-priorities.js";
 import { participationReport } from "../server/participation.js";
 import { participationPatterns } from "../server/patterns.js";
 import { locationFixture } from "./fixtures/location-state.js";
@@ -52,7 +53,7 @@ HTMLDialogElement.prototype.showModal = function () {
 };
 const { render, screen, fireEvent, cleanup, waitFor, within } =
   await import("@testing-library/react");
-const { Overview, Programmes, Audience, Planning, FilterBar, App } =
+const { Overview, Programmes, Audience, Planning, FilterBar, App, SettingsDialog } =
   await tsImport("../src/main.tsx", import.meta.url);
 const { DemographicBars, TrendChart, TimingMatrix, KpiDeck } = await tsImport(
   "../src/analytics-ui.tsx",
@@ -79,6 +80,205 @@ const { ParticipationPatterns } = await tsImport(
   import.meta.url,
 );
 const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+const { OutreachPriorities } = await tsImport(
+  "../src/outreach-priorities-ui.tsx",
+  import.meta.url,
+);
+test("definitions load saved admin-only SRF selections before editing and preserve them on unrelated changes", async () => {
+  const original = globalThis.fetch;
+  const rules = { ...defaults.outreachRules, riskCodes: ["approved"], highCfsFrom: 6 };
+  let resolveRules, saved;
+  globalThis.fetch = async (url, options = {}) => {
+    if (url === "/api/settings/outreach-rules") return new Promise((resolve) => { resolveRules = () => resolve(Response.json(rules)); });
+    if (url === "/api/quality") return Response.json({ imports: [], audit: [] });
+    assert.equal(url, "/api/settings");
+    saved = JSON.parse(options.body);
+    return Response.json(saved);
+  };
+  const data = analytics({ participants: [], programmes: [], sessions: [], attendance: [] }, defaults);
+  data.settings = structuredClone(defaults);
+  delete data.settings.outreachRules.riskCodes;
+  try {
+    render(React.createElement(SettingsDialog, { data, onClose: () => {}, refresh: () => {} }));
+    assert.equal(screen.getByRole("button", { name: "Save definitions" }).disabled, true);
+    resolveRules();
+    await waitFor(() => assert.equal(screen.getByLabelText("SRF codes to prioritise (comma-separated)").value, "approved"));
+    fireEvent.change(screen.getByLabelText("Recorded CFS indicator: additional points"), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save definitions" }));
+    await waitFor(() => assert.ok(saved));
+    assert.deepEqual(saved.outreachRules.riskCodes, ["approved"]);
+    assert.equal(saved.outreachRules.highCfsFrom, 6);
+    assert.equal(saved.outreachRules.cfsPoints, 12);
+  } finally { cleanup(); globalThis.fetch = original; }
+});
+
+test("follow-up priorities show reasons, filter server-side, open existing review and present a disabled personal-export confirmation", async () => {
+  const original = globalThis.fetch,
+    state = locationFixture(),
+    requests = [];
+  let reviewed;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "/api/clients/priorities");
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    return Response.json(outreachPriorities(state, body, "2026-11-06"));
+  };
+  try {
+    render(
+      React.createElement(OutreachPriorities, {
+        user: { role: "planner" },
+        dates: { from: "2026-11-01", to: "2026-11-03", asOf: "2026-11-03" },
+        revision: 0,
+        onDates: () => {},
+        onReview: (row) => (reviewed = row),
+      }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        screen.getAllByRole("button", {
+          name: "Review client / plan follow-up",
+        }).length,
+        25,
+      ),
+    );
+    assert.ok(screen.getAllByText(/No recorded attendance history/).length > 0);
+    assert.ok(
+      screen.getByRole("heading", {
+        name: "Recent registration → recorded attendance",
+      }),
+    );
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: "Review client / plan follow-up",
+      })[0],
+    );
+    assert.ok(reviewed.id);
+    fireEvent.change(screen.getByLabelText("Priority block"), {
+      target: { value: "213" },
+    });
+    await waitFor(() =>
+      assert.equal(
+        screen.getAllByRole("button", {
+          name: "Review client / plan follow-up",
+        }).length,
+        10,
+      ),
+    );
+    assert.equal(requests.at(-1).filters.block, "213");
+    fireEvent.click(screen.getByRole("button", { name: "Review CSV export" }));
+    const dialog = screen.getByRole("dialog", {
+      name: "Review personal-data CSV",
+    });
+    assert.ok(
+      within(dialog).getByText(/Member ID, Recorded block, Attendance flag/),
+    );
+    assert.equal(
+      within(dialog).getByRole("button", { name: "Download CSV" }).disabled,
+      true,
+    );
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    assert.equal(
+      within(dialog).getByRole("button", { name: "Download CSV" }).disabled,
+      true,
+      "acknowledgement cannot bypass export policy",
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Close export review" }),
+    );
+    fireEvent.change(screen.getByLabelText("Priority view"), {
+      target: { value: "watch" },
+    });
+    await waitFor(() =>
+      assert.ok(
+        screen.getByText("No clients match this priority view and filters."),
+      ),
+    );
+    assert.equal(requests.at(-1).view, "watch");
+    assert.ok(requests.every((r) => !r.confirmed && !r.export));
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("viewer never requests follow-up priorities or personal CSV", () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    throw Error("No request expected");
+  };
+  try {
+    render(
+      React.createElement(OutreachPriorities, {
+        user: { role: "viewer" },
+        dates: {},
+        revision: 0,
+        onDates: () => {},
+        onReview: () => {},
+      }),
+    );
+    assert.equal(calls, 0);
+    assert.ok(
+      screen.getByText(/Follow-up priorities require authorised staff access/),
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
+test("Client Engagement priority tab replaces analysis panels and uses only the dedicated audited request", async () => {
+  const original = globalThis.fetch,
+    state = locationFixture(),
+    requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push(String(url));
+    if (url === "/api/clients/preferences")
+      return Response.json({ views: [], sharedTemplates: [] });
+    if (url === "/api/clients/report")
+      return Response.json(clientFixtureReport());
+    if (url === "/api/clients/priorities")
+      return Response.json(
+        outreachPriorities(state, JSON.parse(options.body), "2026-11-06"),
+      );
+    throw Error("Unexpected request " + url);
+  };
+  try {
+    render(
+      React.createElement(ClientEngagement, {
+        user: { role: "planner" },
+        initialFilters: { from: "2026-11-01", to: "2026-11-03" },
+        coverageTo: "2026-11-03",
+        onChanged: () => {},
+      }),
+    );
+    await waitFor(() => assert.ok(document.querySelector(".client-scope")));
+    const before = requests.filter(
+      (url) => url === "/api/clients/report",
+    ).length;
+    fireEvent.click(
+      screen.getByRole("button", { name: "Follow-up priorities" }),
+    );
+    await waitFor(() =>
+      assert.ok(
+        screen.getByRole("heading", { name: "Prioritised follow-up list" }),
+      ),
+    );
+    assert.equal(document.querySelector(".client-scope"), null);
+    assert.equal(
+      requests.filter((url) => url === "/api/clients/report").length,
+      before,
+    );
+    assert.equal(
+      screen
+        .getByRole("button", { name: "Follow-up priorities" })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = original;
+  }
+});
 const { EngagementPanel } = await tsImport('../src/engagement-panel.tsx', import.meta.url);
 test('engagement panel switches depth/recency, retains zero and withheld groups, and prints both count tables', () => {
   const metadata={regularFrom:6,anchor:'2026-11-06',historyFrom:'2026-05-04'};

@@ -24,6 +24,11 @@ import { ActionEditor, blankAction, ParticipantEditor } from "./needs-ui";
 import { ClientRegistryImport } from "./client-import";
 import "./clients.css";
 const ClientOutreach=lazy(()=>import('./client-outreach').then(m=>({default:m.ClientOutreach})));
+const OutreachPriorities = lazy(() =>
+  import("./outreach-priorities-ui").then((m) => ({
+    default: m.OutreachPriorities,
+  })),
+);
 type ClientQuery = Record<string, string>;
 type Metric = number | null;
 type ComparisonRow = {
@@ -665,7 +670,7 @@ export function ClientEngagement({
   }, [user.role]);
   useEffect(() => {
     if (!ready || user.role === "viewer") return;
-    if(tab==='outreach'){setBusy(false);return;}
+    if(['outreach','priorities'].includes(tab)){setBusy(false);return;}
     let live = true;
     const controller = new AbortController();
     setBusy(true);
@@ -790,6 +795,7 @@ export function ClientEngagement({
         )}
         {[
           ["outreach", "Outreach priorities"],
+          ["priorities", "Follow-up priorities"],
           ["analysis", "Client participation"],
           ["explore", "Explore client participation gaps"],
           ["followups", "Client follow-up list"],
@@ -1055,7 +1061,7 @@ export function ClientEngagement({
               onChange={(e) => filter("asOf", e.target.value)}
             />
           </label>
-          {tab!=='outreach'&&<label className="field">
+          {!['outreach','priorities'].includes(tab)&&<label className="field">
             <span>Participation status</span>
             <select
               value={q.status || ""}
@@ -1078,7 +1084,7 @@ export function ClientEngagement({
           </label>}
         </div>
         <div className="client-actions">
-          {tab!=='outreach'&&<button
+          {!['outreach','priorities'].includes(tab)&&<button
             className="text-button"
             aria-expanded={advanced}
             onClick={() => setAdvanced((v) => !v)}
@@ -1094,7 +1100,7 @@ export function ClientEngagement({
             Reset client filters
           </button>
         </div>
-        {tab!=='outreach' && advanced && report && (
+        {!['outreach','priorities'].includes(tab) && advanced && report && (
           <div className="client-filter-grid client-advanced">
             {[
               ["gender", "Gender"],
@@ -1204,7 +1210,23 @@ export function ClientEngagement({
         </p>
       )}
       {tab==='outreach'&&<Suspense fallback={<p>Loading outreach workspace…</p>}><ClientOutreach user={user} dates={{from:q.from||'',to:q.to||'',asOf:q.asOf}} revision={revision+dataRevision} onDates={next=>setView(old=>({...old,filters:{...old.filters,...next}}))} onReview={row=>setSelected(row)}/></Suspense>}
-      {error && (
+      {tab === "priorities" && (
+        <Suspense fallback={<p>Loading follow-up priorities…</p>}>
+          <OutreachPriorities
+            user={user}
+            dates={{ from: q.from || "", to: q.to || "", asOf: q.asOf }}
+            revision={revision + dataRevision}
+            onDates={(next) =>
+              setView((old) => ({
+                ...old,
+                filters: { ...old.filters, ...next },
+              }))
+            }
+            onReview={(row) => setSelected(row)}
+          />
+        </Suspense>
+      )}
+      {tab !== "priorities" && error && (
         <div className="error" role="alert">
           {error}
           <button
@@ -1220,7 +1242,7 @@ export function ClientEngagement({
           Calculating linked client participation…
         </p>
       )}
-      {tab!=='outreach' && report && reportQuery === JSON.stringify(q) && !error && (
+      {!['outreach','priorities'].includes(tab) && report && reportQuery === JSON.stringify(q) && !error && (
         <>
           <div className="client-scope">
             <span>

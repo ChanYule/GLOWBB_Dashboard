@@ -1,5 +1,7 @@
 # Client age profile and outreach priorities
 
+The additional **Follow-up priorities** tab provides transparent point reasons, a lapsing-soon watchlist and registration conversion. See [Phase 4 rules, staff workflow and CSV approval boundary](PHASE-4-FOLLOW-UP-PRIORITIES.md). Identifiable CSV download remains disabled pending approval.
+
 **Who Are We Serving? → Age profile** now uses the full registered-client population when a complete registry is available. It includes clients with no recorded attendance. The CFS chart remains based on unique programme participants, as requested separately; the two charts explicitly identify their populations.
 
 Open **Client Engagement & Outreach → Outreach priorities** to move from population gaps to recorded blocks and individual follow-up. This is an additional workspace inside Client Engagement, not another main dashboard page. The Main Dashboard's attendance summary remains unchanged.

@@ -3,6 +3,7 @@ import {activityDomains} from '../shared/activity-domains.js';
 import {withoutRoutingQuery} from './request-url.js';
 import { reliabilityOptions } from '../shared/participation-reliability.js';
 import { engagementOptions } from '../shared/engagement-depth.js';
+import { validOutreachRules, outreachRules } from "../shared/outreach-priority-rules.js";
 import { mountPatterns } from "./pattern-routes.js";
 import { mountEventTypes } from './event-routes.js';
 import { mountLocations } from "./location-routes.js";
@@ -228,7 +229,8 @@ export function createApp(
         403,
         "Social risk is available in the protected aggregate view only. Combined risk queries are restricted to prevent disclosure.",
       );
-    const report = await dashboard(req);
+    // Redaction must never mutate nested saved settings or shared defaults.
+    const report = structuredClone(await dashboard(req));
     const stripRisk = (value) => {
       if (!value || typeof value !== "object") return;
       for (const key of Object.keys(value)) {
@@ -475,8 +477,16 @@ export function createApp(
         .all(),
     }),
   );
+  app.get("/api/settings/outreach-rules", async (_req, res) => {
+    res.json(outreachRules((await storage.getSettings(db)).outreachRules));
+  });
   app.put("/api/settings", async (req, res) => {
     const s = req.body;
+    if (s.outreachRules !== undefined && !validOutreachRules(s.outreachRules))
+      throw error(
+        400,
+        "Check outreach weights (0–100), CFS boundary (1–8), watchlist thresholds and documented SRF code selections.",
+      );
     if (s.engagement !== undefined && (!s.engagement || typeof s.engagement !== 'object' || Array.isArray(s.engagement) ||
       Object.keys(s.engagement).some(k => k !== 'regularFrom') || !Number.isInteger(s.engagement.regularFrom) || s.engagement.regularFrom < 3 || s.engagement.regularFrom > 1000))
       throw error(400, 'Regular participation must start at 3–1000 sessions. One-time remains exactly one; occasional covers 2 up to that boundary.');
@@ -523,6 +533,9 @@ export function createApp(
       minSessions: s.minSessions,
       minParticipants: s.minParticipants,
       ...(s.reliability ? { reliability: reliabilityOptions(s.reliability) } : {}),
+      ...(s.outreachRules
+        ? { outreachRules: outreachRules(s.outreachRules) }
+        : {}),
       ...(s.engagement ? { engagement: engagementOptions(s.engagement) } : {}),
     };
     await db

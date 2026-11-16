@@ -5,6 +5,7 @@ import { parse } from "csv-parse/sync";
 import { EVENT_TYPE_HEADER, parseEventTypes,sessionEventTypes } from './event-types.js';
 import { DEFAULT_RELIABILITY } from '../shared/participation-reliability.js';
 import { DEFAULT_ENGAGEMENT } from '../shared/engagement-depth.js';
+import { DEFAULT_OUTREACH_RULES } from "../shared/outreach-priority-rules.js";
 export const HEADERS = [
   "Name/Member ID",
   "Gender",
@@ -34,6 +35,7 @@ export const defaults = {
   privacyMinimum: 5,
   reliability: { ...DEFAULT_RELIABILITY },
   engagement: { ...DEFAULT_ENGAGEMENT },
+  outreachRules: { ...DEFAULT_OUTREACH_RULES, riskCodes: [] },
   riskMappings: {},
   multipleRiskFactors: false,
   timeBands: [720, 1080],
