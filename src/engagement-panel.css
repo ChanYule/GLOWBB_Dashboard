@@ -1,0 +1,106 @@
+.engagement-mode {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 320px;
+  margin: 0.8rem 0;
+}
+.engagement-mode select {
+  width: 100%;
+  min-height: 42px;
+}
+.engagement-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+.engagement-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.engagement-legend i {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #475569;
+}
+.engagement-group {
+  margin: 0.8rem 0;
+  border-bottom: 1px solid var(--line, #d6dee9);
+  padding: 0.5rem 0 0.8rem;
+  break-inside: avoid;
+}
+.engagement-group h4 {
+  margin: 0 0 0.45rem;
+  overflow-wrap: anywhere;
+}
+.engagement-group p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.engagement-stack {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  background: #edf2f6;
+  border: 1px solid #aab6c5;
+}
+.engagement-stack span {
+  box-sizing: border-box;
+  border-right: 1px solid #fff;
+  min-width: 0;
+}
+.engagement-tone-noHistory {
+  background: repeating-linear-gradient(135deg, #cbd5e1 0 3px, #f8fafc 3px 6px);
+}
+.engagement-tone-outsideView {
+  background: #64748b;
+}
+.engagement-tone-oneTime,
+.engagement-tone-within30 {
+  background: #08796e;
+}
+.engagement-tone-occasional,
+.engagement-tone-days31to60 {
+  background: #4f46b5;
+}
+.engagement-tone-regular,
+.engagement-tone-days61to90 {
+  background: #b36a00;
+}
+.engagement-tone-over90 {
+  background: #a14b68;
+}
+.engagement-tone-unavailable {
+  background: repeating-linear-gradient(45deg, #475569 0 2px, #fff 2px 4px);
+}
+.engagement-counts {
+  overflow-x: auto;
+}
+.engagement-counts table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+.engagement-counts th,
+.engagement-counts td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #d6dee9;
+}
+@media print {
+  .engagement-stack,
+  .engagement-legend i {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .engagement-counts {
+    overflow: visible;
+  }
+  .engagement-counts table {
+    min-width: 0;
+    font-size: 9pt;
+  }
+}

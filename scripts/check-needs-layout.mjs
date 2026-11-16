@@ -451,7 +451,7 @@ try {
               "[...document.querySelectorAll('.patterns-page button')].find(b => b.textContent==='Presentation / PDF').click()",
             );
             await wait(
-              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===4",
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===5",
               "patterns presentation",
             );
             const reportCheck = await evaluate(
@@ -599,7 +599,7 @@ try {
               "[...document.querySelectorAll('.patterns-page button')].find(b=>b.textContent==='Presentation / PDF').click()",
             );
             await wait(
-              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===4",
+              "!!document.querySelector('.presentation') && document.querySelectorAll('.presentation .report-slide').length===5",
               "location presentation",
             );
             await command("Emulation.setEmulatedMedia", { media: "print" });
@@ -736,7 +736,7 @@ try {
             await wait("!!document.querySelector('.event-insights table caption')",'domain and Event Type matrix');
             const matrix=await evaluate("document.querySelector('.event-insights table caption').closest('table').innerText");if(!matrix.includes('Learning')||!matrix.includes('Physical'))throw Error('Event matrix source labels missing');
             await evaluate("[...document.querySelectorAll('.event-insights button')].find(e=>e.textContent==='Presentation / PDF').click()");
-            const expectedSections=Math.max(1,Math.ceil(sourceProgrammeCount/8))+1;
+            const expectedSections=Math.max(1,Math.ceil(sourceProgrammeCount/8))+2;
             await wait(`document.querySelectorAll('.presentation .report-slide').length===${expectedSections}`,'paginated Event Type presentation');
             const classificationRows=await evaluate("document.querySelectorAll('.presentation .programme-classification-slide tbody tr').length");if(classificationRows!==sourceProgrammeCount)throw Error('Programme classification print rows do not reconcile to distinct programmes');
             const combinedDomains=await evaluate("(()=>{const tables=[...document.querySelectorAll('.presentation .programme-classifications table')];return tables.length>0&&tables.every(table=>[...table.querySelectorAll('thead th')].some(th=>th.textContent==='Domains')&&[...table.querySelectorAll('tbody tr')].every(row=>{const parts=row.cells[1].textContent.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);return parts.length===new Set(parts).size;}));})()");if(!combinedDomains)throw Error('Activity domains are missing or duplicated in the report');

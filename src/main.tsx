@@ -3576,6 +3576,11 @@ function SettingsDialog({
             <label className="field"><span>Minimum registered group size for automatic comparisons</span><input type="number" min="1" max={s.reliability?.cautionMinimum ?? 20} required value={s.reliability?.comparisonFloor ?? 10} onChange={e => setS({ ...s, reliability: { cautionMinimum: s.reliability?.cautionMinimum ?? 20, comparisonFloor: Number(e.target.value) } })} /></label>
           </div>
         </fieldset>
+        <fieldset>
+          <legend>Engagement depth</legend>
+          <label className="field"><span>Regular participation starts at this many sessions</span><input type="number" min="3" max="1000" required value={s.engagement?.regularFrom ?? 6} onChange={e => setS({ ...s, engagement: { regularFrom: Number(e.target.value) } })} /></label>
+          <p>Within the reporting period: One-time = 1 distinct session; Occasional = 2–{(s.engagement?.regularFrom ?? 6) - 1}; Regular = {s.engagement?.regularFrom ?? 6}+. No recorded history and no attendance matching this view remain separate. Recency uses 30/60/90-day bands anchored to the attendance coverage end date. These segments do not change the existing active/inactive rules.</p>
+        </fieldset>
         {error && (
           <p className="error" role="alert">
             {error}

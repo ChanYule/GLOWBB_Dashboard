@@ -17,6 +17,10 @@ Open **Staff Tools → Participation Patterns & Insights**. The three main pages
 
 ## Calculations and definitions
 
+### Engagement depth and recency
+
+**Engagement depth and recency** adds group segment mixes, exact counts and percentages across all analysis dimensions, including overlapping Event Types. Defaults are One-time = 1 session, Occasional = 2–5, Regular = 6+, with separate No recorded history and None in this view categories. The regular boundary is configurable in Dashboard Settings. Recency uses 30/60/90-day bands anchored to the attendance coverage end date across full available history, independently of the selected period/domain. It does not change existing active/inactive rules. [Phase 3 definitions, staff workflow, privacy and validation](PHASE-3-ENGAGEMENT-DEPTH.md).
+
 ### Selected group and overall context
 
 Primary KPI figures refer to the selected group, with the group's denominator stated explicitly. Muted secondary lines give overall figures for the same period/domain/population. The primary session measure is now the median and middle-50% range among attendees, with the mean available in **Definition and mean** and a tooltip. A six-bin histogram shows sessions per attendee. [Phase 2 staff workflow, definitions, privacy and validation](PHASE-2-GROUP-CONTEXT.md).

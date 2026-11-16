@@ -7,6 +7,15 @@ import {locationFixture} from './fixtures/location-state.js';
 import {createApp} from '../server/app.js';
 import {openDb} from '../server/db.js';
 import {defaults} from '../server/domain.js';
+test('engagement threshold settings validate, persist and preserve existing inactivity rules and legacy saves',async()=>{
+ const db=openDb(':memory:'),server=createApp(db).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+ const save=body=>fetch(base+'/api/settings',{method:'PUT',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
+ try{for(const engagement of [null,[],{regularFrom:2},{regularFrom:1001},{regularFrom:6.5},{regularFrom:'6'},{regularFrom:6,extra:true}])assert.equal((await save({...defaults,engagement})).status,400);
+ assert.equal((await save({...defaults,engagement:{regularFrom:8}})).status,200);
+ const {engagement:_ignored,...legacy}=defaults;void _ignored;assert.equal((await save(legacy)).status,200);
+ const stored=JSON.parse(db.prepare('SELECT value FROM settings WHERE id=1').get().value);assert.equal(stored.engagement.regularFrom,8);assert.deepEqual(stored.inactivityBands,[30,60,90]);assert.equal(stored.staffAnalysisFull,undefined);
+ }finally{server.closeAllConnections();await new Promise(r=>server.close(r));db.close();}
+});
 test('reliability settings validate both thresholds, retain legacy saves and preserve staff visibility policy', async () => {
  const db=openDb(':memory:'), app=createApp(db), server=app.listen(0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
  const base='http://127.0.0.1:'+server.address().port;

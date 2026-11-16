@@ -3,6 +3,7 @@ import {populations} from '../shared/participation-compat.js';
 import { clientPopulation, validDay } from "./client-domain.js";
 import { materializeProfiles } from "./needs-domain.js";
 import { patternLabel } from "./patterns.js";
+import { engagementOptions, summariseEngagement } from '../shared/engagement-depth.js';
 import { locationDefaults, locatedPerson } from "./location-model.js";
 import { sessionEventTypes, UNCLASSIFIED } from "./event-types.js";
 const fail = (m) => Object.assign(Error(m), { status: 400 });
@@ -111,6 +112,10 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       (!q.domain || programmes.get(s.programmeId).domain === q.domain) &&
       (!q.programme || s.programmeId === q.programme),
   );
+  const historyDates = [...allSessions.values()].map(s => s.date).sort();
+  const engagementConfig = engagementOptions(settings.engagement);
+  const engagementAnchor = historyDates.at(-1) || null;
+  const lastHistory = new Map([...history].map(([id, ids]) => [id, [...ids].reduce((last, sid) => !last || allSessions.get(sid).date > last ? allSessions.get(sid).date : last, null)]));
   const selectedSessions = new Set(
     sessions
       .filter(
@@ -264,7 +269,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     }
   }
   const small = (n) => n > 0 && n < minimum;
-  const stats = (b) => {
+  const stats = (b, includeEngagement = false) => {
     let attendance = 0,
       repeat = 0,
       opportunity = 0,
@@ -299,6 +304,11 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       !suppressed && !small(repeat) && !small(opportunity - repeat);
     return {
       label: b.label,
+      engagement: includeEngagement && settings.staffAnalysisFull && !suppressed
+        ? summariseEngagement((q.scope === 'clients' ? cohort : cohort.filter(p => b.people.has(p.id))).map(p => ({
+          sessions: [...(b.people.get(p.id)?.values() || [])].reduce((n, ids) => n + ids.size, 0),
+          last: lastHistory.get(p.id) ?? null,
+        })), engagementAnchor, engagementConfig) : null,
       sessions: b.sessionIds.size,
       programmes: b.programmeIds.size,
       suppressed,
@@ -333,8 +343,8 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
           : null,
     };
   };
-  const protect = (bs) => {
-    const rows = [...bs.values()].map(stats);
+  const protect = (bs, includeEngagement = false) => {
+    const rows = [...bs.values()].map(b => stats(b, includeEngagement));
     // Withhold other additive cells when one suppressed cell could be recovered.
     if (rows.some((r) => r.suppressed))
       for (const r of rows) {
@@ -351,11 +361,12 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
         r.male = null;
         r.minority = null;
         r.suppressed = true;
+        r.engagement = null;
       }
     return rows;
   };
   const domains = protect(domainBuckets),
-    types = protect(typeBuckets),
+    types = protect(typeBuckets, true),
     rankRows = protect(ranks)
       .map((r, i) => {
         const source = [...ranks.values()][i];
@@ -503,6 +514,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
         null,
     },
     scope: q.scope,
+    engagement: { ...engagementConfig, anchor: engagementAnchor, historyFrom: historyDates[0] || null },
     target: q.target,
     minimum,
     ratesAvailable,
@@ -543,6 +555,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       : "More participant feedback is required to assess programme alignment.",
     alignmentRows,
     limitations: [
+      "Engagement depth counts distinct sessions in this period/filter within each Event Type. Registered-client depth includes the eligible client cohort for each type; attendance-only depth includes attendees of that type. Event Types overlap; neither their counts nor segment totals can be added across types. No recorded history is not proof that someone never attended. Recency uses full-history latest attendance through the coverage end date, independent of the selected period or Event Type, and does not change active/inactive rules.",
       "Event Type totals overlap; do not sum category totals.",
       "Unique reach counts Member IDs attending qualifying delivered sessions.",
       "Repeat means at least two distinct sessions of the same programme; opportunity requires at least two delivered sessions of that programme.",

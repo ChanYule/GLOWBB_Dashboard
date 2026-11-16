@@ -6,10 +6,13 @@ import type { User } from "./types";
 import { ProgrammeClassificationTable, type ProgrammeClassificationRow } from "./programme-classification-table";
 import "./patterns.css";
 import {populations} from '../shared/participation-compat.js';
+import { EngagementPanel } from './engagement-panel';
+import type { EngagementSummary, EngagementMetadata } from '../shared/engagement-depth.js';
 const PresentationFrame = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationFrame })),
 );
 type Row = {
+  engagement?: EngagementSummary | null;
   label: string;
   sessions: number;
   programmes: number;
@@ -28,6 +31,7 @@ type Row = {
   suppressed: boolean;
 };
 export type EventReport = {
+  engagement?: EngagementMetadata;
   period: { from: string | null; to: string | null };
   scope: string;
   target: string;
@@ -348,6 +352,7 @@ export function EventTypeInsights({
               participant information is not zero.
             </p>
           </section>
+          <EngagementPanel groups={report.types} metadata={report.engagement} dimension="eventType" populationLabel={populations[report.scope]?.label || report.scope} overlap />
           <section className="panel">
             <details
               open={matrixOpen}
@@ -665,6 +670,7 @@ export function EventTypePresentation({ report }: { report: EventReport }) {
         <p>{report.period.from} to {report.period.to} | {report.target === "all" ? "All recorded ages" : "Senior reach"} | Programme table {index + 1} of {pages.length}</p>
         <ProgrammeClassificationTable rows={page} reachLabel={report.target === "all" ? "Unique participants" : "Unique seniors"} print />
       </section>)}
+      {report.engagement && <section className="report-slide"><EngagementPanel groups={report.types} metadata={report.engagement} dimension="eventType" populationLabel={populations[report.scope]?.label || report.scope} overlap printing /></section>}
       <section className="report-slide">
         <h1>Programme planning considerations</h1>
         {report.findings.slice(0, 3).map((f, i) => (

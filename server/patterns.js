@@ -1,6 +1,7 @@
 import { defaults, todaySG } from "./domain.js";
 import { comparisonInsight, participationProportion, reliabilityOptions } from '../shared/participation-reliability.js';
 import { sessionDistribution } from './session-distribution.js';
+import { engagementOptions, summariseEngagement } from '../shared/engagement-depth.js';
 import {sessionEventTypes} from './event-types.js';
 import {
   populations,
@@ -354,6 +355,11 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     for(const p of people){const signature=JSON.stringify([atomDimensions.map(d=>patternLabel(p,d,settings)),(histories.get(p.id)||[]).map(s=>s.id).sort(),p.registrationDate||'']);atoms.set(signature,(atoms.get(signature)||0)+1);}
     sliceBlocked=[...atoms.values()].some(n=>n<minimum);
   }
+  const engagementConfig = engagementOptions(settings.engagement);
+  const engagementFacts = new Map(people.map(p => [p.id, {
+    sessions: selected.get(p.id)?.length || 0,
+    last: (histories.get(p.id) || []).reduce((last, s) => !last || s.date > last ? s.date : last, null),
+  }]));
   const stats = (members) => {
     let attendance = 0,
       repeat = 0,
@@ -402,6 +408,8 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       averageSessions: average(attendance, attending.length),
       sessionDistribution: settings.staffAnalysisFull && coverage.from
         ? sessionDistribution(attending.map(p => selected.get(p.id).length)) : null,
+      engagement: settings.staffAnalysisFull && coverage.to
+        ? summariseEngagement(members.map(p => engagementFacts.get(p.id)), coverage.to, engagementConfig) : null,
       repeat,
       opportunity,
       repeatRate: ratio(repeat, opportunity),
@@ -489,6 +497,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         "attendance",
         "averageSessions",
         "sessionDistribution",
+        "engagement",
       ])
         out[key] = null;
     if ([r.firstObserved, r.returning].some(nonzeroSmall)) {
@@ -581,6 +590,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
         "attendance",
         "averageSessions",
         "sessionDistribution",
+        "engagement",
         "repeat",
         "opportunity",
         "repeatRate",
@@ -1034,6 +1044,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
     registryComplete,
     reliability: { ...reliabilityConfig, overall },
     overallContext,
+    engagement: { ...engagementConfig, anchor: coverage.to, historyFrom: coverage.from },
     population:
       comparisonBlocked || nonzeroSmall(people.length) ? null : people.length,
     completeness,
@@ -1061,6 +1072,7 @@ export function participationPatterns(state, input = {}, now = todaySG()) {
       ...new Set(state.data.programmes.map((p) => p.domain)),
     ].sort(),
     limitations: [
+      "Engagement depth counts distinct sessions matching this reporting period/domain/venue. No recorded history is separate from no attendance matching this view. Recency uses each person's latest full-history attendance through the attendance coverage end date, regardless of the selected period/domain. It is not their status at a historical period end or today's date. Available history does not establish that someone never attended; these segments do not change existing active/inactive definitions.",
       "Session medians and the interquartile range (middle 50%) use participating people only, with linear interpolation for quartiles. The histogram uses distinct person-session counts; nonattenders remain in client-rate denominators and are excluded from this distribution. No attendance history means unavailable, not zero sessions.",
       "Plausible ranges are 95% model-based ranges around recorded client proportions. They indicate small-group instability, not missing-data bias or changes to exact counts; overlapping ranges are not a formal significance test. Group and overall rates are not independent. Differences do not prove cause.",
       ...(locationMode

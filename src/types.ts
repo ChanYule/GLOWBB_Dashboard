@@ -7,6 +7,7 @@ export type Settings = {
   minParticipants: number;
   privacyMinimum: number;
   reliability?: { cautionMinimum: number; comparisonFloor: number };
+  engagement?: { regularFrom: number };
   riskMappings?: Record<
     string,
     { label: string; meaning: string; categories: string[]; noRisk: boolean }

@@ -37,6 +37,17 @@ const row = (
   type,
 ];
 const parsed = (rows) => parseRows([[...HEADERS, EVENT_TYPE_HEADER], ...rows]);
+test('Event Type depth retains registry nonattenders, deduplicates sessions and never adds overlapping type populations',()=>{
+  const s=locationFixture();s.settings.staffAnalysisFull=true;
+  for(const session of s.data.sessions)session.optional={eventTypes:['Learning','Social & Cognitive']};
+  s.data.attendance.push({...s.data.attendance[0]});
+  const r=eventTypeReport(s,{scope:'clients',target:'all'},'2026-11-05');
+  assert.equal(r.engagement.anchor,'2026-11-03');assert.equal(r.types.length,2);
+  for(const t of r.types){assert.equal(t.engagement.population,100);assert.equal(t.engagement.depth.find(c=>c.id==='noHistory').count,50);assert.equal(t.engagement.depth.find(c=>c.id==='occasional').count,50);}
+  const attending=eventTypeReport(s,{scope:'overall',target:'all'},'2026-11-05');assert.ok(attending.types.every(t=>t.engagement.population===50));
+  const period=eventTypeReport(s,{scope:'clients',target:'all',from:'2026-11-01',to:'2026-11-01'},'2026-11-05');assert.equal(period.engagement.anchor,r.engagement.anchor);assert.ok(period.types.every(t=>t.engagement.depth.find(c=>c.id==='oneTime').count===50));
+  delete s.settings.staffAnalysisFull;assert.ok(eventTypeReport(s,{scope:'clients'},'2026-11-05').types.every(t=>t.engagement==null));
+});
 function fixture() {
   const db = openDb(":memory:"),
     app = createApp(db),

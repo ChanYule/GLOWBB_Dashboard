@@ -11,6 +11,8 @@ import type { Reliability } from "./participation-rate-chart";
 import { Under60Participants } from "./under60-participants";
 import { ParticipationGroupSummary } from './participation-group-summary';
 import type { SessionDistribution, OverallContext } from './participation-group-summary';
+import { EngagementPanel } from './engagement-panel';
+import type { EngagementSummary, EngagementMetadata } from '../shared/engagement-depth.js';
 import {
   compatibleAnalysis,
   normalizePatternPreferences,
@@ -48,6 +50,7 @@ type Group = {
   averageDomains?: number | null;
   averageSessions?: number | null;
   sessionDistribution?: SessionDistribution | null;
+  engagement?: EngagementSummary | null;
   repeat?: number;
   opportunity?: number;
   repeatRate?: number | null;
@@ -113,6 +116,7 @@ export type Report = {
   registryComplete: boolean;
   reliability?: Reliability;
   overallContext?: OverallContext | null;
+  engagement?: EngagementMetadata;
   population: number | null;
   completeness: number | null;
   comparisonSuppressed: boolean;
@@ -479,6 +483,7 @@ export function ParticipationPatterns({
               to: q.to || "",
               scope: q.scope,
               target: q.scope === "seniors" ? "senior" : "all",
+              domain: q.domain || "",
             }}
             patterns
           />
@@ -556,6 +561,7 @@ export function ParticipationPatterns({
             {q.domain ? ` / Domain: ${q.domain}` : ""}
           </p>
           <ParticipationGroupSummary report={report} />
+          <EngagementPanel groups={report.groups} metadata={report.engagement} dimension={report.dimension} populationLabel={populations[report.scope]?.label || report.scope} />
           {report.dimension === 'distance' && report.location && <p className="note"><strong>Verified residential locations</strong>: {fmt(report.location.verifiedClients)} of {fmt(report.location.registered)} registered clients. Overall clients with attendance: {fmt(report.location.attending)}; no recorded attendance: {fmt(report.location.noAttendance)}.</p>}
           {!report.registryComplete && q.scope === "clients" && (
             <section className="panel patterns-prerequisite">
@@ -1224,6 +1230,7 @@ export function ParticipationPatterns({
                 .
               </p>
             </section>
+            {printReport.engagement && <section className="report-slide"><EngagementPanel groups={printReport.groups} metadata={printReport.engagement} dimension={printReport.dimension} populationLabel={populations[printReport.scope]?.label || printReport.scope} printing /></section>}
             <section className="report-slide">
               <h2>Findings and planning implications</h2>
               {printReport.findings.slice(0, 3).map((f) => (

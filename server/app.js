@@ -2,6 +2,7 @@ import { mountReporting } from "./reporting.js";
 import {activityDomains} from '../shared/activity-domains.js';
 import {withoutRoutingQuery} from './request-url.js';
 import { reliabilityOptions } from '../shared/participation-reliability.js';
+import { engagementOptions } from '../shared/engagement-depth.js';
 import { mountPatterns } from "./pattern-routes.js";
 import { mountEventTypes } from './event-routes.js';
 import { mountLocations } from "./location-routes.js";
@@ -476,6 +477,9 @@ export function createApp(
   );
   app.put("/api/settings", async (req, res) => {
     const s = req.body;
+    if (s.engagement !== undefined && (!s.engagement || typeof s.engagement !== 'object' || Array.isArray(s.engagement) ||
+      Object.keys(s.engagement).some(k => k !== 'regularFrom') || !Number.isInteger(s.engagement.regularFrom) || s.engagement.regularFrom < 3 || s.engagement.regularFrom > 1000))
+      throw error(400, 'Regular participation must start at 3–1000 sessions. One-time remains exactly one; occasional covers 2 up to that boundary.');
     if (s.reliability !== undefined && (!s.reliability || typeof s.reliability !== 'object' || Array.isArray(s.reliability) ||
       Object.keys(s.reliability).some(k => !['cautionMinimum', 'comparisonFloor'].includes(k)) ||
       !Number.isInteger(s.reliability.cautionMinimum) || s.reliability.cautionMinimum < 2 || s.reliability.cautionMinimum > 1000 ||
@@ -519,6 +523,7 @@ export function createApp(
       minSessions: s.minSessions,
       minParticipants: s.minParticipants,
       ...(s.reliability ? { reliability: reliabilityOptions(s.reliability) } : {}),
+      ...(s.engagement ? { engagement: engagementOptions(s.engagement) } : {}),
     };
     await db
       .prepare("UPDATE settings SET value=? WHERE id=1")

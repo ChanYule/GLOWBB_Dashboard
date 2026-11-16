@@ -72,6 +72,29 @@ function fixture() {
 }
 const now = "2026-11-05",
   query = { from: "2026-11-01", to: "2026-11-03" };
+test('engagement respects distinct sessions, filters, registry nonattenders and a fixed coverage-end recency anchor', () => {
+  const s=fixture();s.settings.staffAnalysisFull=true;
+  s.data.attendance.push({participantId:'literal-1-0',sessionId:'a1'});
+  let r=participationPatterns(s,{...query,group:'60 to 69'},now),g=r.groups.find(g=>g.label==='60 to 69');
+  assert.equal(r.engagement.anchor,'2026-11-03');assert.equal(g.engagement.population,20);
+  assert.equal(g.engagement.depth.find(c=>c.id==='noHistory').count,10);
+  assert.equal(g.engagement.depth.find(c=>c.id==='oneTime').count,5);
+  assert.equal(g.engagement.depth.find(c=>c.id==='occasional').count,5);
+  assert.equal(g.engagement.recency.find(c=>c.id==='within30').count,10);
+  const earlier=participationPatterns(s,{from:'2026-11-02',to:'2026-11-02',group:'60 to 69'},now);
+  const eg=earlier.groups.find(g=>g.label==='60 to 69');assert.equal(eg.engagement.depth.find(c=>c.id==='outsideView').count,5);
+  assert.equal(eg.engagement.depth.find(c=>c.id==='noHistory').count,10);
+  assert.equal(earlier.engagement.anchor,'2026-11-03');assert.deepEqual(eg.engagement.recency,g.engagement.recency);
+  const later=participationPatterns(s,{...query,group:'60 to 69'},'2026-11-06');assert.deepEqual(later.groups.find(g=>g.label==='60 to 69').engagement,g.engagement,'wall clock alone does not age recency');
+  const domain=participationPatterns(s,{...query,domain:'Learning',group:'60 to 69'},now).groups.find(g=>g.label==='60 to 69');
+  assert.equal(domain.engagement.depth.find(c=>c.id==='oneTime').count,5);assert.equal(domain.engagement.depth.find(c=>c.id==='outsideView').count,5);
+  s.settings.engagement={regularFrom:3};r=participationPatterns(s,{...query},now);assert.equal(r.groups.find(g=>g.label==='60 to 69').engagement.depth.find(c=>c.id==='regular').count,5);
+  const attendee=participationPatterns(s,{...query,scope:'overall'},now);assert.equal(attendee.groups.find(g=>g.label==='Below 60').engagement.population,10);assert.equal(attendee.groups.find(g=>g.label==='Below 60').registered,null);
+});
+test('engagement does not release extra conservative cells or invent history when no coverage is available', () => {
+  const s=fixture();let r=participationPatterns(s,{},now);assert.ok(r.groups.every(g=>g.engagement==null));
+  s.settings.staffAnalysisFull=true;s.data.sessions=[];s.data.attendance=[];r=participationPatterns(s,{},now);assert.equal(r.engagement.anchor,null);assert.ok(r.groups.every(g=>g.engagement==null));
+});
 test('group and overall session distributions use deduplicated selected-period attendees with separate registry denominators', () => {
   const s = fixture(); s.settings.staffAnalysisFull = true;
   s.data.attendance.push({ participantId: 'literal-1-0', sessionId: 'a1' });

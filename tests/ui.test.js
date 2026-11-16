@@ -4,6 +4,7 @@ import { locationFixture } from "./fixtures/location-state.js";
 import { locationDefaults } from "../server/location-model.js";
 import {clientOutreach} from '../server/client-outreach.js';
 import {eventTypeReport} from '../server/event-report.js';
+import {summariseEngagement} from '../shared/engagement-depth.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
@@ -78,6 +79,28 @@ const { ParticipationPatterns } = await tsImport(
   import.meta.url,
 );
 const { AttendanceQuestions } = await tsImport('../src/attendance-questions-ui.tsx', import.meta.url);
+const { EngagementPanel } = await tsImport('../src/engagement-panel.tsx', import.meta.url);
+test('engagement panel switches depth/recency, retains zero and withheld groups, and prints both count tables', () => {
+  const metadata={regularFrom:6,anchor:'2026-11-06',historyFrom:'2026-05-04'};
+  const summary=summariseEngagement([{sessions:0,last:null},{sessions:0,last:'2026-08-01'},{sessions:1,last:'2026-11-06'},{sessions:3,last:'2026-10-01'},{sessions:6,last:'2026-11-06'}],metadata.anchor);
+  const groups=[{label:'Block 10',engagement:summariseEngagement([],metadata.anchor)},{label:'Block 9',engagement:summary},{label:'Protected',suppressed:true,engagement:summary}];
+  try {
+    const view=render(React.createElement(EngagementPanel,{groups,metadata,dimension:'block',populationLabel:'Registered clients'}));
+    assert.ok(screen.getByRole('img',{name:/Block 9: No recorded history: 1.*None in this view: 1/}));
+    assert.ok(screen.getByText(/No people in this group/));assert.equal(document.querySelectorAll('table').length,0,'count tables are lazy until expanded');
+    const headings=[...document.querySelectorAll('.engagement-group h4')].map(el=>el.textContent);assert.match(headings[0],/^Block 9/);assert.match(headings[2],/Unavailable \/ withheld/);
+    fireEvent.change(screen.getByLabelText('Engagement breakdown'),{target:{value:'recency'}});
+    assert.ok(screen.getByRole('img',{name:/Block 9: Within 30 days: 2.*More than 90 days: 1/}));
+    assert.ok(screen.getByText(/Recency anchor: 2026-11-06/));
+    const details=screen.getByText('View all counts and percentages').closest('details');details.open=true;fireEvent(details,new Event('toggle'));
+    assert.ok(screen.getByRole('table',{name:'Recency by group · counts and percentages'}));
+    view.rerender(React.createElement(EngagementPanel,{groups,metadata,dimension:'block',populationLabel:'Registered clients',overlap:true,printing:true}));
+    assert.equal(screen.queryByLabelText('Engagement breakdown'),null);
+    assert.equal(screen.getAllByRole('table').length,2);
+    assert.ok(screen.getByText(/Event Types overlap: do not add/));
+    assert.ok(screen.getByRole('table',{name:'Session depth by group · counts and percentages'}));
+  }finally{cleanup();}
+});
 const { ParticipationGroupSummary } = await tsImport('../src/participation-group-summary.tsx', import.meta.url);
 test('group KPIs state selected denominators, keep overall context secondary and show median, IQR and histogram', () => {
   const distribution = { participants: 26, median: 2, q1: 1, q3: 3, mean: 8,
@@ -413,6 +436,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     averageSessions: 2,
     sessionDistribution: { participants: 10, median: 2, q1: 2, q3: 2, mean: 2,
       bins: [{ label: '1', count: 0 }, { label: '2–3', count: 10 }, { label: '4–5', count: 0 }, { label: '6–10', count: 0 }, { label: '11–20', count: 0 }, { label: '21+', count: 0 }] },
+    engagement: summariseEngagement([...Array.from({length:10},()=>({sessions:2,last:'2026-11-03'})),...Array.from({length:10},()=>({sessions:0,last:null}))],'2026-11-03'),
     repeat: 5,
     opportunity: 10,
     repeatRate: 50,
@@ -432,6 +456,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     registryComplete: true,
     population: 20,
     overallContext: { registered: 20, unique: 10, attendance: 20, programmes: 1, rate: 50, sessionDistribution: group.sessionDistribution },
+    engagement: {regularFrom:6,anchor:'2026-11-03',historyFrom:'2026-10-01'},
     completeness: 100,
     comparisonSuppressed: false,
     groups: [group],
@@ -521,7 +546,7 @@ test("participation patterns loads one dimension, saves the staff view and print
     await waitFor(() =>
       assert.equal(
         document.querySelectorAll(".presentation .report-slide").length,
-        4,
+        5,
       ),
     );
     assert.equal(
@@ -536,6 +561,8 @@ test("participation patterns loads one dimension, saves the staff view and print
     assert.ok(document.querySelector('.presentation .session-histogram'));
     assert.equal(document.querySelector('.presentation [aria-label="Median sessions per participant"] strong').textContent, '2');
     assert.match(document.querySelector('.presentation').textContent, /Middle 50% \(IQR\): 2–2 sessions/);
+    assert.ok(within(document.querySelector('.presentation')).getByRole('table',{name:'Session depth by group · counts and percentages'}));
+    assert.ok(within(document.querySelector('.presentation')).getByRole('table',{name:'Recency by group · counts and percentages'}));
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       assert.equal(document.querySelectorAll(".presentation").length, 0),
