@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { AnalysisStamp } from "./analysis-stamp";
 import {currentCentre} from './api';
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
@@ -168,6 +169,7 @@ export function PresentationView({
               {data.period.from || "Available history"} to {data.period.to} ·
               Generated {new Date().toLocaleDateString("en-SG")}
             </p>
+            <AnalysisStamp metadata={data.metadata} coverage={data.coverage} />
             <Cards data={data} briefing={value} />
             <p>
               Attendance describes recorded participation. It does not establish

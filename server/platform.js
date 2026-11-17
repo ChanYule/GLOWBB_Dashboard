@@ -1,3 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {reportingContext,policySummary,isReportingRequest,projectReportingData} from './reporting-policy.js';
 import {mountLargeUploads} from './large-uploads.js';
 import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import express from "express";
@@ -281,6 +283,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
             },
             true,
           );
+      state.data=projectReportingData(state.data,{settings:state.settings,mode:'official'});
       const { data, settings } = state,
         r = analytics(data, settings, filters),
         selected = analytics(data, settings, filters, undefined, true, "rows");
@@ -315,6 +318,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
           : {}),
         coverage: r.coverage,
         seniorAge: settings.seniorAge,
+        reporting:policySummary({settings,mode:'official'}),
         programmeMix:
           r.domains
             .map((d) => `${d.label}: ${d.sessions} sessions`)
@@ -331,10 +335,10 @@ export function createPlatformApp(control = openDb(), options = {}) {
       req.query.format === "csv"
         ? "centres.comparison.exported"
         : "centres.comparison.viewed",
-      { centres: selectedIds },
+      { centres: selectedIds,configurationVersions:Object.fromEntries(rows.map(r=>[r.id,r.reporting.version])) },
     );
     const note =
-      "Counts alone do not rank performance; consider coverage, senior thresholds, programme frequency, audiences and resources. " +
+      "Official reporting configuration versions: "+rows.map(r=>r.name+" v"+r.reporting.version).join("; ")+". Counts alone do not rank performance; consider coverage, senior thresholds, programme frequency, audiences and resources. " +
       (config.memberIdsVerifiedGlobal
         ? "Combined unique reach deduplicates exact verified Member IDs; centre unique counts must not be summed."
         : "Combined unique reach is unavailable until an administrator verifies globally unique source Member IDs.");
@@ -414,6 +418,20 @@ export function createPlatformApp(control = openDb(), options = {}) {
       note,
     });
   });
+  const configuredApp=async(id,user)=>{const db=await workspaces.get(id);await mirrorUser(db,user);if(!apps.has(id))apps.set(id,createApp(db,{...options,resolveUser:r=>r.centreActor}));return {db,application:apps.get(id)};};
+  app.post('/api/centres/configuration/preview',async(req,res)=>{
+    admin(req);const allowed=await access(req.user),ids=req.body.centreIds;
+    if(!Array.isArray(ids)||!ids.length||ids.length>4||new Set(ids).size!==ids.length||ids.some(id=>!allowed.ids.includes(id)))throw fail(403,'Choose authorised centres for this shared policy.');
+    if(req.body.rule?.selector?.ids?.length&&ids.length>1)throw fail(400,'Use a named matching rule for a shared policy; activity IDs belong to their centre workspace.');
+    const id=randomUUID(),targets=[];
+    for(const centreId of ids){const {db,application}=await configuredApp(centreId,req.user),settings=db.storage?await db.storage.getSettings(db):getSettings(db);const preview=await application.configuration.preview(req.user,{...req.body,version:settings.reporting?.version||1});targets.push({centreId,preview});}
+    await control.prepare('INSERT INTO import_previews VALUES(?,?,?,?)').run(id,req.user.id,Date.now()+1200000,JSON.stringify({kind:'shared-configuration',targets}));res.json({id,targets,note:'Each centre has its own approved version and transaction. If a later centre changes, earlier approvals remain recorded; retrying the same preview resumes safely.'});
+  });
+  app.post('/api/centres/configuration/confirm',async(req,res)=>{
+    admin(req);if(req.body.confirmed!==true||req.body.bulkConfirmed!==true)throw fail(400,'Confirm every selected centre impact.');
+    const row=await control.prepare('SELECT * FROM import_previews WHERE id=? AND user_id=?').get(req.body.id,req.user.id);if(!row||row.expires<Date.now())throw fail(409,'Shared preview expired.');const p=JSON.parse(row.payload),allowed=await access(req.user);if(p.kind!=='shared-configuration')throw fail(400,'Wrong preview type.');if(p.targets.some(t=>!allowed.ids.includes(t.centreId)))throw fail(403,'Centre access changed.');
+    const results=[];for(const target of p.targets){const {application}=await configuredApp(target.centreId,req.user);results.push({centreId:target.centreId,...await application.configuration.confirm(req.user,{id:target.preview.id,confirmed:true,bulkConfirmed:true})});}res.json({results});
+  });
   app.use(async (req, res, next) => {
     if (!req.path.startsWith("/api/")) return next();
     if (/^\/api\/(centres|users|login|logout|me)(\/|$)/.test(req.path))
@@ -435,6 +453,15 @@ export function createPlatformApp(control = openDb(), options = {}) {
     const db = await workspaces.get(id);
     await mirrorUser(db, req.user);
     const centre = centreById(id);
+    let reporting=null;
+    if(isReportingRequest(req)){
+      const mode=url.searchParams.get('reportingMode')||'official',includeExcluded=url.searchParams.get('includeExcluded')==='1',reportId=url.searchParams.get('reportId')||'';
+      if(!['official','exploratory'].includes(mode)||mode==='exploratory'&&req.user.role==='viewer'||mode==='official'&&includeExcluded)throw fail(403,'Choose an authorised reporting mode.');
+      for(const key of ['reportingMode','includeExcluded','reportId'])url.searchParams.delete(key);
+      req.url=url.pathname+url.search;
+      const raw=db.storage||{getSettings};reporting={settings:await raw.getSettings(db),mode,includeExcluded,reportId};
+    }
+
     res.set("X-Centre-Id", id);
     const json = res.json.bind(res),
       send = res.send.bind(res);
@@ -442,7 +469,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
       res.type("application/json");
       return json(
         value && typeof value === "object" && !Array.isArray(value)
-          ? { ...value, centre }
+          ? { ...value, centre, ...(reporting?{reporting:policySummary(reporting)}:{}) }
           : value,
       );
     };
@@ -456,6 +483,11 @@ export function createPlatformApp(control = openDb(), options = {}) {
           centre.name +
           '"\r\n' +
           value.replace(/^\uFEFF/, "");
+      if(reporting&&typeof value==='string'){
+        const summary=policySummary(reporting);
+        if(type.includes('text/html'))value=value.replace('</h1>','</h1><p>'+summary.label+' - Configuration version '+summary.version+'</p>');
+        if(type.includes('text/csv'))value='"Reporting mode","'+summary.label+'"\r\n"Configuration version","'+summary.version+'"\r\n'+value;
+      }
       const disposition = res.get("Content-Disposition");
       if (disposition)
         res.set(
@@ -473,7 +505,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
         id,
         createApp(db, { ...options, resolveUser: (r) => r.centreActor }),
       );
-    return apps.get(id)(req, res, next);
+    return reporting?reportingContext.run(reporting,()=>apps.get(id)(req,res,next)):apps.get(id)(req,res,next);
   });
   app.use((err, _req, res, _next) => {
     if (res.headersSent) return;

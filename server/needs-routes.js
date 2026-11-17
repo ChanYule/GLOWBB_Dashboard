@@ -1,4 +1,5 @@
-﻿import { randomUUID } from "node:crypto";
+import {saveLegacyDefinitionVersion} from './configuration.js';
+import { randomUUID } from "node:crypto";
 import { clientReport } from "./client-domain.js";
 import {staffAnalysisState} from './staff-analysis.js';
 import { hash, readMatrix, todaySG } from "./domain.js";
@@ -955,9 +956,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
       livingGroups: s.livingGroups,
       domainGroups: s.domainGroups,
     };
-    await db
-      .prepare("UPDATE settings SET value=? WHERE id=1")
-      .run(JSON.stringify(settings));
+    await saveLegacyDefinitionVersion(db,req.user,settings,'Approved through the existing needs definitions editor.');
     await storage.audit(db, req.user.id, "needs.definitions.updated", {
       fields: [
         "inactivityBands",

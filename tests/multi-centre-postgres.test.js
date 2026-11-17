@@ -156,6 +156,15 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
       ).rows[0].n,
       1,
     );
+    // Configuration approvals use the same private per-centre settings and retain source rows.
+    const cfg = await (await request('/api/configuration?centre=glow_bukit_batok')).json();
+    const proposalResponse=await request('/api/configuration/preview?centre=glow_bukit_batok', {operation:'rule',version:cfg.configuration.version,reason:'Reviewed PostgreSQL attendance policy',rule:{scope:'official',selector:{type:'name',value:'GLOW Movement'}}});
+    const proposal=await proposalResponse.json();assert.equal(proposalResponse.status,200,JSON.stringify(proposal));
+    const approval=await request('/api/configuration/confirm?centre=glow_bukit_batok',{id:proposal.id,confirmed:true,bulkConfirmed:true});assert.equal(approval.status,200,await approval.text());
+    assert.equal((await(await request('/api/dashboard?centre=glow_bukit_batok')).json()).summary.attendance,0);
+    assert.equal((await(await request('/api/dashboard?centre=glow_nanyang')).json()).summary.attendance,1);
+    assert.equal((await engine.query('SELECT count(*)::integer n FROM centre_glow_bukit_batok.attendance')).rows[0].n,1);
+    assert.equal((await(await request('/api/configuration/history?centre=glow_bukit_batok')).json()).rows[0].details.after.reporting.version,2);
     await engine.exec("SET ROLE anon;");
     await assert.rejects(() =>
       engine.query("SELECT * FROM centre_glow_nanyang.attendance"),

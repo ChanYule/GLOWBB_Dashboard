@@ -1,3 +1,5 @@
+import {mountConfiguration,saveLegacyDefinitionVersion} from './configuration.js';
+import {reportingStorage} from './reporting-policy.js';
 import { mountReporting } from "./reporting.js";
 import { analysisMetadata } from './analysis-metadata.js';
 import {activityDomains} from '../shared/activity-domains.js';
@@ -53,7 +55,7 @@ export function createApp(
 ) {
   const app = express(),
     previews = db.previews || sqlitePreviews(db);
-  const storage = db.storage || { readData, getSettings, audit };
+  const storage = reportingStorage(db.storage || { readData, getSettings, audit });
   app.disable("x-powered-by");
   app.use((req,_res,next)=>{req.url=withoutRoutingQuery(req.url);next();});
   app.use(express.json({ limit: "64kb" }));
@@ -98,6 +100,7 @@ export function createApp(
     res.json({ ready: true, schemaVersion: version });
   });
   mountIdentity(app, db, { required: authRequired, production, resolveUser });
+  mountConfiguration(app,{db,storage:db.storage||{readData,getSettings,audit}});
   mountDataManagement(app, { db });
   app.get("/api/me", (req, res) => res.json(req.user));
   const filters = (req) => {
@@ -513,11 +516,9 @@ export function createApp(
         : {}),
       ...(s.engagement ? { engagement: engagementOptions(s.engagement) } : {}),
     };
-    await db
-      .prepare("UPDATE settings SET value=? WHERE id=1")
-      .run(JSON.stringify(clean));
+    const approved=await saveLegacyDefinitionVersion(db,req.user,clean);
     await storage.audit(db, req.user.id, "definitions.updated");
-    res.json(clean);
+    res.json(approved);
   });
   app.post("/api/targets", async (req, res) => {
     const t = req.body;

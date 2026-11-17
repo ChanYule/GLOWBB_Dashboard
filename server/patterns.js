@@ -1,3 +1,4 @@
+import {performanceData,sourceCoverage} from './reporting-policy.js';
 import { defaults, todaySG } from "./domain.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
 import { programmeDiagnostics, programmeRepresentation } from '../shared/programme-diagnostics.js';
@@ -187,7 +188,14 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
 
 // One indexed attendance pass per requested dimension. No participant records
 // or source attributes leave this calculation; all output is protected aggregate.
-export function participationPatterns(state, input = {}, now = todaySG(), { includeTrends = true } = {}) {
+export function participationPatterns(state,input={},now=todaySG(),options={}){
+ const result=calculatePatterns(state,input,now,options),performance=performanceData(state.data);
+ if(performance!==state.data){const p=calculatePatterns({...state,data:performance},{...input,group:result.group},now,{...options,includeTrends:false});
+ const present=p.groups.some(g=>g.label===result.group);result.rankings=present?p.rankings:{suppressed:false,rows:[],total:0,page:0,limit:p.rankings.limit};result.domains=present?p.domains:{suppressed:false,rows:[]};result.domainMix=present?p.domainMix:null;result.programmeDetail=present?p.programmeDetail:null;result.findings=[...result.findings.filter(f=>f.title!=='Leading programme for the selected metric'),...(present?p.findings.filter(f=>f.title==='Leading programme for the selected metric'):[])].slice(0,5);
+ }
+ return result;
+}
+function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends = true } = {}) {
   const q = validatePatternQuery(input, now),
     settings = { ...defaults, ...state.settings };
   const minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);
@@ -223,7 +231,7 @@ export function participationPatterns(state, input = {}, now = todaySG(), { incl
       .map((s) => [s.id, s]),
   );
   const dates = [...sessionMap.values()].map((s) => s.date).sort();
-  const coverage = { from: dates[0] || null, to: dates.at(-1) || null };
+  const coverage = sourceCoverage(state.data,now) || { from: dates[0] || null, to: dates.at(-1) || null };
   const histories = new Map(),
     selected = new Map(),
     delivered = new Map(),

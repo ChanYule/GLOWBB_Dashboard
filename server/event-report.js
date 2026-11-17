@@ -1,3 +1,4 @@
+import {performanceData} from './reporting-policy.js';
 import { defaults, todaySG } from "./domain.js";
 import {populations} from '../shared/participation-compat.js';
 import { clientPopulation, validDay } from "./client-domain.js";
@@ -74,6 +75,7 @@ export function validateEventQuery(input = {}) {
   return q;
 }
 export function eventTypeReport(state, input = {}, now = todaySG()) {
+  state={...state,data:performanceData(state.data)};
   const q = validateEventQuery(input),
     settings = { ...defaults, ...state.settings },
     minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);

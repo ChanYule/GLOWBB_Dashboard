@@ -1,3 +1,4 @@
+import {reportingConfiguration} from './reporting-policy.js';
 import { randomBytes } from "node:crypto";
 import {importFileUpload} from "./large-uploads.js";
 import { readMatrix, parseRows, inspectImport } from "./domain.js";
@@ -170,6 +171,9 @@ export function mountCentreImports(
       await mirror(db, req.user);
       const storage = db.storage || { readData, getSettings };
       const current = await storage.readData(db);
+      const config=reportingConfiguration(await storage.getSettings(db));
+      for(const row of rows){for(const [key,missing,label]of [['cfs',!row.participant.cfs,'CFS'],['srf',!row.participant.riskRaw,'SRF'],['living',!row.participant.livingRaw,'living arrangement'],['domain',!row.programme.domain||row.programme.domain==='Unspecified','AAP Domain'],['eventType',!row.session.optional?.eventTypes?.length,'Event Type']])if(config.qualityWarnings[key]&&missing)issues.push({row:row.row,message:'Missing '+label+'; valid attendance remains eligible unless an approved reporting rule applies.'});}
+
       const existing = new Map(current.participants.map((p) => [p.id, p]));
       for (const r of rows)
         r.participant.client = existing.get(r.participant.id)?.client ?? null;

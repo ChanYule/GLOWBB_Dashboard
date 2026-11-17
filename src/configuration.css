@@ -1,0 +1,212 @@
+.configuration-centre {
+  max-width: 1500px;
+  margin: 20px auto;
+  padding: 24px;
+  color: #17314b;
+}
+.configuration-centre > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.configuration-centre h1 {
+  font-size: 28px;
+  line-height: 1.25;
+}
+.configuration-centre h2 {
+  font-size: 22px;
+  margin-top: 24px;
+}
+.configuration-centre h3 {
+  font-size: 18px;
+}
+.configuration-centre h4 {
+  font-size: 16px;
+}
+.configuration-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+  border-bottom: 1px solid #d8e2ea;
+  padding-bottom: 12px;
+}
+.configuration-tabs button {
+  padding: 10px 16px;
+  border: 1px solid #bccfdb;
+  background: #fff;
+  border-radius: 8px;
+  color: #17314b;
+}
+.configuration-tabs button[aria-selected="true"] {
+  background: #e1f2ef;
+  border-color: #0d9488;
+  color: #12615c;
+  font-weight: 700;
+}
+.configuration-centre label {
+  display: block;
+  margin: 12px 0;
+  font-size: 14px;
+}
+.configuration-centre input:not([type="checkbox"]),
+.configuration-centre select,
+.configuration-centre textarea {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  border: 1px solid #b6cbd8;
+  border-radius: 7px;
+  padding: 9px;
+  background: #fff;
+  color: #17314b;
+}
+.configuration-centre input[type="checkbox"] {
+  margin-right: 8px;
+}
+.configuration-period,
+.configuration-fields,
+.configuration-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.configuration-centre fieldset {
+  border: 1px solid #d4e1e9;
+  border-radius: 8px;
+  margin: 16px 0;
+  padding: 14px;
+}
+.configuration-centre details {
+  margin: 18px 0;
+}
+.configuration-centre summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #234e6b;
+}
+.configuration-centre .work-table {
+  overflow: auto;
+}
+.configuration-centre th,
+.configuration-centre td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #d6e2eb;
+  font-size: 13px;
+}
+.configuration-centre small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.configuration-editor,
+.configuration-preview,
+.configuration-impact,
+.configuration-reason {
+  padding: 18px;
+  border: 1px solid #c8dae4;
+  border-radius: 10px;
+  margin: 20px 0;
+  background: #f8fbfd;
+}
+.configuration-editor .button,
+.configuration-preview .button {
+  margin: 5px;
+}
+.configuration-status {
+  display: inline-block;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12px;
+  background: #edf1f5;
+  color: #4d6070;
+}
+.configuration-status.included {
+  color: #12615c;
+  background: #dff3ee;
+}
+.configuration-status.review-required {
+  color: #7b5105;
+  background: #fff2d6;
+}
+.configuration-rule {
+  border-bottom: 1px solid #d6e2eb;
+  padding: 12px 0;
+}
+.configuration-centre .error {
+  padding: 12px;
+  background: #fff1ed;
+  color: #9b3028;
+}
+.configuration-centre .button {
+  min-height: 40px;
+  white-space: normal;
+}
+.configuration-mode {
+  font-size: 13px;
+  background: #e7f4f2;
+  padding: 8px 16px;
+  color: #12615c;
+}
+.configuration-mode.exploratory {
+  background: #fff2d6;
+  color: #7b5105;
+}
+@media (max-width: 800px) {
+  .configuration-centre {
+    margin: 10px;
+    padding: 16px;
+  }
+  .configuration-centre > header {
+    display: block;
+  }
+  .configuration-tabs button {
+    flex: 1;
+    min-width: 140px;
+  }
+  .configuration-period,
+  .configuration-fields,
+  .configuration-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-centre .work-table table {
+    min-width: 800px;
+  }
+}
+@media print {
+  .configuration-tabs,
+  .configuration-centre button,
+  .configuration-centre input,
+  .configuration-centre select,
+  .configuration-reason {
+    display: none;
+  }
+  .configuration-centre {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+  }
+  .configuration-centre .work-table {
+    overflow: visible;
+  }
+  .configuration-centre td,
+  .configuration-centre th {
+    font-size: 9px;
+    padding: 5px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.configuration-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.configuration-table-scroll table {
+  width: 100%;
+}
+.configuration-impact {
+  min-width: 0;
+}

@@ -1,3 +1,4 @@
+import {saveLegacyDefinitionVersion} from './configuration.js';
 import { dataTransaction } from "./data-management.js";
 import { readEffectiveData } from "./needs-domain.js";
 import {staffAnalysisSettings} from './staff-analysis.js';
@@ -183,6 +184,7 @@ export function mountAnalysis(app, { db, storage, filters }) {
           ...value,
           ...(saved.clients ? { clients: saved.clients } : {}),
           ...(saved.patterns ? { patterns: saved.patterns } : {}),
+          ...(saved.configuration ? {configuration:saved.configuration}:{}),
         };
         yield tx
           .prepare(
@@ -292,9 +294,7 @@ export function mountAnalysis(app, { db, storage, filters }) {
       ...(timeBands ? { timeBands } : {}),
       ...(sharedTemplates ? { sharedTemplates } : {}),
     };
-    await db
-      .prepare("UPDATE settings SET value=? WHERE id=1")
-      .run(JSON.stringify(settings));
+    await saveLegacyDefinitionVersion(db,req.user,settings,'Approved through the existing risk definitions editor.');
     await storage.audit(db, req.user.id, "risk.definitions.updated", {
       codes: Object.keys(riskMappings).length,
       privacyMinimum,

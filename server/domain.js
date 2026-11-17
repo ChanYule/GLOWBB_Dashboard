@@ -1,3 +1,4 @@
+import {performanceData,sourceCoverage} from './reporting-policy.js';
 import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
 import unzipper from "unzipper";
@@ -512,7 +513,15 @@ function buildInsights({
     );
   return insights.slice(0, 6);
 }
-export function analytics(
+export function analytics(data,...args){
+ const report=calculateAnalytics(data,...args);
+ if(!report||!report.summary)return report;
+ const performance=performanceData(data);
+ if(performance!==data){const p=calculateAnalytics(performance,...args);for(const key of ['programmes','domains','recommendations'])if(p[key])report[key]=p[key];if(report.insights)report.insights=report.insights.filter(i=>!i.programmeId);}
+ const coverage=sourceCoverage(data,args[2]);if(coverage){report.coverage=coverage;if(report.period&&!report.period.from)report.period.from=coverage.from||'';}
+ return report;
+}
+function calculateAnalytics(
   data,
   settings = defaults,
   filters = {},
@@ -1054,11 +1063,11 @@ export function analyticsContext(
     insights: [],
     recommendations: [],
     period: {
-      from: filters.from || dates[0] || "",
+      from: filters.from || sourceCoverage(data, now)?.from || dates[0] || "",
       to: filters.to || now,
       now,
     },
-    coverage: { from: dates[0] || null, to: dates.at(-1) || null },
+    coverage: sourceCoverage(data, now) || { from: dates[0] || null, to: dates.at(-1) || null },
     quality: {
       missingAge: data.participants.filter((p) => p.age === null).length,
       unknownGender: data.participants.filter(

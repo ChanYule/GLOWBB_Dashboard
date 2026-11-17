@@ -1,4 +1,5 @@
-﻿import { analytics, defaults, hash, todaySG } from "./domain.js";
+import {performanceData} from "./reporting-policy.js";
+import { analytics, defaults, hash, todaySG } from "./domain.js";
 export const interests = [
   "Physical exercise",
   "Health and wellness",
@@ -695,6 +696,8 @@ export function needsAnalysis(
           r.history.daysSince > settings.inactivityBands[0],
       ).length
     : null;
+  const programmeData = performanceData(effective);
+  const programmeReport = programmeData === effective ? report : analytics(programmeData, settings, filters, now);
   const groupedDomains = new Map();
   for (const d of report.domains) {
     const label = settings.domainGroups[d.label] || d.label;
@@ -705,7 +708,7 @@ export function needsAnalysis(
     const pg = report.programmes.filter((p) => domains.includes(p.domain)),
       ids = new Set(pg.map((p) => p.id));
     const subset = analytics(
-      effective,
+      programmeData,
       settings,
       { ...filters, domain: JSON.stringify(domains) },
       now,
@@ -719,8 +722,8 @@ export function needsAnalysis(
       attendance: subset.summary.attendance,
       average: subset.summary.average,
       repeat: subset.summary.repeat,
-      sessionShare: report.summary.sessions
-        ? (subset.summary.sessions / report.summary.sessions) * 100
+      sessionShare: programmeReport.summary.sessions
+        ? (subset.summary.sessions / programmeReport.summary.sessions) * 100
         : null,
       programmeIds: [...ids],
     };
@@ -732,7 +735,7 @@ export function needsAnalysis(
   ]) {
     if (summary.suppressed) continue;
     for (const item of summary.values) {
-      const offered = effective.programmes.filter((p) =>
+      const offered = programmeData.programmes.filter((p) =>
         p.optional?.[tag]?.includes(item.label),
       );
       const requestedIds = new Set(
@@ -751,7 +754,7 @@ export function needsAnalysis(
       );
       const offeredIds = new Set(offered.map((p) => p.id));
       const reached = new Set(
-        effective.attendance
+        programmeData.attendance
           .filter((a) => {
             const session = sessions.get(a.sessionId);
             return (

@@ -1,3 +1,4 @@
+import {policySummary} from './reporting-policy.js';
 const stamp = (value) => {
   if (!value) return null;
   const normalized =
@@ -15,6 +16,7 @@ export async function analysisMetadata(db, settings) {
     )
     .all();
   return {
+    ...(policySummary()?{reporting:policySummary()}:{}),
     lastUpdatedAt:
       [settings.registry?.importedAt, ...rows.map((r) => r.stamp)]
         .map(stamp)

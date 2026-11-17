@@ -9,12 +9,13 @@ import {
 import { Building2 } from "lucide-react";
 import { App } from "./main";
 import type { Filters, User } from "./types";
-import { api, setCentreContext } from "./api";
+import { api, setCentreContext,setReportingMode } from "./api";
 import type { Centre } from "../shared/centres.js";
 import "./platform.css";
 const CentreTools = lazy(() =>
   import("./centre-tools").then((m) => ({ default: m.CentreTools })),
 );
+const ConfigurationCentre=lazy(()=>import('./configuration-centre').then(m=>({default:m.ConfigurationCentre})));
 type Staff = User & {
   id: number;
   centres: Centre[];
@@ -25,7 +26,7 @@ export function PlatformApp() {
   const [staff, setStaff] = useState<Staff | null>(null),
     [centre, setCentre] = useState<Centre | null>(null),
     [error, setError] = useState(""),
-    [tools, setTools] = useState(false);
+    [tools, setTools] = useState(false),[configuration,setConfiguration]=useState(false),[mode,setMode]=useState<'official'|'exploratory'>('official'),[dataRevision,setDataRevision]=useState(0);
   const dates = useRef<Partial<Filters> | undefined>(undefined),
     header = useRef<HTMLElement>(null);
   const rememberDates = useCallback((value: Partial<Filters>) => {
@@ -35,6 +36,7 @@ export function PlatformApp() {
     setStaff(null);
     setCentre(null);
     setCentreContext(null);
+    setMode('official');
     api<Staff>("/api/me")
       .then((value) => {
         const c =
@@ -107,6 +109,7 @@ export function PlatformApp() {
               setCentreContext(next);
               setCentre(next);
               setTools(false);
+              setConfiguration(false);setMode('official');
               api("/api/centres/preference", {
                 method: "PUT",
                 body: JSON.stringify({ centreId: next.id }),
@@ -123,23 +126,24 @@ export function PlatformApp() {
           </select>
         </label>
         {(staff.role === "admin" || staff.canCompare) && (
-          <button className="button" onClick={() => setTools((v) => !v)}>
+          <button className="button" onClick={() => {setConfiguration(false);setTools((v) => !v);}}>
             {tools
               ? "Return to centre dashboard"
               : "Centre administration & comparisons"}
           </button>
         )}
+        {centre&&staff.role!=='viewer'&&<><button className="button" onClick={()=>{setConfiguration(v=>!v);setTools(false);}}>Dashboard &amp; Data Configuration</button><label>Reporting mode<select aria-label="Reporting mode" value={mode} onChange={e=>{const value=e.target.value as 'official'|'exploratory';setReportingMode(value);setMode(value);}}><option value="official">Official reporting</option><option value="exploratory">Explore including excluded activities</option></select></label></>}
         <button className="text-button" onClick={load}>
           Refresh access
         </button>
       </header>
       {error && <p role="alert">{error}</p>}
-      {tools ? (
+      {configuration&&centre?<Suspense fallback={<p>Loading configuration...</p>}><ConfigurationCentre key={centre.id} centre={centre} centres={staff.centres} user={staff} onChanged={()=>{setReportingMode(mode);setDataRevision(n=>n+1);}} onReturn={()=>setConfiguration(false)}/></Suspense>:tools ? (
         <Suspense fallback={<p>Loading centre tools…</p>}>
           <CentreTools staff={staff} onChanged={load} />
         </Suspense>
       ) : centre ? (
-        <div key={centre.id} className="centre-workspace">
+        <div key={centre.id+'-'+mode+'-'+dataRevision} className="centre-workspace">
           <div className="selected-centre-name">{centre.name}</div>
           <App
             initialDates={dates.current}

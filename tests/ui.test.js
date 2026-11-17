@@ -2668,3 +2668,34 @@ test("programme classification table keeps secondary labels on one metric row an
     assert.ok(screen.getByText('Programme 24'));
   } finally {cleanup();}
 });
+
+const {ConfigurationCentre}=await tsImport('../src/configuration-centre.tsx',import.meta.url);
+test('configuration requires review and confirmation, invalidates changed forms, and labels disconnected sync honestly',async()=>{
+ const original=globalThis.fetch;let confirmed=0;
+ const configuration={settings:{...defaults,cfsMappings:{},livingGroups:{},domainGroups:{}},configuration:{version:1,rules:[],qualityWarnings:{cfs:true},sync:{categories:['attendance'],mode:'all',from:'',to:''}},personal:{},templates:['Monthly Centre Performance'],caritaHub:{connected:false,note:'Not connected'}};
+ globalThis.fetch=async(url,options)=>{const path=new URL(String(url),'http://localhost').pathname;let value;
+  if(path==='/api/configuration')value=configuration;
+  else if(path.endsWith('/activities'))value={rows:[{id:'a',name:'GLOW Admin',domain:'Others',eventTypes:[],sessions:1,attendance:3,unique:2,status:'Included',rules:[],pending:[]}],total:1,pages:1};
+  else if(path.endsWith('/preview'))value={id:'preview',version:1,nextVersion:2,matched:[{id:'a',name:'GLOW Admin'}],impact:{before:{summary:{unique:3,attendance:4},rankings:[],clientMetrics:null},after:{summary:{unique:2,attendance:2},rankings:[],clientMetrics:null,note:'Source retained'}},note:'Only approved IDs.'};
+  else if(path.endsWith('/confirm')){confirmed++;value={status:'Approved'};}
+  else throw Error('Unexpected '+path+' '+options?.method);
+  return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
+ };
+ try{
+  setCentreContext(CENTRES[0]);
+  render(React.createElement(ConfigurationCentre,{centre:CENTRES[0],centres:CENTRES,user:{username:'admin',role:'admin'},onChanged:()=>{},onReturn:()=>{}}));
+  await screen.findByRole('checkbox',{name:'Select GLOW Admin'});
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select GLOW Admin'}));
+  fireEvent.click(screen.getByRole('button',{name:'Preview Matches & Impact'}));
+  const approve=await screen.findByRole('button',{name:'Approve reporting configuration'});
+  assert.equal(approve.disabled,true);
+  fireEvent.click(screen.getByRole('checkbox',{name:/I reviewed the impact/}));
+  assert.equal(approve.disabled,false);
+  fireEvent.change(screen.getByLabelText('Additional explanation (optional)'),{target:{value:'Changed after preview'}});
+  assert.equal(approve.disabled,true);
+  assert.equal(confirmed,0);
+  fireEvent.click(screen.getByRole('tab',{name:'CaritaHub Sync Settings'}));
+  assert.ok(screen.getByText('Not connected'));
+  assert.equal(screen.queryByRole('button',{name:/sync now/i}),null);
+ }finally{cleanup();globalThis.fetch=original;setCentreContext(null);}
+});

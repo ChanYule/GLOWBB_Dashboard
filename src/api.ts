@@ -1,12 +1,15 @@
+import {isReportingPath} from '../shared/reporting-paths.js';
 import type {Centre} from '../shared/centres.js';
 import {MAX_IMPORT_BYTES,MAX_IMPORT_MB,DIRECT_UPLOAD_BYTES,UPLOAD_CHUNK_BYTES} from '../shared/upload-limits.js';
 let selectedCentre: Centre | null = null;
 let centreGeneration = 0;
+let reportMode:'official'|'exploratory'='official';
+export function setReportingMode(mode:'official'|'exploratory'){reportMode=mode;centreGeneration++;inFlight.clear();}
 export const currentCentre = () => selectedCentre;
-export function setCentreContext(centre:Centre|null){selectedCentre=centre;centreGeneration++;inFlight.clear();}
+export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;inFlight.clear();}
 export function centreUrl(url:string){
   if(!selectedCentre||!url.startsWith('/api/')||/^\/api\/(me|login|logout|users|centres)(?:[/?]|$)/.test(url))return url;
-  const parsed=new URL(url,'http://centre.local');parsed.searchParams.set('centre',selectedCentre.id);return parsed.pathname+parsed.search;
+  const parsed=new URL(url,'http://centre.local');parsed.searchParams.set('centre',selectedCentre.id);if(isReportingPath(parsed.pathname)||/^\/api\/clients\/(report|outreach|priorities|followups)$/.test(parsed.pathname)){parsed.searchParams.set('reportingMode',reportMode);if(reportMode==='exploratory')parsed.searchParams.set('includeExcluded','1');}return parsed.pathname+parsed.search;
 }
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const generation=centreGeneration;

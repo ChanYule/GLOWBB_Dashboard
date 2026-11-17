@@ -182,6 +182,44 @@ try {
       "!!document.querySelector('nav')&&!document.querySelector('.fetch-status')",
       "main app",
     );
+    if(process.argv.includes('--configuration')) {
+      await evaluate("[...document.querySelectorAll('.platform-header button')].find(b=>b.textContent.includes('Dashboard & Data Configuration')).click()");
+      await wait("document.querySelectorAll('.configuration-centre tbody tr').length>0",'configuration activities');
+      const chooseTab=async(name)=>{await evaluate(`[...document.querySelectorAll('.configuration-tabs button')].find(b=>b.textContent.includes(${JSON.stringify(name)})).click()`);};
+      await evaluate("document.querySelector('.configuration-centre tbody input[type=checkbox]').click()");
+      await evaluate("[...document.querySelectorAll('.configuration-centre button')].find(b=>b.textContent.includes('Preview Matches')).click()");
+      await wait("!!document.querySelector('.configuration-preview')",'exclusion impact');
+      if(!(await evaluate("document.querySelector('.configuration-preview').innerText.includes('Unique')")))throw Error('Missing distinct impact');
+      const approvalDisabled=await evaluate("[...document.querySelectorAll('.configuration-preview button')].find(b=>b.textContent.includes('Approve reporting')).disabled");
+      if(!approvalDisabled)throw Error('Approval lacks explicit confirmation');
+      await evaluate("document.querySelector('.configuration-preview input[type=checkbox]').click()");
+      await evaluate("[...document.querySelectorAll('.configuration-preview button')].find(b=>b.textContent.includes('Approve reporting')).click()");
+      await wait("!document.querySelector('.configuration-preview')&&document.querySelector('.configuration-centre').innerText.includes('Configuration approved')",'approve exclusion');
+      const checkLayout=async(label)=>{const body=await evaluate('document.documentElement.scrollWidth');if(body>width+2)throw Error(label+' overflow '+width+':'+body);};
+      await checkLayout('Activity exclusions');
+      await evaluate("window.scrollTo({top:0,behavior:'instant'})");
+      await wait("(()=>{window.scrollTo({top:0,behavior:'instant'});return Math.abs(window.scrollY)<1})()",'configuration page top');
+      await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-configuration-activities.png'),Buffer.from(r.data,'base64')));
+      await chooseTab('KPI');
+      await evaluate("[...document.querySelectorAll('.configuration-centre button')].find(b=>b.textContent==='Preview management report').click()");
+      await wait("!!document.querySelector('.configuration-centre a[target=_blank]')",'management snapshot');
+      await checkLayout('KPI rules and report');
+      await evaluate("window.scrollTo({top:0,behavior:'instant'})");
+      await wait("(()=>{window.scrollTo({top:0,behavior:'instant'});return Math.abs(window.scrollY)<1})()",'configuration page top');
+      await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).then(r=>writeFileSync(join(output,width+'-configuration-report.png'),Buffer.from(r.data,'base64')));
+      await chooseTab('Centre');
+      await evaluate("[...document.querySelectorAll('.configuration-centre button')].find(b=>b.textContent.includes('Load history')).click()");
+      await wait("document.querySelector('.configuration-centre').innerText.includes('Approved configuration')",'configuration history');await checkLayout('History');
+      await chooseTab('CaritaHub');
+      if(!(await evaluate("document.querySelector('.configuration-centre').innerText.includes('Not connected')")))throw Error('CaritaHub connection overstated');await checkLayout('Sync drafts');
+      await chooseTab('Personal');await checkLayout('Personal preferences');
+      await evaluate("[...document.querySelectorAll('.configuration-centre button')].find(b=>b.textContent.includes('Save personal display')).click()");
+      await wait("document.querySelector('.configuration-centre').innerText.includes('Display preferences saved')",'personal defaults');
+      await evaluate("[...document.querySelectorAll('.platform-header button')].find(b=>b.textContent.includes('administration')).click()");
+      await wait("!!document.querySelector('.centre-tools')&&!document.querySelector('.configuration-centre')",'return to centre administration');
+      results.push({width,configuration:true,tabs:5,explicitApproval:true,reportSnapshot:true,history:true,caritaHubConnected:false});
+      continue;
+    }
     if(importWorkbook){
       await evaluate("[...document.querySelectorAll('.heading-actions button')].find(b=>b.textContent.includes('Import attendance')).click()");
       await wait("!!document.querySelector('input[name=file]')",'attendance upload');
@@ -295,7 +333,7 @@ try {
   }
   if (errors.length) throw Error("Browser errors: " + errors.join("; "));
   writeFileSync(
-    join(output, importWorkbook?'import-results.json':process.argv.includes("--print-only")?"print-results.json":"results.json"),
+    join(output, process.argv.includes('--configuration')?'configuration-results.json':importWorkbook?'import-results.json':process.argv.includes("--print-only")?"print-results.json":"results.json"),
     JSON.stringify({ isolated:true, syntheticOnly:!importWorkbook, sourceWorkbookRead:!!importWorkbook, results, errors }, null, 2),
   );
   process.stdout.write(

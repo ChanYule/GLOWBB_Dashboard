@@ -1,14 +1,15 @@
 import { MetricHelp } from "./metric-help";
 export function AnalysisStamp({
   metadata,
-  coverage,
+  coverage = {from:null,to:null},
 }: {
-  metadata?: { lastUpdatedAt?: string | null; generatedAt?: string };
-  coverage: { from: string | null; to: string | null };
+  metadata?: { lastUpdatedAt?: string | null; generatedAt?: string;reporting?:{label:string;version:number} };
+  coverage?: { from: string | null; to: string | null };
 }) {
   const stamp = metadata?.lastUpdatedAt;
   return (
     <div className="analysis-stamp">
+      {metadata?.reporting&&<strong>{metadata.reporting.label} · Configuration version {metadata.reporting.version}</strong>}
       <span>
         Data last updated:{" "}
         {stamp && Number.isFinite(Date.parse(stamp))

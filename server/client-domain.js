@@ -1,3 +1,4 @@
+import {sourceCoverage} from "./reporting-policy.js";
 import { defaults, hash, todaySG, matchesSelection } from "./domain.js";
 import { registrationContext } from '../shared/registration-context.js';
 import {
@@ -431,14 +432,15 @@ export function clientContext(
       allSelected.add(a.participantId);
   }
   dates.sort();
+  const coverage = sourceCoverage(state.data, now) || {from:dates[0]||null,to:dates.at(-1)||null};
   if (
-    dates.length &&
-    ((q.from && q.from > dates.at(-1)) || (q.to || q.asOf) < dates[0])
+    coverage.from &&
+    ((q.from && q.from > coverage.to) || (q.to || q.asOf) < coverage.from)
   )
     throw fail(
       "The selected period does not overlap the available attendance coverage. Choose covered dates or import newer attendance.",
     );
-  const historyCurrent = Boolean(dates.length && q.asOf <= dates.at(-1));
+  const historyCurrent = Boolean(coverage.to && q.asOf <= coverage.to);
   const historyNote = historyCurrent
     ? "Observed recency within the available attendance coverage."
     : "The chosen reporting date is beyond the available attendance coverage, or no history is available. Active/inactive classifications are unavailable; choose a covered date or import updated attendance.";
@@ -546,7 +548,7 @@ export function clientContext(
     members,
     selected: members.filter((p) => matches(p)),
     comparison: members.filter((p) => matches(p, true)),
-    coverage: { from: dates[0] || null, to: dates.at(-1) || null },
+    coverage,
     otherAttenders: [...allSelected].filter((id) => !currentIds.has(id)).length,
     allSelected,
     programmes: [...programmes.values()],

@@ -121,3 +121,5 @@ See [the 4 November redesign report and staff guide](docs/REDESIGN-REPORT.md) fo
 See [performance hardening and verification](docs/PERFORMANCE-HARDENING.md) for faster database reads, bulk merges, deletion/recovery and debounced filtering/search.
 
 See [Main Dashboard and Client Engagement](docs/MAIN-DASHBOARD.md) for the daily/monthly summary, client IB/OB definitions and the all-history two-programme inactive measure.
+
+See [Dashboard & Data Configuration](docs/CONFIGURATION-CENTRE.md) for reviewed activity exclusions, reporting versions, management report presets, permissions and disconnected CaritaHub draft settings.

@@ -1,3 +1,4 @@
+import {saveDefinitionInTransaction} from './configuration.js';
 import { writeClientRegistry } from "./client-writes.js";
 import { randomUUID } from "node:crypto";
 import {clientOutreach} from './client-outreach.js';
@@ -639,14 +640,7 @@ export function mountClients(app, { db, storage, upload }) {
       );
     await dataTransaction(db, function* (tx) {
       const settings = yield storage.getSettings(tx);
-      yield tx.prepare("UPDATE settings SET value=? WHERE id=1").run(
-        JSON.stringify({
-          ...settings,
-          clientZones: zones,
-          clientZoneDocumentation: documentation,
-          inactivityBands: bands,
-        }),
-      );
+      yield* saveDefinitionInTransaction(tx,req.user,{...settings,clientZones:zones,clientZoneDocumentation:documentation,inactivityBands:bands},'Approved client reporting settings: '+documentation);
       yield* audit(tx, req.user.id, "client.reporting.settings.updated", {
         zones,
         bands,
