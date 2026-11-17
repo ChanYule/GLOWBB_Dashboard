@@ -19,7 +19,7 @@ import { mountNeeds } from "./needs-routes.js";
 import { mountAnalysis } from "./analysis-routes.js";
 import {importFileUpload} from "./large-uploads.js";
 import multer from 'multer';
-import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
+import {MAX_IMPORT_MB,MAX_IMPORT_ROWS} from '../shared/upload-limits.js';
 import { randomBytes } from "node:crypto";
 import {
   readFile,
@@ -248,8 +248,8 @@ export function createApp(
           : "Could not read this file. Use a valid XLSX or UTF-8 CSV with the exact ten attendance headers, values only, in row 1.",
       );
     }
-    if (parsed.rawRows > 50000)
-      throw error(400, "Maximum 50,000 rows per upload.");
+    if (parsed.rawRows > MAX_IMPORT_ROWS)
+      throw error(400, `Maximum ${MAX_IMPORT_ROWS.toLocaleString("en-SG")} attendance rows per upload.`);
     const mode = req.query.mode || "merge";
     if (!["add", "merge", "replace"].includes(mode))
       throw error(400, "Select a valid import mode.");

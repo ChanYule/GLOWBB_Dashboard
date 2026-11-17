@@ -1,3 +1,4 @@
+import {MAX_IMPORT_ROWS} from "../shared/upload-limits.js";
 import {reportingConfiguration} from './reporting-policy.js';
 import { randomBytes } from "node:crypto";
 import {importFileUpload} from "./large-uploads.js";
@@ -251,6 +252,7 @@ export function mountCentreImports(
         });
       }
     }
+    p.issues = issues;
     p.children = children;
     p.denied = denied;
     p.counts = result.counts;
@@ -274,7 +276,8 @@ export function mountCentreImports(
       flaggedRows: new Set(issues.map((i) => i.row)).size,
       classificationReview: result.review,
       deniedCentres: denied,
-      issues,
+      issueCount: issues.length,
+      issues: issues.slice(0,100),
       preview: result.parsed.rows.slice(0, 30).map((r) => ({
         row: r.row,
         programme: r.programme.name,
@@ -315,13 +318,11 @@ export function mountCentreImports(
     let matrix;
     try {
       matrix = await readMatrix(req.file.buffer, req.file.originalname);
-    } catch {
-      throw fail(
-        400,
-        "Attendance file could not be read. Use one values-only worksheet with the required attendance headers, or a valid UTF-8 CSV.",
-      );
+    } catch (e) {
+      const safe = /^(The file is empty|Missing required headers:|Duplicate column|Upload an |This is not a valid|Exactly one worksheet|Maximum |Formula cells|Workbook expands|CSV could not)/.test(e.message);
+      throw fail(400, safe ? e.message : "Attendance file could not be read. Use one values-only worksheet with the required attendance headers, or a valid UTF-8 CSV.");
     }
-    if (matrix.length > 50001) throw fail(400, "Maximum 50,000 rows.");
+    if (matrix.length > MAX_IMPORT_ROWS + 1) throw fail(400, `Maximum ${MAX_IMPORT_ROWS.toLocaleString("en-SG")} attendance rows per upload.`);
     const classified = classifyMatrix(matrix);
     const id = randomBytes(24).toString("hex"),
       p = { kind: "centre-import", matrix, mode, overrides: {} };
@@ -345,7 +346,7 @@ export function mountCentreImports(
     admin(req);
     const p = await load(req, req.body.id),
       allowed = await access(req.user);
-    if (!Array.isArray(req.body.overrides) || req.body.overrides.length > 50000)
+    if (!Array.isArray(req.body.overrides) || req.body.overrides.length > MAX_IMPORT_ROWS)
       throw fail(400, "Choose row classifications.");
     if (req.body.unclassifiedCentre) {
       if (!allowed.ids.includes(req.body.unclassifiedCentre))
@@ -375,6 +376,18 @@ export function mountCentreImports(
       p.overrides[String(o.row)] = { centreId: o.centreId, reason: o.reason };
     }
     res.json(await preview(req, p, req.body.id));
+  });
+  app.get("/api/centres/import/issues", async (req,res) => {
+    admin(req);
+    const {id,page="1",revision}=req.query;
+    if(typeof id!=="string" || !/^[1-9]\d*$/.test(String(page)) || Object.keys(req.query).some(k=>!["id","page","revision"].includes(k))) throw fail(400,"Choose a valid preview and issue page.");
+    const p=await load(req,id), allowed=await access(req.user);
+    if(Object.keys(p.children||{}).some(c=>!allowed.ids.includes(c))) throw fail(403,"Centre access changed. Upload a fresh preview.");
+    if(revision!==undefined && String(p.classificationRevision)!==String(revision)) throw fail(409,"The preview changed. Download the latest validation report.");
+    if(!Array.isArray(p.issues)) throw fail(409,"Upload a fresh preview to download all row issues.");
+    const pages=Math.max(1,Math.ceil(p.issues.length/1000)),number=Number(page);
+    if(number>pages)throw fail(400,"Choose an available issue page.");
+    res.json({issues:p.issues.slice((number-1)*1000,number*1000),total:p.issues.length,page:number,pages,revision:p.classificationRevision});
   });
   app.get("/api/centres/import/rows", async (req, res) => {
     admin(req);

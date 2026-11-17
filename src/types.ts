@@ -160,6 +160,7 @@ export type Preview = {
   centreSummaries?:Record<string,{rawRows:number;ready:number;duplicates:number;skipped:number;invalid:number;profileUpdates:number;sessionUpdates:number;resultingAttendance?:number;resultingProfiles?:number}>;
   classificationRevision?:number;
   flaggedRows?:number;
+  issueCount?:number;
   unclassified?: number;
   deniedCentres?: string[];
   classificationReview?: {row:number;activity:string;location:string;reason:string}[];

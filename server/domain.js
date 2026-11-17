@@ -1,3 +1,4 @@
+import {MAX_IMPORT_ROWS} from "../shared/upload-limits.js";
 import {performanceData,sourceCoverage} from './reporting-policy.js';
 import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
@@ -221,7 +222,7 @@ export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
         "CSV could not be read. Check UTF-8 encoding, quoted fields and consistent column counts.",
       );
     }
-    if (matrix.length > 50001) throw Error("Maximum 50,000 rows per upload.");
+    if (matrix.length > MAX_IMPORT_ROWS + 1) throw Error(`Maximum ${MAX_IMPORT_ROWS.toLocaleString("en-SG")} attendance rows per upload.`);
     return matrix;
   }
   if (!/\.xlsx$/i.test(name))
@@ -250,14 +251,15 @@ export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
       "Exactly one worksheet must contain all attendance headers in row 1.",
     );
   const s = sheets[0];
-  if (s.columnCount > 100) throw Error("Maximum 100 columns per worksheet.");
-  if (s.rowCount > 50001)
-    throw Error("Maximum 50,000 attendance rows per upload.");
+  const columnCount = s.columnCount;
+  if (columnCount > 100) throw Error("Maximum 100 columns per worksheet.");
+  if (s.rowCount > MAX_IMPORT_ROWS + 1)
+    throw Error(`Maximum ${MAX_IMPORT_ROWS.toLocaleString("en-SG")} attendance rows per upload.`);
   const matrix = [];
   s.eachRow({ includeEmpty: true }, (r) =>
     matrix.push(
       Array.from(
-        { length: Math.max(requiredHeaders.length, s.columnCount) },
+        { length: Math.max(requiredHeaders.length, columnCount) },
         (_, i) => {
           const c = r.getCell(i + 1);
           if (c.type === ExcelJS.ValueType.Formula)

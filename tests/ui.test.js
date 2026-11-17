@@ -2699,3 +2699,19 @@ test('configuration requires review and confirmation, invalidates changed forms,
   assert.equal(screen.queryByRole('button',{name:/sync now/i}),null);
  }finally{cleanup();globalThis.fetch=original;setCentreContext(null);}
 });
+
+test('large attendance previews show total warning counts and download every issue page',async()=>{
+ const {ImportDialog}=await tsImport('../src/main.tsx',import.meta.url);
+ const original=globalThis.fetch,originalForm=globalThis.FormData,originalCreate=URL.createObjectURL,originalRevoke=URL.revokeObjectURL,originalClick=dom.window.HTMLAnchorElement.prototype.click;
+ let blob;const pages=[];
+ globalThis.FormData=dom.window.FormData;URL.createObjectURL=b=>{blob=b;return 'blob:test-download';};URL.revokeObjectURL=()=>{};dom.window.HTMLAnchorElement.prototype.click=()=>{};
+ const preview={id:'large',classificationRevision:2,centreCounts:{glow_bukit_batok:3},rawRows:3,ready:3,duplicates:0,invalid:0,skipped:0,issues:[{row:2,message:'First issue'}],issueCount:3,preview:[],reference:{},expectedReference:{},variants:[]};
+ globalThis.fetch=async url=>{const u=new URL(String(url),'http://localhost');if(u.pathname==='/api/import/preview')return Response.json(preview);assert.equal(u.pathname,'/api/centres/import/issues');assert.equal(u.searchParams.get('revision'),'2');const page=Number(u.searchParams.get('page'));pages.push(page);return Response.json({issues:page===1?[{row:2,message:'First issue'},{row:3,message:'Second issue'}]:[{row:4,message:'Final issue'}],pages:2});};
+ try{
+  setCentreContext(CENTRES[0]);render(React.createElement(ImportDialog,{onClose:()=>{},onDone:()=>{}}));
+  fireEvent.submit(screen.getByRole('button',{name:'Preview import'}).closest('form'));
+  await screen.findByText(/3 issues & warnings/);
+  fireEvent.click(screen.getByRole('button',{name:'Download row issues'}));
+  await waitFor(()=>assert.ok(blob));assert.deepEqual(pages,[1,2]);const text=await blob.text();assert.match(text,/First issue/);assert.match(text,/Final issue/);assert.equal(text.split('\r\n').length,4);
+ }finally{cleanup();setCentreContext(null);globalThis.fetch=original;globalThis.FormData=originalForm;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke;dom.window.HTMLAnchorElement.prototype.click=originalClick;}
+});

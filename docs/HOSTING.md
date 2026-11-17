@@ -96,7 +96,8 @@ If local data is imported before switching, back up SQLite and plan a separate t
 - **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data.
 - **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.
 - **Preview expired:** upload again. The 20-minute limit applies across deployments.
-- **Upload rejected:** use one CSV/XLSX of 20 MB or less and at most 50,000 rows. `.xls` is unsupported.
+- Large attendance previews show the first 100 validation messages. **Download row issues** retrieves every message in bounded pages, keeping the initial response small enough for hosted request limits.
+- **Upload rejected:** use one CSV/XLSX of 20 MB or less and at most 100,000 attendance rows. `.xls` is unsupported.
 
 The previous Express/SQLite deployment with `render.yaml` remains an alternative. It needs a persistent disk, `APP_ORIGIN` matching Vercel, and `DASHBOARD_BACKEND_URL` in Vercel. Leave `DATABASE_URL` unset when intentionally using that proxy mode.
 

@@ -1,4 +1,4 @@
-import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
+import {MAX_IMPORT_MB,MAX_IMPORT_ROWS} from '../shared/upload-limits.js';
 import {centreById} from '../shared/centres.js';
 import {CentreImportReview} from './centre-import-review';
 import {centreUrl} from "./api";
@@ -3137,19 +3137,18 @@ function ImportDialog({
       setBusy(false);
     }
   }
-  function issuesCsv() {
+  async function issuesCsv() {
     if (!preview) return;
-    const csv =
-      "Row,Issue\r\n" +
-      preview.issues
-        .map((i) => `${i.row},"${i.message.replaceAll('"', '""')}"`)
-        .join("\r\n");
-    const a = document.createElement("a"),
-      url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.href = url;
-    a.download = "import-issues.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    setBusy(true);setError("");
+    try {
+      const issues=[...preview.issues];
+      if(preview.centreCounts && (preview.issueCount ?? issues.length)>issues.length){
+        issues.length=0;let page=1,pages=1;
+        do {const result=await api<{issues:Preview["issues"];pages:number}>("/api/centres/import/issues?"+new URLSearchParams({id:preview.id,page:String(page),revision:String(preview.classificationRevision)}));issues.push(...result.issues);pages=result.pages;page++;}while(page<=pages);
+      }
+      const csv="Row,Issue\r\n"+issues.map(i=>`${i.row},"${i.message.replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"','""')}"`).join("\r\n");
+      const a=document.createElement("a"), url=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.href=url;a.download="import-issues.csv";a.click();URL.revokeObjectURL(url);
+    }catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   const discard = () => {
     uploadController.current?.abort();
@@ -3190,7 +3189,7 @@ function ImportDialog({
             <Upload size={32} />
             <h3>Bring your attendance records together</h3>
             <p>
-              Excel (.xlsx) or UTF-8 CSV · up to {maxFileMb} MB and up to 50,000
+              Excel (.xlsx) or UTF-8 CSV · up to {maxFileMb} MB and up to {MAX_IMPORT_ROWS.toLocaleString("en-SG")}
               rows
             </p>
             <input
@@ -3276,9 +3275,9 @@ function ImportDialog({
           )}
           <details open={preview.issues.length > 0}>
             <summary>
-              Validation report · {preview.issues.length} issues & warnings
+              Validation report · {preview.issueCount ?? preview.issues.length} issues & warnings
             </summary>
-            <Button onClick={issuesCsv}>
+            <Button disabled={busy} onClick={issuesCsv}>
               <Download size={16} />
               Download row issues
             </Button>
@@ -3288,7 +3287,7 @@ function ImportDialog({
                   <b>Row {i.row}:</b> {i.message}
                 </p>
               ))}
-              {preview.issues.length > 100 && (
+              {(preview.issueCount ?? preview.issues.length) > 100 && (
                 <p>Download the full report for remaining issues.</p>
               )}
               {!preview.issues.length && (

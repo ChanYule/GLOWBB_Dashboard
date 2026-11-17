@@ -57,7 +57,7 @@ The production server serves the built React app and API together. Default bindi
 ## Import the attendance workbook
 
 1. Select **Import attendance**.
-2. Choose `.xlsx` or UTF-8 `.csv`, under 8 MB, up to 50,000 rows. `.xls` is not supported. XLSX expanded contents are limited to 64 MB. Export formula cells as values first.
+2. Choose `.xlsx` or UTF-8 `.csv`, up to 20 MB and 100,000 attendance rows. `.xls` is not supported. XLSX expanded contents are limited to 64 MB. Export formula cells as values first.
 3. Put these exact headers in row 1, in any order, on exactly one worksheet:
 
    `Name/Member ID`, `Gender`, `Name/Age`, `Name/Race`, `Name/CFS`, `Is Client`, `Within Boundary`, `Activity Name`, `AAP Domain`, `Session Detail`.
