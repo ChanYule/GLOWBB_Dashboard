@@ -69,7 +69,7 @@ Use a separate Supabase project and the exact preview origin for preview deploym
 
 Local tests use an embedded PostgreSQL engine to verify migration SQL, API operations, cross-instance preview confirmation and transaction rollback. A live Supabase/Vercel check is still required after account setup.
 
-Hosted uploads must be **under 4 MB** to leave room for multipart overhead below Vercel's function payload limit. Split larger files. Local SQLite mode retains its 8 MB file limit.
+Imports support files up to **20 MB**, locally and when hosted. Files larger than 3 MB are sent in 1 MB chunks, stored temporarily in the existing private preview table, then assembled by the backend for the normal review flow. Each request stays below the hosted request payload limit. Upgrade the frontend and backend together; no new SQL migration is needed. Upload data expires after 20 minutes and expired data is pruned when another upload begins. The client removes temporary chunks after preview success or failure when connected.
 
 Import previews contain parsed, pseudonymised attendance data and are stored in the database across function restarts. They expire after 20 minutes and are deleted on confirmation, cancellation or cleanup during the next preview upload. Expiration prevents confirmation; it does not schedule physical deletion. For cleanup independent of traffic, schedule this query through your approved database job mechanism:
 
@@ -96,6 +96,11 @@ If local data is imported before switching, back up SQLite and plan a separate t
 - **Database unavailable / setup incomplete:** check provisioning, the migration, the pooler URI and password. Vercel function logs record database error codes without SQL or participant data.
 - **403 on save/import:** `APP_ORIGIN` must exactly match the browser origin, without a trailing slash. Preview and custom domains have different origins.
 - **Preview expired:** upload again. The 20-minute limit applies across deployments.
-- **Upload rejected:** use one CSV/XLSX smaller than 4 MB and at most 50,000 rows. `.xls` is unsupported.
+- **Upload rejected:** use one CSV/XLSX of 20 MB or less and at most 50,000 rows. `.xls` is unsupported.
 
 The previous Express/SQLite deployment with `render.yaml` remains an alternative. It needs a persistent disk, `APP_ORIGIN` matching Vercel, and `DASHBOARD_BACKEND_URL` in Vercel. Leave `DATABASE_URL` unset when intentionally using that proxy mode.
+
+
+### Large-file upload validation
+
+The 20 MB transport was validated locally with a 20,882,729-byte synthetic CSV: browser upload, preview, per-centre counts and page-two source inspection passed. SQLite import tests validate the same near-limit file through confirmation; PostgreSQL tests validate chunk persistence, preview and confirmation. Ownership, expiry, incomplete uploads, changed chunks, destination binding, cleanup and the normal review-before-save flow are covered. All 296 automated tests passed, along with lint, typecheck and the production build. These results do not establish live hosting behavior; deploy the matching frontend/backend and verify an upload on the hosted service.

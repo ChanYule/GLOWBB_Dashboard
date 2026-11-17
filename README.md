@@ -1,5 +1,7 @@
 # Programme & Outreach Dashboard
 
+**Larger imports:** XLSX/CSV imports now support files up to **20 MB**. Large files upload in small requests before the normal preview and confirmation. Deploy frontend and backend together; no new SQL is required. Existing row-count and workbook-expansion checks remain.
+
 **Attendance import fix:** Full Tzu Chi SEEN location labels now route by physical location, while Activity Name determines GLOW or SEEN, including verified GLOW_ names. [Source reconciliation and staff import guide](docs/CENTRE-IMPORT-ALIASES.md). No new SQL migration beyond 006.
 
 **Multi-centre upgrade:** GLOW Bukit Batok, SEEN Bukit Batok, GLOW Nanyang and SEEN Nanyang now share one staff platform. Start with the [multi-centre setup and staff guide](docs/MULTI-CENTRE.md) for migration 006, staff grants, reviewed historical allocation, centre registries and hosting requirements. The dashboard opens directly without sign-in. Older release notes below describe earlier versions and their former setup.

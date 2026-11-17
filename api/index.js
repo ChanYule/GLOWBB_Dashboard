@@ -1,3 +1,4 @@
+import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import { Readable } from "node:stream";
 import {withoutRoutingQuery} from '../server/request-url.js';
 
@@ -69,7 +70,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
               return json(
                 res,
                 413,
-                "This hosted upload is too large. Use a file smaller than 4 MB.",
+                `This upload request is too large. Reload the dashboard to upload files up to ${MAX_IMPORT_MB} MB.`,
               );
             chunks.push(buffer);
           }
@@ -79,7 +80,7 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
           return json(
             res,
             413,
-            "This hosted upload is too large. Use a file smaller than 4 MB.",
+            `This upload request is too large. Reload the dashboard to upload files up to ${MAX_IMPORT_MB} MB.`,
           );
       } catch {
         return json(res, 400, "The request body could not be read.");

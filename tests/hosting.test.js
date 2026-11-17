@@ -370,7 +370,7 @@ test("hosted upload size errors remain useful when Vercel returns plain text", a
         headers: { "content-type": "text/plain" },
       }),
     async () =>
-      assert.rejects(api("/api/import/preview"), /file smaller than 4 MB/),
+      assert.rejects(api("/api/import/preview"), /file of 20 MB or less/),
   );
 });
 
@@ -429,4 +429,17 @@ test("Vercel proxy permits needs management reports and protected-route approved
         assert.equal(await r.text(), "Verified report");
       },
     );
+});
+
+
+test('browser sends large files in request-sized chunks and cleans temporary uploads after preview',async()=>{
+ const original=globalThis.fetch,calls=[];let chunks=0;
+ globalThis.fetch=async(url,options)=>{calls.push({url,method:options.method,bytes:Buffer.byteLength(options.body||'')});if(url==='/api/centres/uploads')return Response.json({id:'upload-fixture',chunkBytes:1024*1024});if(String(url).includes('/chunks/')){chunks++;return Response.json({ok:true});}if(options.method==='DELETE')return Response.json({ok:true});assert.equal(JSON.parse(options.body).uploadId,'upload-fixture');return Response.json({ready:1});};
+ try{const form=new FormData();form.append('file',new Blob([new Uint8Array(5*1024*1024)]),'large.xlsx');const p=await api('/api/import/preview?mode=merge',{method:'POST',body:form});assert.equal(p.ready,1);assert.equal(chunks,5);assert.ok(calls.every(c=>c.bytes<2*1024*1024));assert.equal(calls.at(-1).method,'DELETE');assert.equal(calls.some(c=>c.method==='POST'&&c.url.includes('/confirm')),false);}finally{globalThis.fetch=original;}
+});
+
+test('large upload cleanup still runs when preview validation fails',async()=>{
+ const original=globalThis.fetch;let cleaned=false;
+ globalThis.fetch=async(url,options)=>{if(url==='/api/centres/uploads')return Response.json({id:'upload-fixture',chunkBytes:1024*1024});if(String(url).includes('/chunks/'))return Response.json({ok:true});if(options.method==='DELETE'){cleaned=true;return Response.json({ok:true});}return Response.json({error:'Invalid worksheet headers'},{status:400});};
+ try{const form=new FormData();form.append('file',new Blob([new Uint8Array(3*1024*1024+1)]),'large.xlsx');await assert.rejects(api('/api/import/preview',{method:'POST',body:form}),/Invalid worksheet headers/);assert.equal(cleaned,true);}finally{globalThis.fetch=original;}
 });

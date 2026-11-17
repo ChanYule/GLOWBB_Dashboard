@@ -1,3 +1,4 @@
+import {MAX_IMPORT_BYTES,UPLOAD_CHUNK_BYTES} from '../shared/upload-limits.js';
 import ExcelJS from "exceljs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -750,4 +751,32 @@ test("centre preview actions reconcile all source rows and paginated inspection 
   } finally {
     await f.close();
   }
+});
+
+
+test('large imports assemble bounded chunks, reject missing or changed chunks, and preserve the reviewed import flow',async()=>{
+ const f=await app();try{
+  const body=Buffer.from(csv([[...HEADERS,'Centres','Source note'],...Array.from({length:520},(_,i)=>{const row=attendance('GLOW Large file');row[0]='large-synthetic-'+i;return [...row,'Tzu Chi SEEN @ Bukit Batok','x'.repeat(40000)];})]));assert.ok(body.length>19*1024*1024);assert.ok(body.length<MAX_IMPORT_BYTES);
+  const rejected=await f.request('/api/centres/uploads',{name:'large.csv',size:MAX_IMPORT_BYTES+1,target:'/api/import/preview?mode=merge'});assert.equal(rejected.status,413);
+  assert.equal((await f.request('/api/centres/uploads',{name:'large.csv',size:body.length,target:'/api/import/confirm'})).status,400);
+  const begin=await f.request('/api/centres/uploads',{name:'large.csv',size:body.length,target:'/api/import/preview?mode=merge'}),session=await begin.json();assert.equal(begin.status,200,JSON.stringify(session));
+  const put=(i,data)=>fetch(f.origin+'/api/centres/uploads/'+session.id+'/chunks/'+i,{method:'PUT',headers:{Origin:f.origin,'Content-Type':'application/json'},body:JSON.stringify({data:data.toString('base64')})});
+  assert.equal((await f.request('/api/import/preview?mode=merge',{uploadId:session.id})).status,409);
+  for(let offset=0,i=0;offset<body.length;offset+=UPLOAD_CHUNK_BYTES,i++){const bytes=body.subarray(offset,offset+UPLOAD_CHUNK_BYTES),r=await put(i,bytes);assert.equal(r.status,200,await r.text());if(i===0){assert.equal((await put(i,bytes)).status,200);assert.equal((await put(i,Buffer.alloc(bytes.length,120))).status,409);}}
+  assert.equal((await f.request('/api/import/preview?mode=add',{uploadId:session.id})).status,409);
+  const response=await f.request('/api/import/preview?mode=merge',{uploadId:session.id}),previewed=await response.json();assert.equal(response.status,200,JSON.stringify(previewed));assert.equal(previewed.ready,520);assert.equal(previewed.unclassified,0);assert.equal(readData(f.stores.get('glow_bukit_batok')).attendance.length,0);
+  const cleanup=await fetch(f.origin+'/api/centres/uploads/'+session.id,{method:'DELETE',headers:{Origin:f.origin}});assert.equal(cleanup.status,200);assert.equal(f.db.prepare("SELECT COUNT(*) n FROM import_previews WHERE id LIKE 'upload-%'").get().n,0);
+  assert.equal((await f.request('/api/import/confirm',{id:previewed.id,confirmed:true})).status,200);assert.equal(readData(f.stores.get('glow_bukit_batok')).attendance.length,520);
+ }finally{await f.close();}
+});
+
+
+test('temporary large uploads remain owner-scoped and expired uploads cannot be completed',async()=>{
+ const f=await app({auth:true,seed:db=>{for(const username of ['uploader-one','uploader-two'])db.prepare('INSERT INTO users(username,password,role) VALUES(?,?,?)').run(username,passwordHash('fixture-password-long'),'admin');}});try{
+  const login=async username=>{const r=await f.request('/api/login',{username,password:'fixture-password-long'});return {cookie:r.headers.get('set-cookie').split(';')[0]};},one=await login('uploader-one'),two=await login('uploader-two');
+  const begin=await f.request('/api/centres/uploads',{name:'small.csv',size:1,target:'/api/import/preview?mode=merge'},one),p=await begin.json();assert.equal(begin.status,200);
+  assert.equal((await f.request('/api/import/preview?mode=merge',{uploadId:p.id},two)).status,409);
+  const put=()=>fetch(f.origin+'/api/centres/uploads/'+p.id+'/chunks/0',{method:'PUT',headers:{Origin:f.origin,'Content-Type':'application/json',...one},body:JSON.stringify({data:'eA=='})});
+  f.db.prepare('UPDATE import_previews SET expires=? WHERE id=?').run(Date.now()-1,p.id);assert.equal((await put()).status,409);
+ }finally{await f.close();}
 });

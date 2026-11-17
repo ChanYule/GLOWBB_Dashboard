@@ -15,7 +15,9 @@ import { mountDataManagement } from "./data-management.js";
 import { mountClients } from "./client-routes.js";
 import { mountNeeds } from "./needs-routes.js";
 import { mountAnalysis } from "./analysis-routes.js";
-import multer from "multer";
+import {importFileUpload} from "./large-uploads.js";
+import multer from 'multer';
+import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import { randomBytes } from "node:crypto";
 import {
   readFile,
@@ -222,14 +224,7 @@ export function createApp(
     delete report.options.cfs;
     res.json(report);
   });
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-      fileSize: (db.storage ? 4 : 8) * 1024 * 1024,
-      files: 1,
-      fields: 0,
-    },
-  }).single("file");
+  const upload = importFileUpload();
   mountNeeds(app, { db, storage, previews, upload, filters });
   mountOperations(app, { db, storage, previews, upload, filters });
   mountClients(app, { db, storage, previews, upload });
@@ -704,7 +699,7 @@ export function createApp(
       error: err.status
         ? err.message
         : err instanceof multer.MulterError
-          ? `Upload must be a single file under ${db.storage ? 4 : 8} MB.`
+          ? `Upload must be a single file of ${MAX_IMPORT_MB} MB or less.`
           : "The request could not be processed. Check your file or entries and try again.",
     });
   });

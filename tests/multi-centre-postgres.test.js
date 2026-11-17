@@ -73,35 +73,57 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
         : {}),
     });
   try {
-    const form = new FormData(),
-      row = [
-        "opaque-id",
-        "MALE",
-        65,
-        "MALAY",
-        "4",
-        "YES",
-        "YES",
-        "GLOW Movement",
-        "Physical",
-        "2026-11-01, 09:00 AM - 10:00 AM",
-      ];
+    const row = [
+      "opaque-id",
+      "MALE",
+      65,
+      "MALAY",
+      "4",
+      "YES",
+      "YES",
+      "GLOW Movement",
+      "Physical",
+      "2026-11-01, 09:00 AM - 10:00 AM",
+    ];
     const matrix = [
       [...HEADERS, "Centres"],
       [...row, "Tzu Chi SEEN @ Bukit Batok"],
       [...row, "Tzu Chi SEEN @ Nanyang"],
     ];
-    form.append(
-      "file",
-      new Blob([
-        matrix.map((r) => r.map((v) => '"' + v + '"').join(",")).join("\r\n"),
-      ]),
-      "two-centres.csv",
+    const csvBuffer = Buffer.from(
+      matrix.map((r) => r.map((v) => '"' + v + '"').join(",")).join("\r\n"),
     );
-    const pResponse = await request("/api/import/preview?mode=merge", form),
+    const begin = await request("/api/centres/uploads", {
+        name: "two-centres.csv",
+        size: csvBuffer.length,
+        target: "/api/import/preview?mode=merge",
+      }),
+      upload = await begin.json();
+    assert.equal(begin.status, 200, JSON.stringify(upload));
+    const chunk = await fetch(
+      origin + "/api/centres/uploads/" + upload.id + "/chunks/0",
+      {
+        method: "PUT",
+        headers: { Origin: origin, "Content-Type": "application/json" },
+        body: JSON.stringify({ data: csvBuffer.toString("base64") }),
+      },
+    );
+    assert.equal(chunk.status, 200, await chunk.text());
+    const pResponse = await request("/api/import/preview?mode=merge", {
+        uploadId: upload.id,
+      }),
       p = await pResponse.json();
     assert.equal(pResponse.status, 200, JSON.stringify(p));
     assert.equal(p.ready, 2);
+    assert.equal(
+      (
+        await fetch(origin + "/api/centres/uploads/" + upload.id, {
+          method: "DELETE",
+          headers: { Origin: origin },
+        })
+      ).status,
+      200,
+    );
     const confirmed = await request("/api/import/confirm", {
       id: p.id,
       confirmed: true,

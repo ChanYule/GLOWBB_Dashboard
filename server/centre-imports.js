@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import multer from "multer";
+import {importFileUpload} from "./large-uploads.js";
 import { readMatrix, parseRows, inspectImport } from "./domain.js";
 import { readData, getSettings } from "./db.js";
 import { sqlitePreviews } from "./previews.js";
@@ -96,10 +96,7 @@ export function mountCentreImports(
   app,
   { control, workspaces, access, audit, mirror },
 ) {
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 0 },
-  }).single("file");
+  const upload = importFileUpload();
   const admin = (req) => {
     if (req.user.role !== "admin")
       throw fail(403, "Administrator access is required.");
@@ -328,7 +325,7 @@ export function mountCentreImports(
       .prepare("DELETE FROM import_previews WHERE expires<?")
       .run(Date.now());
     if (
-      (await control.prepare("SELECT count(*) AS n FROM import_previews").get())
+      (await control.prepare("SELECT count(*) AS n FROM import_previews WHERE id NOT LIKE 'upload-%'").get())
         .n >= 10
     )
       throw fail(

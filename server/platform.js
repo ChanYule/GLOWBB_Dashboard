@@ -1,3 +1,5 @@
+import {mountLargeUploads} from './large-uploads.js';
+import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import express from "express";
 import { createApp } from "./app.js";
 import { openDb, readData, getSettings, audit as sqliteAudit } from "./db.js";
@@ -205,6 +207,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     });
     res.json({ ok: true });
   });
+  mountLargeUploads(app,{control,access});
   mountCentreImports(app, {
     control,
     workspaces,
@@ -477,7 +480,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     if (err.code === "LIMIT_FILE_SIZE")
       return res
         .status(413)
-        .json({ error: "The attendance upload exceeds 8 MB." });
+        .json({ error: `Choose an import file of ${MAX_IMPORT_MB} MB or less.` });
     res.status(err.status || 500).json({
       error: err.status
         ? err.message

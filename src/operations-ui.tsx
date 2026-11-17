@@ -1,3 +1,4 @@
+import {MAX_IMPORT_BYTES,MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import {centreUrl} from "./api";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
@@ -535,8 +536,8 @@ export function OperationsPage({
     try {
       const form = new FormData(e.currentTarget),
         file = form.get("file");
-      if (file && typeof file !== "string" && file.size >= 4 * 1024 * 1024)
-        throw Error("Choose a monthly report smaller than 4 MB.");
+      if (file && typeof file !== "string" && file.size > MAX_IMPORT_BYTES)
+        throw Error(`Choose a monthly report of ${MAX_IMPORT_MB} MB or less.`);
       setPreview(
         await api<AssessmentPreview>("/api/operations/assessments/preview", {
           method: "POST",

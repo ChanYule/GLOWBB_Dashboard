@@ -1,3 +1,4 @@
+import {MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import {centreById} from '../shared/centres.js';
 import {CentreImportReview} from './centre-import-review';
 import {centreUrl} from "./api";
@@ -3080,11 +3081,7 @@ function ImportDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const maxFileMb = ["localhost", "127.0.0.1", "[::1]"].includes(
-    window.location.hostname,
-  )
-    ? 8
-    : 4;
+  const maxFileMb = MAX_IMPORT_MB;
   const [receipt,setReceipt]=useState<Record<string,{imported:number}>|null>(null);
   const [preview, setPreview] = useState<Preview | null>(null),
     [error, setError] = useState(""),
@@ -3092,8 +3089,12 @@ function ImportDialog({
     [consent, setConsent] = useState(false),
     [mode, setMode] = useState("merge"),
     [confirmation, setConfirmation] = useState("");
+  const uploadController=useRef<AbortController|null>(null);
+  useEffect(()=>()=>uploadController.current?.abort(),[]);
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    uploadController.current?.abort();
+    uploadController.current=new AbortController();
     setBusy(true);
     setError("");
     try {
@@ -3102,15 +3103,16 @@ function ImportDialog({
       if (
         file &&
         typeof file !== "string" &&
-        file.size >= maxFileMb * 1024 * 1024
+        file.size > maxFileMb * 1024 * 1024
       )
         throw Error(
-          `Choose a file smaller than ${maxFileMb} MB. Split larger attendance exports into smaller files.`,
+          `Choose a file of ${maxFileMb} MB or less.`,
         );
       setPreview(
         await api<Preview>("/api/import/preview?mode=" + mode, {
           method: "POST",
           body: form,
+          signal:uploadController.current.signal,
         }),
       );
     } catch (e) {
@@ -3150,6 +3152,7 @@ function ImportDialog({
     URL.revokeObjectURL(url);
   }
   const discard = () => {
+    uploadController.current?.abort();
     if (preview)
       void api("/api/import/preview/" + preview.id, { method: "DELETE" }).catch(
         () => {},
@@ -3187,7 +3190,7 @@ function ImportDialog({
             <Upload size={32} />
             <h3>Bring your attendance records together</h3>
             <p>
-              Excel (.xlsx) or UTF-8 CSV · under {maxFileMb} MB and up to 50,000
+              Excel (.xlsx) or UTF-8 CSV · up to {maxFileMb} MB and up to 50,000
               rows
             </p>
             <input

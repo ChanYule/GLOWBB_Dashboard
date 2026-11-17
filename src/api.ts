@@ -1,4 +1,5 @@
 import type {Centre} from '../shared/centres.js';
+import {MAX_IMPORT_BYTES,MAX_IMPORT_MB,DIRECT_UPLOAD_BYTES,UPLOAD_CHUNK_BYTES} from '../shared/upload-limits.js';
 let selectedCentre: Centre | null = null;
 let centreGeneration = 0;
 export const currentCentre = () => selectedCentre;
@@ -35,7 +36,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
   if (res.status === 413)
     throw Error(
-      "This upload is too large. Choose a file smaller than 4 MB and try again.",
+      `The upload request was rejected. Choose a file of ${MAX_IMPORT_MB} MB or less, then reload the dashboard and retry.`,
     );
   if (res.status === 504)
     throw Object.assign(Error(timeoutMessage), { status: res.status });
@@ -87,10 +88,35 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 // Coalesce only concurrent GETs. Never persist protected results across sessions
 // and never share a cancellable request with another caller.
 const inFlight = new Map<string, Promise<unknown>>();
+async function uploadInChunks<T>(url:string,options:RequestInit,file:File):Promise<T>{
+  const generation=centreGeneration;
+  const active=()=>{if(generation!==centreGeneration||options.signal?.aborted)throw new DOMException('Upload cancelled because the workspace changed.','AbortError');};
+  active();
+  const session=await request<{id:string;chunkBytes:number}>('/api/centres/uploads',{method:'POST',signal:options.signal,body:JSON.stringify({name:file.name,size:file.size,target:url})});
+  try{
+    if(session.chunkBytes!==UPLOAD_CHUNK_BYTES)throw Error('Upload configuration changed. Reload the dashboard.');
+    for(let offset=0,index=0;offset<file.size;offset+=UPLOAD_CHUNK_BYTES,index++){
+      active();const bytes=new Uint8Array(await file.slice(offset,offset+UPLOAD_CHUNK_BYTES).arrayBuffer());let binary='';
+      for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+      active();await request('/api/centres/uploads/'+session.id+'/chunks/'+index,{method:'PUT',signal:options.signal,body:JSON.stringify({data:btoa(binary)})});
+    }
+    active();return await request<T>(url,{...options,body:JSON.stringify({uploadId:session.id}),headers:{...options.headers,'Content-Type':'application/json'}});
+  }finally{await request('/api/centres/uploads/'+session.id,{method:'DELETE'}).catch(()=>{});}
+}
 export function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   url=centreUrl(url);
   if ((options.method || "GET") !== "GET") {
     inFlight.clear();
+    if(options.body instanceof FormData){
+      const file=options.body.get('file');
+      if(file&&typeof file!=='string'){
+        if(file.size>MAX_IMPORT_BYTES)return Promise.reject(Error(`Choose a file of ${MAX_IMPORT_MB} MB or less.`));
+        if(file.size>DIRECT_UPLOAD_BYTES){
+          if([...options.body.keys()].some(k=>k!=='file')||options.body.getAll('file').length!==1)return Promise.reject(Error('Choose one import file at a time.'));
+          return uploadInChunks<T>(url,options,file);
+        }
+      }
+    }
     return request<T>(url, options);
   }
   if (options.signal || options.headers || options.body)

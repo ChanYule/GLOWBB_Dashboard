@@ -27,6 +27,7 @@ const fixture = await centreQaFixture();
 const {db,app}=fixture;
 const state = diagnosticFixture();
 const importWorkbook=process.argv.find(v=>v.startsWith('--import-preview='))?.slice('--import-preview='.length);
+const expectedImportRows=Number(process.argv.find(v=>v.startsWith('--expected-import-rows='))?.split('=')[1]||3610);
 state.registry.forEach((r, i) => {
   const p = JSON.parse(r.details);
   if (i < 30) p.age = null;
@@ -188,7 +189,7 @@ try {
       await evaluate("[...document.querySelectorAll('dialog button')].find(b=>b.textContent.includes('Preview import')).click()");
       await wait("document.querySelectorAll('.centre-import-summary>section').length===4",'four centre import cards');
       const counts=await evaluate("[...document.querySelectorAll('.centre-import-summary>section>strong')].map(e=>e.textContent)");
-      if(JSON.stringify(counts)!==JSON.stringify(['3,610','0','0','0']))throw Error('Wrong source centre counts '+JSON.stringify(counts));
+      if(JSON.stringify(counts)!==JSON.stringify([new Intl.NumberFormat('en-SG').format(expectedImportRows),'0','0','0']))throw Error('Wrong source centre counts '+JSON.stringify(counts));
       await evaluate("[...document.querySelectorAll('.centre-import-summary button')].find(b=>b.textContent==='Inspect GLOW Bukit Batok rows').click()");
       await wait("document.querySelectorAll('.centre-source-rows tbody tr').length===25",'source rows');
       await evaluate("[...document.querySelectorAll('.centre-source-rows button')].find(b=>b.textContent==='Next source rows').click()");
