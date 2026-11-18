@@ -157,14 +157,54 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
       1,
     );
     // Configuration approvals use the same private per-centre settings and retain source rows.
-    const cfg = await (await request('/api/configuration?centre=glow_bukit_batok')).json();
-    const proposalResponse=await request('/api/configuration/preview?centre=glow_bukit_batok', {operation:'rule',version:cfg.configuration.version,reason:'Reviewed PostgreSQL attendance policy',rule:{scope:'official',selector:{type:'name',value:'GLOW Movement'}}});
-    const proposal=await proposalResponse.json();assert.equal(proposalResponse.status,200,JSON.stringify(proposal));
-    const approval=await request('/api/configuration/confirm?centre=glow_bukit_batok',{id:proposal.id,confirmed:true,bulkConfirmed:true});assert.equal(approval.status,200,await approval.text());
-    assert.equal((await(await request('/api/dashboard?centre=glow_bukit_batok')).json()).summary.attendance,0);
-    assert.equal((await(await request('/api/dashboard?centre=glow_nanyang')).json()).summary.attendance,1);
-    assert.equal((await engine.query('SELECT count(*)::integer n FROM centre_glow_bukit_batok.attendance')).rows[0].n,1);
-    assert.equal((await(await request('/api/configuration/history?centre=glow_bukit_batok')).json()).rows[0].details.after.reporting.version,2);
+    const cfg = await (
+      await request("/api/configuration?centre=glow_bukit_batok")
+    ).json();
+    const proposalResponse = await request(
+      "/api/configuration/preview?centre=glow_bukit_batok",
+      {
+        operation: "rule",
+        version: cfg.configuration.version,
+        reason: "Reviewed PostgreSQL attendance policy",
+        rule: {
+          scope: "official",
+          selector: { type: "name", value: "GLOW Movement" },
+        },
+      },
+    );
+    const proposal = await proposalResponse.json();
+    assert.equal(proposalResponse.status, 200, JSON.stringify(proposal));
+    const approval = await request(
+      "/api/configuration/confirm?centre=glow_bukit_batok",
+      { id: proposal.id, confirmed: true, bulkConfirmed: true },
+    );
+    assert.equal(approval.status, 200, await approval.text());
+    assert.equal(
+      (await (await request("/api/dashboard?centre=glow_bukit_batok")).json())
+        .summary.attendance,
+      0,
+    );
+    assert.equal(
+      (await (await request("/api/dashboard?centre=glow_nanyang")).json())
+        .summary.attendance,
+      1,
+    );
+    assert.equal(
+      (
+        await engine.query(
+          "SELECT count(*)::integer n FROM centre_glow_bukit_batok.attendance",
+        )
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await (
+          await request("/api/configuration/history?centre=glow_bukit_batok")
+        ).json()
+      ).rows[0].details.after.reporting.version,
+      2,
+    );
     await engine.exec("SET ROLE anon;");
     await assert.rejects(() =>
       engine.query("SELECT * FROM centre_glow_nanyang.attendance"),
@@ -173,6 +213,92 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
     const client = await request("/api/clients/report?centre=glow_nanyang", {});
     assert.equal(client.status, 200);
     assert.equal((await client.json()).complete, false);
+    const largeForm = new FormData();
+    largeForm.append(
+      "file",
+      new Blob([
+        [
+          HEADERS.concat("Centres").join(","),
+          ...Array.from({ length: 2501 }, (_, i) =>
+            [
+              "pg-batch-" + i,
+              "MALE",
+              65,
+              "MALAY",
+              "4",
+              "YES",
+              "YES",
+              "GLOW Batch",
+              "Physical",
+              '"2026-11-02, 09:00 AM - 10:00 AM"',
+              "Bukit Batok",
+            ].join(","),
+          ),
+        ].join("\r\n"),
+      ]),
+      "batch.csv",
+    );
+    const largePreview = await (
+      await request("/api/import/preview?mode=merge", largeForm)
+    ).json();
+    assert.equal(largePreview.ready, 2501);
+    const firstStep = await request("/api/import/confirm", {
+        id: largePreview.id,
+        confirmed: true,
+        step: true,
+      }),
+      firstResult = await firstStep.json();
+    assert.equal(firstStep.status, 200, JSON.stringify(firstResult));
+    assert.equal(firstResult.processedRows, 2000);
+    assert.equal(firstResult.pending, true);
+    await engine.exec(
+      "CREATE FUNCTION centre_glow_bukit_batok.fail_batch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic batch failure'; END $$; CREATE TRIGGER fail_batch BEFORE INSERT ON centre_glow_bukit_batok.attendance FOR EACH ROW EXECUTE FUNCTION centre_glow_bukit_batok.fail_batch();",
+    );
+    assert.equal(
+      (
+        await request("/api/import/confirm", {
+          id: largePreview.id,
+          confirmed: true,
+          step: true,
+        })
+      ).status,
+      500,
+    );
+    assert.equal(
+      (
+        await engine.query(
+          "SELECT count(*)::integer n FROM centre_glow_bukit_batok.attendance",
+        )
+      ).rows[0].n,
+      2001,
+    );
+    await engine.exec(
+      "DROP TRIGGER fail_batch ON centre_glow_bukit_batok.attendance;",
+    );
+    const lastStep = await request("/api/import/confirm", {
+        id: largePreview.id,
+        confirmed: true,
+        step: true,
+      }),
+      lastResult = await lastStep.json();
+    assert.equal(lastStep.status, 200, JSON.stringify(lastResult));
+    assert.equal(lastResult.imported, 2501);
+    const receiptRetry = await (
+      await request("/api/import/confirm", {
+        id: largePreview.id,
+        confirmed: true,
+        step: true,
+      })
+    ).json();
+    assert.equal(receiptRetry.imported, 2501);
+    assert.equal(
+      (
+        await engine.query(
+          "SELECT count(*)::integer n FROM centre_glow_bukit_batok.attendance",
+        )
+      ).rows[0].n,
+      2502,
+    );
   } finally {
     server.closeAllConnections();
     await new Promise((r) => server.close(r));

@@ -91,8 +91,8 @@ export function audit(db, user, action, details = {}) {
     "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
   ).run(new Date().toISOString(), user, action, JSON.stringify(details));
 }
-export function saveImport(db, parsed, inspection, user) {
-  db.exec("BEGIN IMMEDIATE");
+export function saveImport(db, parsed, inspection, user, {transaction = true} = {}) {
+  if(transaction) db.exec("BEGIN IMMEDIATE");
   try {
     if (inspection.mode === "replace") {
       db.prepare("INSERT INTO attendance_backups VALUES(?,?,?,?)").run(
@@ -113,6 +113,7 @@ export function saveImport(db, parsed, inspection, user) {
       );
     const summary = {
       ...(parsed.platformImportId ? {platformImportId:parsed.platformImportId} : {}),
+      ...(parsed.platformBatchIndex !== undefined ? {platformBatchIndex:parsed.platformBatchIndex,platformImportComplete:parsed.platformImportComplete}:{}),
       updatedSessions: inspection.sessionUpdates?.length || 0,
       updatedProfiles: inspection.updates?.length || 0,
       mode: inspection.mode || "add",
@@ -172,7 +173,7 @@ export function saveImport(db, parsed, inspection, user) {
         JSON.stringify(details),
         id,
       );
-    for (const r of parsed.rows)
+    for (const r of parsed.observationRows || parsed.rows)
       if (
         "riskRaw" in r.participant &&
         db
@@ -187,7 +188,7 @@ export function saveImport(db, parsed, inspection, user) {
           r.participant.riskRaw,
           new Date().toISOString(),
         );
-    for (const r of parsed.rows)
+    for (const r of parsed.observationRows || parsed.rows)
       for (const field of [
         "age",
         "gender",
@@ -222,10 +223,10 @@ export function saveImport(db, parsed, inspection, user) {
         );
       }
     audit(db, user, "attendance.import", summary);
-    db.exec("COMMIT");
+    if(transaction) db.exec("COMMIT");
     return summary;
   } catch (e) {
-    db.exec("ROLLBACK");
+    if(transaction) db.exec("ROLLBACK");
     throw e;
   }
 }

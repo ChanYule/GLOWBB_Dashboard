@@ -2715,3 +2715,28 @@ test('large attendance previews show total warning counts and download every iss
   await waitFor(()=>assert.ok(blob));assert.deepEqual(pages,[1,2]);const text=await blob.text();assert.match(text,/First issue/);assert.match(text,/Final issue/);assert.equal(text.split('\r\n').length,4);
  }finally{cleanup();setCentreContext(null);globalThis.fetch=original;globalThis.FormData=originalForm;URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke;dom.window.HTMLAnchorElement.prototype.click=originalClick;}
 });
+
+test('large confirmation reports progress, preserves the reviewed preview on timeout, and resumes to the final receipt',async()=>{
+ const {ImportDialog}=await tsImport('../src/main.tsx',import.meta.url);
+ const original=globalThis.fetch,originalForm=globalThis.FormData;globalThis.FormData=dom.window.FormData;let step=0;const sent=[];
+ const preview={id:'reviewed-batch',classificationRevision:1,centreCounts:{glow_bukit_batok:4501},rawRows:4501,ready:4501,duplicates:0,invalid:0,skipped:0,issues:[],preview:[],reference:{},expectedReference:{},variants:[]};
+ globalThis.fetch=async(url,options)=>{
+  const u=new URL(String(url),'http://localhost');if(u.pathname==='/api/import/preview')return Response.json(preview);
+  assert.equal(u.pathname,'/api/import/confirm');const body=JSON.parse(options.body);sent.push(body);step++;
+  if(step===1)return Response.json({pending:true,centreId:'glow_bukit_batok',processedRows:2000,totalRows:4501});
+  if(step===2)return Response.json({error:'timeout'},{status:504});
+  if(step===3)return Response.json({pending:true,centreId:'glow_bukit_batok',processedRows:4000,totalRows:4501});
+  return Response.json({imported:4501,centres:{glow_bukit_batok:{imported:4501}}});
+ };
+ try{
+  setCentreContext(CENTRES[0]);render(React.createElement(ImportDialog,{onClose:()=>{},onDone:()=>{}}));
+  fireEvent.submit(screen.getByRole('button',{name:'Preview import'}).closest('form'));
+  fireEvent.click(await screen.findByRole('checkbox',{name:/I reviewed the preview/}));
+  fireEvent.click(screen.getByRole('button',{name:/Confirm 4501 entries/}));
+  await screen.findByText(/The import response timed out/);
+  assert.match(screen.getByRole('status').textContent,/2,000 of 4,501/);
+  fireEvent.click(screen.getByRole('button',{name:'Resume remaining import batches'}));
+  await screen.findByText('Attendance imported');assert.ok(screen.getByText(/4501 entries imported/));
+  assert.equal(sent.length,4);assert.ok(sent.every(b=>b.id==='reviewed-batch'&&b.step===true&&b.confirmed===true));
+ }finally{cleanup();setCentreContext(null);globalThis.fetch=original;globalThis.FormData=originalForm;}
+});

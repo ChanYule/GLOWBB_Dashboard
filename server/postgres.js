@@ -1,3 +1,4 @@
+import {importBatch,importBatchResult} from "./import-batches.js";
 import pg from "pg";
 import { rootCertificates } from "node:tls";
 import { readFileSync } from "node:fs";
@@ -144,9 +145,18 @@ export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {})
             { status: 409 },
           );
         const inspection = inspectImport(parsed, current);
-        if(inspection.sessionUpdates.length && parsed.fingerprint!==inspection.fingerprint)
+        const batch=importBatch(parsed,current,inspection,options.batchSize);
+        if(!batch && inspection.sessionUpdates.length && parsed.fingerprint!==inspection.fingerprint)
           throw Object.assign(Error('Session metadata changed after preview. Review a fresh preview.'),{status:409});
-        const summary = await saveImport(tx, parsed, inspection, user);
+        const summary=await saveImport(tx,batch?.parsed||parsed,batch?.inspection||inspection,user);
+        if(batch){
+          const response=importBatchResult(parsed,batch,summary,await readData(tx));
+          if(batch.complete){
+            await tx.prepare('UPDATE imports SET summary=? WHERE id=(SELECT MAX(id) FROM imports)').run(JSON.stringify({...summary,platformTotals:response}));
+            await tx.prepare('DELETE FROM import_previews WHERE id=?').run(id);
+          }else await tx.prepare('UPDATE import_previews SET payload=?,expires=? WHERE id=? AND user_id=?').run(JSON.stringify(parsed),Date.now()+1200000,id,user);
+          return response;
+        }
         await tx.prepare("DELETE FROM import_previews WHERE id=?").run(id);
         return summary;
       }),
@@ -258,6 +268,7 @@ async function saveImport(db, parsed, inspection, user) {
   }
   const summary = {
     ...(parsed.platformImportId ? {platformImportId:parsed.platformImportId} : {}),
+    ...(parsed.platformBatchIndex !== undefined ? {platformBatchIndex:parsed.platformBatchIndex,platformImportComplete:parsed.platformImportComplete}:{}),
     updatedSessions: inspection.sessionUpdates?.length || 0,
     updatedProfiles: inspection.updates?.length || 0,
     mode: inspection.mode || "add",
@@ -361,7 +372,7 @@ async function saveImport(db, parsed, inspection, user) {
     );
   const observations = [
     ...new Map(
-      parsed.rows
+      (parsed.observationRows || parsed.rows)
         .filter((r) => "riskRaw" in r.participant)
         .map((r) => {
           const id = hash([
@@ -388,7 +399,7 @@ async function saveImport(db, parsed, inspection, user) {
     );
   const profileObservations = [
     ...new Map(
-      parsed.rows.flatMap((r) =>
+      (parsed.observationRows || parsed.rows).flatMap((r) =>
         [
           "age",
           "gender",

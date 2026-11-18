@@ -3083,6 +3083,7 @@ function ImportDialog({
 }) {
   const maxFileMb = MAX_IMPORT_MB;
   const [receipt,setReceipt]=useState<Record<string,{imported:number}>|null>(null);
+  const [importProgress,setImportProgress]=useState<{centreId:string;processedRows:number;totalRows:number}|null>(null);
   const [preview, setPreview] = useState<Preview | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -3125,10 +3126,12 @@ function ImportDialog({
     setBusy(true);
     setError("");
     try {
-      const result=await api<{centres?:Record<string,{imported:number}>}>("/api/import/confirm", {
-        method: "POST",
-        body: JSON.stringify({ id: preview!.id, confirmation, confirmed:true }),
-      });
+      let result:{pending?:boolean;centreId:string;processedRows:number;totalRows:number;centres?:Record<string,{imported:number}>};
+      do{
+        result=await api("/api/import/confirm",{method:"POST",body:JSON.stringify({id:preview!.id,confirmation,confirmed:true,...(preview!.centreCounts?{step:true}:{})})});
+        if(result.pending)setImportProgress({centreId:result.centreId,processedRows:result.processedRows,totalRows:result.totalRows});
+      }while(result.pending);
+      setImportProgress(null);
       if(result.centres){setReceipt(result.centres);return;}
       onDone();
     } catch (e) {
@@ -3162,6 +3165,7 @@ function ImportDialog({
     <Modal
       title={preview ? "Review attendance import" : "Import attendance"}
       onClose={() => {
+        if(busy)return;
         discard();
         onClose();
       }}
@@ -3359,8 +3363,11 @@ function ImportDialog({
               programme conflicts.
             </span>
           </label>
+          {importProgress && <p role="status">{busy ? 'Saving' : 'Saved progress for'} {centreById(importProgress.centreId)?.name || 'selected centre'}: {importProgress.processedRows.toLocaleString('en-SG')} of {importProgress.totalRows.toLocaleString('en-SG')} source rows processed. Completed batches stay saved. If interrupted, retry this same preview to resume.</p>}
+          {preview.centreCounts && <p>Large imports save in batches of up to 2,000 source rows. Keep this window open until the final centre receipt appears.</p>}
           <div className="modal-actions">
             <Button
+              disabled={busy}
               onClick={() => {
                 discard();
                 setPreview(null);
@@ -3381,7 +3388,7 @@ function ImportDialog({
             >
               {busy
                 ? "Saving…"
-                : `Confirm ${preview.ready} entries, ${preview.updatedProfiles || 0} profile and ${preview.updatedSessions || 0} session updates`}
+                : importProgress ? "Resume remaining import batches" : `Confirm ${preview.ready} entries, ${preview.updatedProfiles || 0} profile and ${preview.updatedSessions || 0} session updates`}
             </Button>
           </div>
         </>

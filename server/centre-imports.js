@@ -1,3 +1,4 @@
+import {IMPORT_BATCH_ROWS} from "./import-batches.js";
 import {MAX_IMPORT_ROWS} from "../shared/upload-limits.js";
 import {reportingConfiguration} from './reporting-policy.js';
 import { randomBytes } from "node:crypto";
@@ -477,20 +478,32 @@ export function mountCentreImports(
         "Resolve all unclassified and unauthorised centre rows before importing.",
       );
     const results = {};
+    let stepped=false;
     for (const [id, child] of Object.entries(p.children || {})) {
       if (!a.ids.includes(id))
         throw fail(403, "Centre access changed; review a fresh import.");
       const db = await workspaces.get(id);
       await mirror(db, req.user);
-      const prior = (await db.prepare("SELECT summary FROM imports").all())
+      const prior = (await db.prepare("SELECT summary FROM imports WHERE summary LIKE ?").all("%"+req.body.id+"%"))
         .map((r) => JSON.parse(r.summary))
-        .find((s) => s.platformImportId === req.body.id);
-      results[id] =
-        prior ||
-        (await (db.previews || sqlitePreviews(db)).confirm(
-          child.previewId,
-          req.user.id,
-        ));
+        .find((s) => s.platformImportId === req.body.id && s.platformImportComplete !== false);
+      if(!prior && req.body.step===true && stepped)return res.json({pending:true,centres:results,centreId:id,processedRows:0,totalRows:p.counts?.[id]||child.ready});
+      let result=prior ? (prior.platformTotals||prior) : null;
+      if(!prior){
+        try {result=await (db.previews||sqlitePreviews(db)).confirm(child.previewId,req.user.id,req.body.step===true?{batchSize:IMPORT_BATCH_ROWS}:{});}
+        catch(error){
+          // Another retry may have completed the final transaction while this request waited for its lock.
+          const receipt=(await db.prepare('SELECT summary FROM imports WHERE summary LIKE ?').all('%'+req.body.id+'%')).map(r=>JSON.parse(r.summary)).find(s=>s.platformImportId===req.body.id && s.platformImportComplete!==false);
+          if(!receipt)throw error;
+          result=receipt.platformTotals||receipt;
+        }
+        stepped=true;
+      }
+      if(result.pending){
+        await control.prepare('UPDATE import_previews SET expires=? WHERE id=? AND user_id=?').run(Date.now()+1200000,req.body.id,req.user.id);
+        return res.json({...result,centreId:id,centres:results});
+      }
+      results[id]=result;
     }
     await audit(req.user, "centres.attendance.imported", {
       centres: Object.keys(results),
