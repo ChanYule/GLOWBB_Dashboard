@@ -106,6 +106,7 @@ export function NeedsExperience({
         <p role="status">Loading recorded needs…</p>
       ) : (
         <>
+          <div className="needs-experience-grid">
           <section className="panel">
             <div className="report-section-heading">
               <h2>Participant profile</h2>
@@ -173,6 +174,7 @@ export function NeedsExperience({
             )}
             <p className="muted">{report.responses.note}</p>
           </section>
+          </div>
           <section className="panel">
             <h2>Accessibility review</h2>
             <p>

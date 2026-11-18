@@ -1,3 +1,4 @@
+import {HorizontalRankingChart,CompactTrend} from "./chart-system";
 import {centreUrl} from "./api";
 import { metrics, reportingFilters } from "./view-config";
 export { metrics, reportingFilters } from "./view-config";
@@ -155,8 +156,7 @@ export function AnalysisGraphic({
 }) {
   if (!rows.length)
     return <p className="chart-empty">No attendance matches this view.</p>;
-  const max = Math.max(...rows.map((r) => r.value || 0), 1),
-    total = rows.reduce((sum, r) => sum + (r.value || 0), 0);
+  const total = rows.reduce((sum, r) => sum + (r.value || 0), 0);
   if (type === "table")
     return (
       <div className="work-table">
@@ -179,47 +179,7 @@ export function AnalysisGraphic({
         </table>
       </div>
     );
-  if (type === "line")
-    return (
-      <>
-        <svg
-          role="img"
-          aria-label={title}
-          viewBox="0 0 600 180"
-          className="work-line"
-        >
-          <line x1="25" y1="150" x2="580" y2="150" stroke="#cbd5e1" />
-          <polyline
-            points={rows
-              .map(
-                (r, i) =>
-                  `${25 + (i * 550) / Math.max(1, rows.length - 1)},${150 - ((r.value || 0) / max) * 125}`,
-              )
-              .join(" ")}
-            fill="none"
-            stroke="#087f86"
-            strokeWidth="3"
-          />
-          {rows.map((r, i) => (
-            <circle
-              key={r.label}
-              cx={25 + (i * 550) / Math.max(1, rows.length - 1)}
-              cy={150 - ((r.value || 0) / max) * 125}
-              r="4"
-              fill="#087f86"
-            >
-              <title>
-                {r.label}: {fmt(r.value)}
-              </title>
-            </circle>
-          ))}
-        </svg>
-        <details>
-          <summary>View trend values</summary>
-          <AnalysisGraphic rows={rows} type="table" title={title} />
-        </details>
-      </>
-    );
+  if(type==="line")return <CompactTrend rows={rows} title={title}/>;
   if (type === "donut" && total > 0) {
     let offset = 0;
     const colors = ["#087f86", "#4f6bd4", "#8961ac", "#b47b29", "#61778c"];
@@ -262,17 +222,7 @@ export function AnalysisGraphic({
       </div>
     );
   }
-  return (
-    <div className="work-bars">
-      {rows.map((r) => (
-        <div key={r.label}>
-          <span>{r.label}</span>
-          <strong>{fmt(r.value)}</strong>
-          <i style={{ width: `${((r.value || 0) / max) * 100}%` }} />
-        </div>
-      ))}
-    </div>
-  );
+  return <HorizontalRankingChart rows={rows} label={title} tone="demographic" limit={8}/>;
 }
 function Chart({
   data,

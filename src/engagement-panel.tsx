@@ -43,29 +43,8 @@ export function EngagementPanel({
   const rows = sortGroups(groups, "label", dimension);
   return (
     <section className="panel engagement-panel" aria-labelledby={id}>
-      <h2 id={id}>Engagement depth and recency</h2>
-      <p>
-        {populationLabel}. Depth counts distinct sessions matching the selected
-        reporting period and filters. Each bar uses the eligible people in that
-        group as its denominator; n is shown beside the group.
-      </p>
-      <p className="table-note">
-        No recorded history means no attendance found anywhere in the available
-        records; it does not mean never attended. None in this view means
-        recorded history exists but no sessions match this period/filter.
-        One-time = 1; Occasional = 2–{(metadata?.regularFrom ?? 6) - 1}; Regular
-        = {metadata?.regularFrom ?? 6}+ sessions. These segments do not change
-        active/inactive classifications.
-      </p>
-      <p className="table-note">
-        Recency anchor: {metadata?.anchor || "Unavailable"} (attendance coverage
-        end, not today). Full recorded history:{" "}
-        {metadata?.historyFrom || "Unavailable"} to{" "}
-        {metadata?.anchor || "Unavailable"}. Recency uses latest attendance
-        across all programmes through that anchor, even outside this selected
-        period/filter; it is not a historical period-end status. Missing
-        registration dates do not establish historical membership.
-      </p>
+      <h2 id={id}>How often do participants return?</h2>
+      <p className="muted">{populationLabel}. Each bar uses the eligible people in that group; n is shown beside it.</p>
       {overlap && (
         <p className="note">
           Event Types overlap: do not add group or segment totals across types.
@@ -82,8 +61,8 @@ export function EngagementPanel({
             value={mode}
             onChange={(e) => setMode(e.target.value as "depth" | "recency")}
           >
-            <option value="depth">Engagement depth</option>
-            <option value="recency">Recency</option>
+            <option value="depth">Engagement Frequency</option>
+            <option value="recency">Recent Participation</option>
           </select>
         </label>
       )}
@@ -173,10 +152,10 @@ export function EngagementPanel({
                             <span
                               key={cell.id}
                               className={`engagement-tone-${cell.id}`}
-                              style={{
-                                width: `${(cell.count / data.population) * 100}%`,
-                              }}
-                            />
+                              style={{width:`${(cell.count / data.population) * 100}%`}}
+                              tabIndex={0}
+                              aria-label={`${cell.label}: ${fmt(cell.count)} people, ${fmt(cell.percentage,'%')}`}
+                            >{cell.percentage!=null&&cell.percentage>=12&&<b aria-hidden="true">{fmt(cell.count)}</b>}<span className="chart-tooltip" role="tooltip">{cell.label}: {fmt(cell.count)} people ({fmt(cell.percentage,'%')})</span></span>
                           ))}
                       </div>
                       <p>
@@ -214,6 +193,29 @@ export function EngagementPanel({
           </div>
         );
       })}
+      <details className="chart-methodology" open={printing}><summary>How frequency and recency are defined</summary>      <p>
+        {populationLabel}. Depth counts distinct sessions matching the selected
+        reporting period and filters. Each bar uses the eligible people in that
+        group as its denominator; n is shown beside the group.
+      </p>
+      <p className="table-note">
+        No recorded history means no attendance found anywhere in the available
+        records; it does not mean never attended. None in this view means
+        recorded history exists but no sessions match this period/filter.
+        One-time = 1; Occasional = 2–{(metadata?.regularFrom ?? 6) - 1}; Regular
+        = {metadata?.regularFrom ?? 6}+ sessions. These segments do not change
+        active/inactive classifications.
+      </p>
+      <p className="table-note">
+        Recency anchor: {metadata?.anchor || "Unavailable"} (attendance coverage
+        end, not today). Full recorded history:{" "}
+        {metadata?.historyFrom || "Unavailable"} to{" "}
+        {metadata?.anchor || "Unavailable"}. Recency uses latest attendance
+        across all programmes through that anchor, even outside this selected
+        period/filter; it is not a historical period-end status. Missing
+        registration dates do not establish historical membership.
+      </p>
+      </details>
       <p className="table-note">
         Counts describe only the records available. Known profiles and
         attendance differences do not prove causes or explain individual support

@@ -60,7 +60,9 @@ HTMLDialogElement.prototype.showModal = function () {
 };
 const { render, screen, fireEvent, cleanup, waitFor, within } =
   await import("@testing-library/react");
-const { Overview, Programmes, Audience, Planning, FilterBar, App, SettingsDialog } =
+const {Planning}=await tsImport("../src/planning-page.tsx",import.meta.url);
+const {Overview,Programmes,Audience}=await tsImport("../src/dashboard-pages.tsx",import.meta.url);
+const { FilterBar, App, SettingsDialog } =
   await tsImport("../src/main.tsx", import.meta.url);
 const { DemographicBars, TrendChart, TimingMatrix, KpiDeck } = await tsImport(
   "../src/analytics-ui.tsx",
@@ -118,7 +120,7 @@ test('global centre selector shows authorised options, resets child views, prese
   if(text.startsWith('/api/dashboard')&&text.includes('glow_bukit_batok'))return oldResponse;
   return Response.json(empty);
  };
- try{render(React.createElement(PlatformApp));await waitFor(()=>assert.ok(screen.getByLabelText('Selected centre')));assert.equal(screen.getByLabelText('Selected centre').options.length,2);await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('from=2026-05-04'))));fireEvent.change(screen.getByLabelText('Selected centre'),{target:{value:'glow_nanyang'}});assert.equal(document.querySelector('.selected-centre-name').textContent,'GLOW Nanyang');await waitFor(()=>assert.ok(screen.getByText('No programme attendance data has been imported for this centre.')));release(Response.json({...empty,programmes:[{name:'STALE OLD CENTRE'}]}));await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('centre=glow_nanyang')&&u.includes('from=2026-05-04')&&!u.includes('old-programme'))));assert.equal(document.body.textContent.includes('STALE OLD CENTRE'),false);assert.equal(document.title,'GLOW Nanyang | Programme & Outreach Dashboard');}finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
+ try{render(React.createElement(PlatformApp));await waitFor(()=>assert.ok(screen.getByLabelText('Selected centre')));assert.equal(screen.getByLabelText('Selected centre').options.length,2);fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));assert.ok(document.querySelector('.dashboard-shell.sidebar-collapsed'));fireEvent.click(screen.getByRole('button',{name:'Expand navigation'}));assert.equal(document.querySelector('.dashboard-shell.sidebar-collapsed'),null);await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('from=2026-05-04'))));fireEvent.change(screen.getByLabelText('Selected centre'),{target:{value:'glow_nanyang'}});assert.equal(document.querySelector('.selected-centre-name').textContent,'GLOW Nanyang');await waitFor(()=>assert.ok(screen.getByText('No programme attendance data has been imported for this centre.')));release(Response.json({...empty,programmes:[{name:'STALE OLD CENTRE'}]}));await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('centre=glow_nanyang')&&u.includes('from=2026-05-04')&&!u.includes('old-programme'))));assert.equal(document.body.textContent.includes('STALE OLD CENTRE'),false);assert.equal(document.title,'GLOW Nanyang | Programme & Outreach Dashboard');}finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
 });
 
 test('centre administration tab switches never render the previous response shape or stale comparison scope',async()=>{
@@ -496,7 +498,7 @@ test('group KPIs state selected denominators, keep overall context secondary and
     assert.match(registered.querySelector('small').textContent, /1,473 registered clients/);
     const participants = screen.getByRole('article', { name: 'Group participants' });
     assert.equal(participants.querySelector('strong').textContent, '26');
-    assert.ok(within(participants).getByText('26 of 74 group registered clients attended at least once.'));
+    const definition=within(participants).getByText(/26 of 74 group registered clients attended at least once/);assert.ok(definition.closest('details'));
     assert.match(participants.querySelector('small').textContent, /166 of 1,473/);
     const rate = screen.getByRole('article', { name: 'Group participation rate' });
     assert.equal(rate.querySelector('strong').textContent, '35.1%'); assert.match(rate.querySelector('small').textContent, /11.3%/);
@@ -504,6 +506,7 @@ test('group KPIs state selected denominators, keep overall context secondary and
     assert.equal(median.querySelector('strong').textContent, '2'); assert.match(median.textContent, /IQR\): 1–3 sessions/);
     assert.ok(within(median).getByLabelText('How median sessions per participant is calculated'));
     assert.match(median.querySelector('strong').title, /Mean.*8/);
+    const distributionDetails=screen.getByText('Detailed session distribution and median').closest('details');assert.equal(distributionDetails.open,false);distributionDetails.open=true;
     assert.equal(within(screen.getByRole('list', { name: 'Session count distribution' })).getAllByRole('listitem').length, 6);
     assert.ok(screen.getByText('12 participants (46.2%)'));
     view.rerender(React.createElement(ParticipationGroupSummary, { report: { ...report, scope: 'overall', overallContext: { ...report.overallContext, registered: null, rate: null }, groups: [{ ...report.groups[0], registered: null, rate: null }] } }));
@@ -906,7 +909,7 @@ test("participation patterns loads one dimension, saves the staff view and print
       5,
     );
     assert.ok(
-      screen.getByRole("heading", { name: "Participant group comparison" }),
+      screen.getByRole("heading", { name: "Which groups participate most?" }),
     );
     assert.equal(document.querySelectorAll(".patterns-kpis article").length, 4);
     assert.equal(document.querySelector(".patterns-page details").open, false);
@@ -1037,13 +1040,9 @@ test("management overview has four headline cards and presentation preserves the
 
     assert.equal(screen.queryByText("Registered clients"), null);
     assert.equal(screen.queryByText("No recorded attendance"), null);
-    await waitFor(() =>
-      assert.ok(screen.getByRole("columnheader", { name: "IB (%)" })),
-    );
-    assert.equal(
-      screen.getByText("Review target-group outreach").closest("details").open,
-      false,
-    );
+    const attendanceRegister=document.querySelector('.participation-summary');assert.equal(attendanceRegister.open,false);attendanceRegister.open=true;
+    await waitFor(() => assert.ok(screen.getByRole("columnheader", { name: "IB (%)" })));
+    assert.ok(screen.getByText("Review target-group outreach"));
     assert.ok(screen.getByRole("button", { name: "Print summary" }));
     assert.equal(
       screen.getAllByRole("combobox", { name: "Chart focus" }).length,
@@ -1056,7 +1055,7 @@ test("management overview has four headline cards and presentation preserves the
       screen.getByRole("img", { name: /male participation over time/ }),
     );
     assert.deepEqual(
-      [...document.querySelectorAll(".management-chart-grid .report-bar")].map(
+      [...document.querySelectorAll(".management-chart-grid .ranking-row")].map(
         (row) => [
           row.querySelector("span").textContent,
           Number(row.querySelector("strong").textContent),
@@ -1093,6 +1092,8 @@ test("management overview has four headline cards and presentation preserves the
       ),
     );
     assert.equal(document.querySelectorAll(".report-slide").length, 6);
+    assert.equal(document.querySelector(".presentation").parentElement,document.body);
+    assert.equal(document.querySelector(".presentation").closest("[inert]"),null);
     assert.equal(briefingCalls, 1);
     assert.equal(screen.queryByText("Registered clients"), null);
     assert.ok(screen.getAllByText("70").length);
@@ -1247,7 +1248,7 @@ test("programme search and sorting preserve details affordance", () => {
     { target: { value: "Movement" } },
   );
   assert.equal(screen.queryByText(/A very long programme title/), null);
-  fireEvent.click(screen.getByRole("button", { name: /Movement/ }));
+  fireEvent.click(within(document.querySelector(".programme-table")).getByRole("button", { name: /Movement/ }));
   assert.equal(chosen.name, "Movement");
   fireEvent.change(
     screen.getByRole("textbox", { name: "Search programme names" }),
@@ -2739,4 +2740,24 @@ test('large confirmation reports progress, preserves the reviewed preview on tim
   await screen.findByText('Attendance imported');assert.ok(screen.getByText(/4501 entries imported/));
   assert.equal(sent.length,4);assert.ok(sent.every(b=>b.id==='reviewed-batch'&&b.step===true&&b.confirmed===true));
  }finally{cleanup();setCentreContext(null);globalThis.fetch=original;globalThis.FormData=originalForm;}
+});
+
+test('shared ranking keeps zero, missing and negative values distinct and reveals every category',async()=>{
+ const {HorizontalRankingChart}=await tsImport('../src/chart-system.tsx',import.meta.url);
+ try{render(React.createElement(HorizontalRankingChart,{rows:[{label:'No attendance',value:0},{label:'Unknown',value:null},{label:'Decrease',value:-4},{label:'Increase',value:8}],limit:2}));
+ assert.ok(screen.getByRole('img',{name:'No attendance: 0'}));assert.ok(screen.getByRole('img',{name:'Unknown: Unavailable'}));assert.equal(document.querySelectorAll('.ranking-extra').length,2);
+ fireEvent.click(screen.getByRole('button',{name:'View all 4 categories'}));assert.equal(document.querySelectorAll('.ranking-extra').length,0);const negative=screen.getByRole('img',{name:'Decrease: -4'});assert.ok(parseFloat(negative.querySelector('i').style.width)>0);assert.equal(negative.querySelector('i').style.left,'0%');
+ }finally{cleanup();}
+});
+test('shared trend preserves observed zero, breaks missing periods and exposes keyboard values',async()=>{
+ const {CompactTrend}=await tsImport('../src/chart-system.tsx',import.meta.url);
+ try{render(React.createElement(CompactTrend,{title:'Recorded attendance',rows:[{label:'Jan',value:0},{label:'Feb',value:4},{label:'Mar',value:null},{label:'Apr',value:8},{label:'May',value:9}]}));
+ assert.equal(document.querySelectorAll('polyline').length,2);assert.equal(document.querySelectorAll('circle').length,4);assert.ok(screen.getByLabelText('Jan: 0'));assert.equal(screen.queryByLabelText('Mar: 0'),null);fireEvent.focus(screen.getByLabelText('Apr: 8'));assert.equal(document.querySelector('.chart-readout').textContent,'Apr: 8');assert.equal(document.querySelector('tbody tr:nth-child(3) td').textContent,'Unavailable');
+ }finally{cleanup();}
+});
+test('operational trends never bridge a missing observation or draw it as zero',async()=>{
+ const {OperationalChart}=await tsImport('../src/operations-ui.tsx',import.meta.url);
+ try{render(React.createElement(OperationalChart,{title:'Screening observations',mode:'line',series:[{key:'count',label:'Recorded',color:'#0f766e'}],rows:[{label:'Jan',count:0},{label:'Feb',count:null},{label:'Mar',count:5}]}));
+ const path=document.querySelector('svg path').getAttribute('d');assert.equal((path.match(/M /g)||[]).length,2);assert.equal(path.includes('L '),false);assert.equal(document.querySelectorAll('circle').length,2);assert.ok(screen.getByLabelText('Jan: Recorded 0'));
+ }finally{cleanup();}
 });

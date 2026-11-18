@@ -1,3 +1,4 @@
+import {REPORT_STYLES} from "./report-design.js";
 import {randomUUID} from 'node:crypto';
 import {reportingContext,policySummary,isReportingRequest,projectReportingData} from './reporting-policy.js';
 import {mountLargeUploads} from './large-uploads.js';
@@ -475,6 +476,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     };
     res.send = (value) => {
       const type = String(res.get("Content-Type") || "");
+      if (typeof value === "string" && type.includes("text/html"))value=value.replace(/(<h1\b)/i,'<style data-report-design>'+REPORT_STYLES+'</style>$1');
       if (typeof value === "string" && type.includes("text/html"))
         value = value.replace(/(<h1[^>]*>)/i, "$1" + centre.name + " · ");
       if (typeof value === "string" && type.includes("text/csv"))

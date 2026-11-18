@@ -1,3 +1,4 @@
+import {useChartWidth} from "./chart-system";
 import {MAX_IMPORT_BYTES,MAX_IMPORT_MB} from '../shared/upload-limits.js';
 import {centreUrl} from "./api";
 import { useEffect, useState } from "react";
@@ -61,6 +62,8 @@ export function OperationalChart({
   mode?: "line" | "grouped" | "stacked";
   periodLabel?: "days" | "months";
 }) {
+  const {ref,width}=useChartWidth(600);
+  const w=Math.max(260,width);
   const selected = rows.slice(-6),
     values = selected.flatMap((r) =>
       series.map((s) =>
@@ -69,7 +72,7 @@ export function OperationalChart({
     );
   if (selected.length < 2 || values.every((v) => v === null))
     return (
-      <div className="chart-empty">
+      <div className="chart-empty" ref={ref}>
         <CalendarDays size={28} />
         <strong>
           {values.every((v) => v === null)
@@ -90,10 +93,11 @@ export function OperationalChart({
         : Math.max(...series.map((s) => Number(r[s.key]) || 0)),
     ),
   );
-  const x = (i: number) => 62 + i * 92,
+  const slot=(w-70)/Math.max(1,selected.length),barWidth=Math.min(24,slot*.8/Math.max(1,series.length));
+  const x = (i: number) => 48+i*(w-80)/Math.max(1,selected.length-1),
     y = (v: number) => 188 - (v / max) * 135;
   return (
-    <>
+    <div className="operational-graphic" ref={ref}>
       <div className="ops-legend">
         {series.map((s) => (
           <span key={s.key}>
@@ -104,7 +108,7 @@ export function OperationalChart({
       </div>
       <div className="ops-chart-scroll">
         <svg
-          viewBox="0 0 600 235"
+          viewBox={`0 0 ${w} 235`}
           role="img"
           aria-label={title}
           className="ops-chart"
@@ -113,7 +117,7 @@ export function OperationalChart({
             <g key={v}>
               <line
                 x1="35"
-                x2="585"
+                x2={w-10}
                 y1={y(v * max)}
                 y2={y(v * max)}
                 stroke="#e6eaf3"
@@ -131,15 +135,14 @@ export function OperationalChart({
           {mode === "line" &&
             series.map((s, si) => (
               <g key={s.key}>
-                <polyline
-                  points={selected
-                    .map((r, i) => `${x(i)},${y(Number(r[s.key]))}`)
-                    .join(" ")}
+                <path
+                  d={selected
+                    .flatMap((r,i)=>r[s.key]==null?[]:[`${i===0||selected[i-1][s.key]==null?'M':'L'} ${x(i)} ${y(Number(r[s.key]))}`]).join(' ')}
                   fill="none"
                   stroke={s.color}
                   strokeWidth="2.5"
                 />
-                {selected.map((r, i) => (
+                {selected.map((r, i) => r[s.key]==null?null:(
                   <g key={i}>
                     <circle
                       cx={x(i)}
@@ -154,7 +157,7 @@ export function OperationalChart({
                         {s.percentKey ? ` (${percent(r[s.percentKey])})` : ""}
                       </title>
                     </circle>
-                    <text
+                    {w>=480&&series.length<=2&&<text
                       x={x(i)}
                       y={y(Number(r[s.key])) + (si ? 22 : -12)}
                       textAnchor="middle"
@@ -162,7 +165,7 @@ export function OperationalChart({
                       className="ops-value"
                     >
                       {number(Number(r[s.key]))}
-                    </text>
+                    </text>}
                   </g>
                 ))}
               </g>
@@ -179,14 +182,14 @@ export function OperationalChart({
                       top = mode === "stacked" ? y(height + value) : y(value),
                       barHeight = (value / max) * 135;
                     const xPos =
-                      mode === "stacked" ? x(i) - 21 : x(i) - 32 + si * 34;
+                      mode === "stacked" ? x(i)-Math.min(32,slot*.7)/2 : x(i)-(series.length*barWidth)/2+si*barWidth;
                     height += value;
                     return (
                       <g key={s.key}>
                         <rect
                           x={xPos}
                           y={missing ? 178 : top}
-                          width={mode === "stacked" ? 42 : 29}
+                          width={mode === "stacked" ? Math.min(32,slot*.7) : barWidth-2}
                           height={missing ? 10 : Math.max(1, barHeight)}
                           rx="3"
                           fill={missing ? "#e7e9f0" : s.color}
@@ -196,8 +199,8 @@ export function OperationalChart({
                             {missing ? "Unavailable" : number(value)}
                           </title>
                         </rect>
-                        <text
-                          x={xPos + (mode === "stacked" ? 21 : 14.5)}
+                        {w>=480&&<text
+                          x={xPos + (mode === "stacked" ? Math.min(32,slot*.7)/2 : barWidth/2)}
                           y={
                             mode === "stacked" && barHeight > 22
                               ? top + barHeight / 2 + 4
@@ -212,7 +215,7 @@ export function OperationalChart({
                           }
                         >
                           {missing ? "—" : number(value)}
-                        </text>
+                        </text>}
                       </g>
                     );
                   })}
@@ -227,7 +230,7 @@ export function OperationalChart({
               textAnchor="middle"
               className="ops-axis"
             >
-              {r.label}
+              {w<480&&i%2&&i!==selected.length-1?'':r.label}
             </text>
           ))}
         </svg>
@@ -271,7 +274,7 @@ export function OperationalChart({
           </table>
         </div>
       </details>
-    </>
+    </div>
   );
 }
 

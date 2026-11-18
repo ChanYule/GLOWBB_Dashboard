@@ -1,3 +1,4 @@
+import {ChartCard,HorizontalRankingChart} from "./chart-system";
 import { ParticipationSummary } from "./participation-summary";
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -68,24 +69,7 @@ export function ReportBars({
   rows: { label: string; value: number; detail?: string }[];
   maxValue?: number;
 }) {
-  const max = Math.max(maxValue || 1, ...rows.map((r) => r.value));
-  return rows.length ? (
-    <div className="report-bars">
-      {rows.map((r) => (
-        <div className="report-bar" key={r.label}>
-          <span>{r.label}</span>
-          <strong>{fmt(r.value)}</strong>
-          <i
-            aria-hidden="true"
-            style={{ width: `${(r.value / max) * 100}%` }}
-          />
-          <small>{r.detail}</small>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <p className="empty">No recorded values in this period.</p>
-  );
+  return <HorizontalRankingChart rows={rows} maxValue={maxValue}/>;
 }
 export function Cards({
   data,
@@ -113,12 +97,12 @@ export function Cards({
     [
       "Male seniors",
       data.coverage.from ? data.summary.male : null,
-      `${fmt(data.summary.malePct)}% of ${fmt(data.summary.knownGender)} seniors with known gender`,
+      data.summary.malePct==null?"Gender share unavailable":`${fmt(data.summary.malePct)}% of ${fmt(data.summary.knownGender)} seniors with known gender`,
     ],
     [
       "Minority seniors",
       data.coverage.from ? data.summary.minority : null,
-      `${fmt(data.summary.minorityPct)}% of ${fmt(data.summary.knownRace)} seniors with known race`,
+      data.summary.minorityPct==null?"Race share unavailable":`${fmt(data.summary.minorityPct)}% of ${fmt(data.summary.knownRace)} seniors with known race`,
     ],
     [
       "Programmes delivered",
@@ -316,12 +300,10 @@ export function ManagementHome({
         </button>
       </div>
       <div className="management-chart-grid">
-        <section className="panel">
-          <h3>Reach over time</h3>
+        <ChartCard title="How is participation changing?" description="Distinct seniors in each reporting period. People may appear in several periods.">
           <TrendChart rows={data.trends} metric={audience} />
-        </section>
-        <section className="panel">
-          <h3>Top five programmes</h3>
+        </ChartCard>
+        <ChartCard title="Which programmes reach the most seniors?" description="Top five by the selected reach measure. Session frequency adds context.">
           <ReportBars
             rows={[...data.programmes]
               .sort((a, b) => b[audience] - a[audience])
@@ -332,7 +314,7 @@ export function ManagementHome({
                 detail: `${fmt(p.sessions)} sessions`,
               }))}
           />
-        </section>
+        </ChartCard>
       </div>
       <ParticipationSummary
         filters={filters}
@@ -352,10 +334,7 @@ export function ManagementHome({
         >
           Open Planning
         </button>
-        <details>
-          <summary>More planning notes</summary>
-          <Findings data={data} briefing={value} navigate={navigate} />
-        </details>
+        <Findings data={data} briefing={value} navigate={navigate} />
       </section>
     </div>
   );

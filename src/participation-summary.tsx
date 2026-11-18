@@ -109,7 +109,7 @@ export function ParticipationSummary({
     return () => controller.abort();
   }, [query, revision, available]);
   return (
-    <section className="panel participation-summary" aria-busy={loading}>
+    <details className="panel participation-summary" aria-busy={loading}><summary>Attendance register <small>Daily and monthly figures</small></summary>
       <div className="report-section-heading">
         <div>
           <h2>Attendance summary</h2>
@@ -256,6 +256,6 @@ export function ParticipationSummary({
           </>
         )
       )}
-    </section>
+    </details>
   );
 }

@@ -137,14 +137,16 @@ export function ConfigurationCentre({
   user,
   onChanged,
   onReturn,
+  initialTab="activities",
 }: {
   centre: Centre;
   centres: Centre[];
   user: User;
   onChanged: () => void;
   onReturn: () => void;
+  initialTab?:string;
 }) {
-  const [tab, setTab] = useState("activities"),
+  const [tab, setTab] = useState(initialTab),
     [config, setConfig] = useState<Config | null>(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),

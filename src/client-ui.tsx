@@ -434,6 +434,7 @@ function Compare({
                   <>
                     <div
                       className="client-bars"
+                      role="img" tabIndex={0}
                       aria-label={`${r.attending} of ${r.registered} clients attended`}
                     >
                       <i

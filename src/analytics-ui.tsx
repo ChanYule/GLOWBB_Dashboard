@@ -1,3 +1,4 @@
+import {useChartWidth,chartColours} from "./chart-system";
 import { useId, useState } from "react";
 import {
   Activity,
@@ -26,11 +27,11 @@ import type {
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(v);
 const colors: Record<string, string> = {
-  unique: "#5551d9",
-  allAges: "#5551d9",
-  attendance: "#078579",
+  unique: chartColours.reach,
+  allAges: chartColours.reach,
+  attendance: chartColours.attendance,
   male: "#097da1",
-  minority: "#a44a97",
+  minority: chartColours.demographic,
   firstObserved: "#8152c7",
   returning: "#b56d0a",
 };
@@ -224,7 +225,8 @@ export function TrendChart({
   const id = useId().replaceAll(":", ""),
     color = colors[metric],
     max = Math.max(...rows.map((r) => r[metric]), 1);
-  const w = 720,
+  const {ref,width}=useChartWidth();
+  const w = Math.max(260,width),
     h = 245,
     left = 45,
     bottom = 205;
@@ -241,7 +243,7 @@ export function TrendChart({
           : "unique seniors";
   if (rows.length < 2)
     return (
-      <div className="chart-empty">
+      <div className="chart-empty" ref={ref}>
         <ChartNoAxesCombined size={30} />
         <strong>Not enough historical data to show a meaningful trend.</strong>
         <span>
@@ -253,7 +255,7 @@ export function TrendChart({
     );
   if (rows.length > 180)
     return (
-      <div className="chart-empty">
+      <div className="chart-empty" ref={ref}>
         <CalendarDays size={30} />
         <strong>Choose a shorter range for this level of detail.</strong>
         <span>
@@ -284,7 +286,7 @@ export function TrendChart({
     ]),
   ];
   for (const i of candidates) {
-    if (labelled.size >= 8) break;
+    if (labelled.size >= (w<480?4:8)) break;
     const width = fmt(rows[i][metric]).length * 14 + 12;
     const leftEdge =
       i === 0 ? x(i) : i === rows.length - 1 ? x(i) - width : x(i) - width / 2;
@@ -312,7 +314,7 @@ export function TrendChart({
     Math.max(0, Math.ceil(rows.length / 30) - 1),
   );
   return (
-    <div className="line-chart modern-chart">
+    <div className="line-chart modern-chart" ref={ref}>
       <div className="chart-legend">
         <span style={{ color }}>
           <i style={{ background: color }} />
@@ -346,7 +348,7 @@ export function TrendChart({
               textAnchor="end"
               className="axis"
             >
-              {fmt(max * v)}
+              {new Intl.NumberFormat("en-SG",{notation:max>9999?"compact":"standard",maximumFractionDigits:1}).format(max*v)}
             </text>
           </g>
         ))}
@@ -403,7 +405,7 @@ export function TrendChart({
                 }
               }}
             />
-            {(i % Math.ceil(rows.length / 5) === 0 ||
+            {(i % Math.ceil(rows.length / (w<480?2:5)) === 0 ||
               i === rows.length - 1) && (
               <text
                 x={x(i)}
@@ -774,6 +776,9 @@ export function TimingMatrix({ data }: { data: Dashboard }) {
                             }
                           : {}
                       }
+                      tabIndex={0}
+                      role="img"
+                      aria-label={cell?`${day}, ${slot}: ${cell.sessions} sessions, ${cell.unique} distinct seniors, ${cell.attendance} attendance entries${enough?'':'; insufficient observations for comparison'}`:`${day}, ${slot}: no recorded sessions`}
                       title={
                         cell
                           ? `${cell.sessions} sessions; ${cell.unique} distinct seniors; ${cell.attendance} attendance entries${enough ? "" : "; insufficient observations for comparison"}`

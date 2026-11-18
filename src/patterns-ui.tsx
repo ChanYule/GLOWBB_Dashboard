@@ -517,12 +517,6 @@ export function ParticipationPatterns({
   return (
     <div className="patterns-page" aria-busy={loading}>
       {controls}
-      {ready && <AttendanceQuestions query={q} revision={`${revision}:${locationRevision}:${retry}`} onReview={dimension => {
-        setQ(old => ({ from: old.from || "", to: old.to || "", domain: old.domain || "", basis: old.basis || "current", scope: "clients", dimension, ranking: "unique" }));
-        setMetric("rate");
-        setAdvanced(false);
-        setMessage("Showing the registered-client comparison used in the answer.");
-      }} />}
       {message && (
         <p role="status" className="patterns-notice">
           {message}
@@ -588,8 +582,8 @@ export function ParticipationPatterns({
           <ParticipationGroupSummary report={report} />
           {report.dataQuality && ['block','locationBlock','distance'].includes(report.dimension) && <AddressVerification summary={report.dataQuality} />}
 
-          <RegistrationRate value={report.registrationContext} populationLabel="Overall eligible registry, across groups" />
-          <EngagementPanel groups={report.groups} metadata={report.engagement} dimension={report.dimension} populationLabel={populations[report.scope]?.label || report.scope} />
+
+
           {report.dimension === 'distance' && report.location && <p className="note"><strong>Verified residential locations</strong>: {fmt(report.location.verifiedClients)} of {fmt(report.location.registered)} registered clients. Overall clients with attendance: {fmt(report.location.attending)}; no recorded attendance: {fmt(report.location.noAttendance)}.</p>}
           {!report.registryComplete && q.scope === "clients" && (
             <section className="panel patterns-prerequisite">
@@ -660,7 +654,7 @@ export function ParticipationPatterns({
                 <h2>
                   {report.dimension === "distance"
                     ? "Participation by Distance"
-                    : "Participant group comparison"}
+                    : "Which groups participate most?"}
                 </h2>
                 <label>
                   Compare
@@ -764,7 +758,7 @@ export function ParticipationPatterns({
               </details>
             </section>
             <section className="panel">
-              <h2>Most Popular Programmes by Participant Group</h2>
+              <h2>Which programmes attract this group?</h2>
               <div className="patterns-filter-grid">
                 <label>
                   Specific group
@@ -861,6 +855,14 @@ export function ParticipationPatterns({
               )}
             </section>
           </div>
+      {ready && <AttendanceQuestions query={q} revision={`${revision}:${locationRevision}:${retry}`} onReview={dimension => {
+        setQ(old => ({ from: old.from || "", to: old.to || "", domain: old.domain || "", basis: old.basis || "current", scope: "clients", dimension, ranking: "unique" }));
+        setMetric("rate");
+        setAdvanced(false);
+        setMessage("Showing the registered-client comparison used in the answer.");
+      }} />}
+          <EngagementPanel groups={report.groups} metadata={report.engagement} dimension={report.dimension} populationLabel={populations[report.scope]?.label || report.scope} />
+          <details className="panel chart-methodology"><summary>Registration timing and attendance context</summary><RegistrationRate value={report.registrationContext} populationLabel="Overall eligible registry, across groups" /></details>
           {report.dimension === "distance" && (
             <Suspense fallback={<p>Loading residential comparison...</p>}>
               <LocationBlocks
@@ -1047,7 +1049,7 @@ export function ParticipationPatterns({
               </article>
             ))}
           </section>
-          {report.trendAnalysis && loadedQuery === query && !loading && !error && <AnalysisTrends value={report.trendAnalysis} />}
+          {report.trendAnalysis && loadedQuery === query && !loading && !error && <details className="panel"><summary>Monthly participation trends and changes</summary><AnalysisTrends value={report.trendAnalysis} /></details>}
           {report.dataQuality && loadedQuery === query && !loading && !error && <DataCompleteness showVerification={!['block','locationBlock','distance'].includes(report.dimension)} user={user} asOf={report.dataQuality.asOf} summary={report.dataQuality} revision={revision+locationRevision} onDistance={()=>{setQ(old=>({...old,dimension:'distance',scope:'clients',group:'',second:'',programme:''}));}}/>}
           <details
             className="panel"

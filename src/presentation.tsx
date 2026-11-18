@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { AnalysisStamp } from "./analysis-stamp";
-import {currentCentre} from './api';
+import { currentCentre } from "./api";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { Cards, Coverage, ReportBars, useBriefing } from "./management";
@@ -14,13 +14,17 @@ const fmt = (n: number | null | undefined) =>
 function usePresentation(close: () => void) {
   useEffect(() => {
     const old = document.title;
-    document.title = (currentCentre()?.name || "Programme & Outreach Dashboard") + " / Management report";
+    document.title =
+      (currentCentre()?.name || "Programme & Outreach Dashboard") +
+      " / Management report";
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.body.classList.add("presenting");
     const previousFocus = document.activeElement as HTMLElement | null;
     const underlying = [
-      ...document.querySelectorAll<HTMLElement>(".sidebar, .main-shell"),
+      ...document.querySelectorAll<HTMLElement>(
+        ".dashboard-shell, .sidebar, .main-shell",
+      ),
     ];
     underlying.forEach((e) => (e.inert = true));
     const key = (e: KeyboardEvent) => {
@@ -83,7 +87,9 @@ export function PresentationFrame({
           Print / Save as PDF
         </button>
       </div>
-      {currentCentre() && <p className="centre-report-scope">Centre: {currentCentre()!.name}</p>}
+      {currentCentre() && (
+        <p className="centre-report-scope">Centre: {currentCentre()!.name}</p>
+      )}
       {children}
     </div>,
     document.body,
@@ -120,13 +126,13 @@ export function PresentationView({
     "Needs and accessibility",
     "Planning and actions",
     "Follow-up plan",
-    ...(value?.programmeMix?['Programme Mix and Engagement Types']:[]),
+    ...(value?.programmeMix ? ["Programme Mix and Engagement Types"] : []),
   ];
   const audience =
     ["gender", "race", "ageBand", "client", "boundary"].some(
       (k) => filters[k as keyof Filters],
     ) || filters.target !== "all";
-  return (
+  return createPortal(
     <div
       className="presentation"
       role="dialog"
@@ -164,7 +170,12 @@ export function PresentationView({
             <span className="eyebrow">
               PROGRAMME &amp; OUTREACH / MANAGEMENT REPORT
             </span>
-            <h1>{titles[0]}</h1>{currentCentre() && <p className="centre-report-scope">Centre: {currentCentre()!.name}</p>}
+            <h1>{titles[0]}</h1>
+            {currentCentre() && (
+              <p className="centre-report-scope">
+                Centre: {currentCentre()!.name}
+              </p>
+            )}
             <p>
               {data.period.from || "Available history"} to {data.period.to} ·
               Generated {new Date().toLocaleDateString("en-SG")}
@@ -226,7 +237,30 @@ export function PresentationView({
               programme eligibility.
             </p>
           </section>
-          {value?.programmeMix&&<section className="report-slide" id="report-6"><h1>Programme Mix and Engagement Types</h1><h2>Primary AAP Domain distribution</h2><ReportBars rows={value.programmeMix.domains.map(d=>({label:d.label,value:d.sessions,detail:'delivered sessions'}))}/><h2>Selected secondary classifications</h2><p>{value.programmeMix.types.map(t=>`${t.label}: ${fmt(t.sessions)} sessions, ${fmt(t.unique)} unique seniors, ${fmt(t.repeat)} same-programme repeat`).join(' · ')}</p><p>{value.programmeMix.findings[0]?.action}</p><p>{value.programmeMix.note}</p></section>}
+          {value?.programmeMix && (
+            <section className="report-slide" id="report-6">
+              <h1>Programme Mix and Engagement Types</h1>
+              <h2>Primary AAP Domain distribution</h2>
+              <ReportBars
+                rows={value.programmeMix.domains.map((d) => ({
+                  label: d.label,
+                  value: d.sessions,
+                  detail: "delivered sessions",
+                }))}
+              />
+              <h2>Selected secondary classifications</h2>
+              <p>
+                {value.programmeMix.types
+                  .map(
+                    (t) =>
+                      `${t.label}: ${fmt(t.sessions)} sessions, ${fmt(t.unique)} unique seniors, ${fmt(t.repeat)} same-programme repeat`,
+                  )
+                  .join(" · ")}
+              </p>
+              <p>{value.programmeMix.findings[0]?.action}</p>
+              <p>{value.programmeMix.note}</p>
+            </section>
+          )}
           <section className="report-slide" id="report-4">
             <h1>{titles[4]}</h1>
             <p>
@@ -294,6 +328,7 @@ export function PresentationView({
           </section>
         </>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

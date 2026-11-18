@@ -1,3 +1,4 @@
+import {CompactTrend} from "./chart-system";
 import { useState } from "react";
 import {MetricHelp} from './metric-help';
 import "./analysis-trends.css";
@@ -68,20 +69,12 @@ export function AnalysisTrends({
     returning: "Returning client participants",
     sessions: "Delivered sessions",
   };
-  const maximum = Math.max(1, ...value.monthly.rows.map((r) => r[metric]));
+
   return (
     <section className="panel analysis-trends">
       <h2>Monthly client trends</h2>
       <MetricHelp label="Monthly client metrics" definition="Active: eligible clients with a full-history visit within the configured active band of each monthly anchor. First observed/returning: eligible clients attending in that month, split by earliest available attendance. Sessions: distinct delivered sessions in that month's covered dates and domain. Counts are not rates and have no per-session denominator."/>
-      <p>
-        Full attendance coverage {value.monthly.from || "Unavailable"} to{" "}
-        {value.monthly.to || "Unavailable"}, independent of selected
-        dates/group. Active means a recorded visit within{" "}
-        {value.monthly.activeThroughDays || 30} days of the displayed month
-        anchor across all programmes, using existing rules. Participation and
-        sessions follow the programme-domain filter. First observed means first
-        in available history, not new to the centre.
-      </p>
+
       {!value.monthly.available ? (
         <p>{value.monthly.reason}</p>
       ) : (
@@ -102,35 +95,7 @@ export function AnalysisTrends({
                   ))}
                 </select>
               </label>
-              <div
-                className="monthly-bars"
-                role="img"
-                aria-label={
-                  labels[metric] +
-                  ": " +
-                  value.monthly.rows
-                    .map(
-                      (r) =>
-                        `${r.month}: ${r[metric]}${r.partial ? " (partial month)" : ""}`,
-                    )
-                    .join("; ")
-                }
-              >
-                {value.monthly.rows.map((r) => (
-                  <div key={r.month}>
-                    <span>
-                      {r.month}
-                      {r.partial ? " · partial" : ""}
-                    </span>
-                    <i
-                      style={{
-                        width: Math.max(1, (r[metric] / maximum) * 100) + "%",
-                      }}
-                    />
-                    <strong>{r[metric]}</strong>
-                  </div>
-                ))}
-              </div>
+              <CompactTrend title={labels[metric]} rows={value.monthly.rows.map(r=>({label:r.month+(r.partial?' (partial)':''),value:r[metric]}))}/>
             </>
           )}
           <div className="work-table">
@@ -227,6 +192,15 @@ export function AnalysisTrends({
       )}
       <details open={printing}>
         <summary>Trend definitions and limits</summary>
+      <p>
+        Full attendance coverage {value.monthly.from || "Unavailable"} to{" "}
+        {value.monthly.to || "Unavailable"}, independent of selected
+        dates/group. Active means a recorded visit within{" "}
+        {value.monthly.activeThroughDays || 30} days of the displayed month
+        anchor across all programmes, using existing rules. Participation and
+        sessions follow the programme-domain filter. First observed means first
+        in available history, not new to the centre.
+      </p>
         <p>
           Partial first/last months are not full-month totals. Active clients
           can differ from clients attending within that month. Current client

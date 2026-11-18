@@ -128,7 +128,7 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
           <article className="panel" key={card.title} aria-label={card.title}>
             <span>{card.title}</span><MetricHelp label={card.title} definition={card.detail+' Selected reporting period and programme-domain filter apply. Muted overall lines use the same population basis.'}/>
             <strong>{card.value}</strong>
-            <p>{card.detail}</p>
+
             <small className="patterns-kpi-overall">{card.overall}</small>
           </article>
         ))}
@@ -164,7 +164,7 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
           </small>
         </article>
       </div>
-      <section
+      <details className="histogram-disclosure"><summary>Detailed session distribution and median</summary><section
         className="panel session-distribution"
         aria-labelledby={histogramId}
       >
@@ -209,7 +209,7 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
                 : "Session distribution unavailable: recorded attendance or authorised aggregate detail is missing. Missing is not zero."}
           </p>
         )}
-      </section>
+      </section></details>
     </section>
   );
 }
