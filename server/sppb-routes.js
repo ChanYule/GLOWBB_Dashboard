@@ -111,7 +111,7 @@ export function mountSppb(app, { control, workspaces, access }) {
         "Individual assessments are restricted to authorised staff.",
       );
   };
-  async function context(req, all = false) {
+  async function context(req, all = false, existingOnly = false) {
     const grants = await access(req.user);
     const queryCentre = req.query.centre,
       headerCentre = req.get("x-centre-id");
@@ -136,6 +136,10 @@ export function mountSppb(app, { control, workspaces, access }) {
     for (const id of ids) {
       const db = await workspaces.get(id),
         storage = db.storage || { readData, getSettings };
+      if(existingOnly){
+        for(const p of await db.prepare('SELECT id FROM participants').all())existing.add(p.id);
+        continue;
+      }
       const data = await storage.readData(db),
         settings = await storage.getSettings(db);
       const registry = await db.prepare("SELECT * FROM member_registry").all();
@@ -520,7 +524,7 @@ export function mountSppb(app, { control, workspaces, access }) {
           "Total Score",
         ]),
       );
-      const ctx = await context(req, true),
+      const ctx = await context(req, true, true),
         existing = await allRecords(control),
         saved = new Set(existing.map((r) => r.id));
       const unique = [...new Map(parsed.rows.map((r) => [r.id, r])).values()];
@@ -595,11 +599,17 @@ export function mountSppb(app, { control, workspaces, access }) {
     await globalAdmin(req);
     if (req.body.confirmed !== true || !text(req.body.id, 100))
       throw fail(400, "Review and confirm the SPPB import.");
-    const ctx = await context(req, true);
+    // Recover a committed response before opening centre workspaces. The
+    // transaction rechecks this receipt to serialize concurrent confirmations.
+    const receipt=await control.prepare('SELECT * FROM sppb_batches WHERE id=? AND user_id=?').get(req.body.id,req.user.id);
+    if(receipt)return res.json({...JSON.parse(receipt.details),replayed:true});
+    const ctx = await context(req, true, true);
     res.json(
       await dataTransaction(
         control,
         function* (tx) {
+          const receipt=yield tx.prepare('SELECT * FROM sppb_batches WHERE id=? AND user_id=?').get(req.body.id,req.user.id);
+          if(receipt)return {...JSON.parse(receipt.details),replayed:true};
           const preview = yield tx
             .prepare("SELECT * FROM import_previews WHERE id=? AND user_id=?")
             .get(req.body.id, req.user.id);
@@ -611,20 +621,10 @@ export function mountSppb(app, { control, workspaces, access }) {
           const payload = JSON.parse(preview.payload);
           if (payload.kind !== "sppb")
             throw fail(400, "Choose an SPPB import preview.");
-          const batch = randomUUID(),
+          const batch = req.body.id,
             timestamp = new Date().toISOString();
           let inserted = 0;
-          for (const r of payload.rows) {
-            if (
-              yield tx
-                .prepare("SELECT id FROM sppb_records WHERE id=?")
-                .get(r.id)
-            )
-              continue;
-            yield tx.prepare("INSERT INTO sppb_records VALUES(?,?,?)").run(
-              r.id,
-              r.memberKey,
-              JSON.stringify({
+          const records=payload.rows.map(r=>({id:r.id,member_key:r.memberKey,details:JSON.stringify({
                 ...r,
                 source: payload.source,
                 sourceHash: payload.sourceHash,
@@ -632,9 +632,14 @@ export function mountSppb(app, { control, workspaces, access }) {
                 importedAt: timestamp,
                 linkedExisting: ctx.existing.has(r.memberKey),
                 review: { revision: 0, disposition: "unresolved" },
-              }),
-            );
-            inserted++;
+              })}));
+          if(control.storage){
+            for(let start=0;start<records.length;start+=500){
+              const result=yield tx.query('INSERT INTO glowbb.sppb_records (id,member_key,details) SELECT id,member_key,details FROM jsonb_to_recordset($1::jsonb) AS x(id text,member_key text,details text) ON CONFLICT(id) DO NOTHING RETURNING id',[JSON.stringify(records.slice(start,start+500))]);
+              inserted+=result.rows.length;
+            }
+          }else{
+            for(const r of records){const result=yield tx.prepare('INSERT OR IGNORE INTO sppb_records VALUES(?,?,?)').run(r.id,r.member_key,r.details);inserted+=Number(result.changes);}
           }
           const result = {
             ...payload.summary,
@@ -684,7 +689,7 @@ export function mountSppb(app, { control, workspaces, access }) {
     const page = Number(req.query.page || 1);
     if (!Number.isInteger(page) || page < 1)
       throw fail(400, "Choose a review page.");
-    const ctx = await context(req, true),
+    const ctx = await context(req, true, true),
       records = await allRecords(control),
       config = await configuration(control),
       conflicts = conflictGroups(records),

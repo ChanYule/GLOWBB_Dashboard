@@ -1186,15 +1186,16 @@ function SppbAdministration({
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0),
     [error, setError] = useState(""),
+    [reviewError,setReviewError]=useState(""),
     [message, setMessage] = useState(""),
     [preview, setPreview] = useState<Preview | null>(null),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
     api<Review>("/api/sppb/review?page=" + page, { signal: abort.signal })
-      .then(setData)
+      .then(r=>{setData(r);setReviewError('');})
       .catch((e) => {
-        if (!abort.signal.aborted) setError(e.message);
+        if (!abort.signal.aborted) setReviewError(e.message);
       });
     return () => abort.abort();
   }, [page, revision]);
@@ -1285,22 +1286,24 @@ function SppbAdministration({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
+                  setError('');
                   try {
                     const r = await api<{
                       inserted: number;
                       matchedMembers: number;
                       unmatchedMembers: number;
+                      replayed?:boolean;
                     }>("/api/sppb/import/confirm", {
                       method: "POST",
                       body: JSON.stringify({ id: preview.id, confirmed: true }),
                     });
                     setMessage(
-                      `Saved ${r.inserted} new assessment records; ${r.matchedMembers} matched members; ${r.unmatchedMembers} unmatched members retained.`,
+                      `${r.replayed?'Recovered saved import receipt for':'Saved'} ${r.inserted} new assessment records; ${r.matchedMembers} matched members; ${r.unmatchedMembers} unmatched members retained.`,
                     );
                     setPreview(null);
                     refresh();
                     onImported(
-                      `Imported ${r.inserted} new assessment records. ${r.matchedMembers} matched members; ${r.unmatchedMembers} unmatched members retained.`,
+                      `${r.replayed?'Recovered saved import:':'Imported'} ${r.inserted} new assessment records. ${r.matchedMembers} matched members; ${r.unmatchedMembers} unmatched members retained.`,
                     );
                   } catch (e) {
                     setError((e as Error).message);
@@ -1334,6 +1337,7 @@ function SppbAdministration({
           </div>
         )}
       </section>
+      {reviewError&&<div className="callout" role="status"><p>Assessment review could not be loaded. You can still preview and confirm an import.</p><p>{reviewError}</p><button className="button" disabled={busy} onClick={()=>setRevision(n=>n+1)}>Retry assessment review</button></div>}
       {data && (
         <>
           <details className="panel">

@@ -943,3 +943,29 @@ for (const engine of ["SQLite", "PostgreSQL"])
       await f.close();
     }
   });
+
+for(const engine of ['SQLite','PostgreSQL'])test(`${engine}: 666-record SPPB import uses bulk writes and recovers an already committed receipt`,async()=>{
+ const f=await fixture(engine);let bulkCalls=0,lookups=0,failSecond=false;
+ const original=f.control.transaction?.bind(f.control);
+ if(original)f.control.transaction=(work,options)=>original(async tx=>{
+   const query=tx.query.bind(tx),prepare=tx.prepare.bind(tx);
+   tx.query=(sql,values)=>{if(sql.startsWith('INSERT INTO glowbb.sppb_records')){bulkCalls++;if(failSecond&&bulkCalls===2)throw Error('Injected second bulk failure');}return query(sql,values);};
+   tx.prepare=sql=>{if(/SELECT id FROM sppb_records WHERE id=/.test(sql))lookups++;return prepare(sql);};
+   return work(tx);
+ },options);
+ try{
+   const p=await f.json('/api/sppb/import/preview',f.upload(matrix(...Array.from({length:666},(_,i)=>row('bulk-'+i)))));
+   if(engine==='PostgreSQL'){
+     failSecond=true;assert.equal((await f.request('/api/sppb/import/confirm',{id:p.id,confirmed:true})).status,500);
+     assert.equal(Number((await f.control.prepare('SELECT count(*) n FROM sppb_records').get()).n),0);
+     assert.ok(await f.control.prepare('SELECT id FROM import_previews WHERE id=?').get(p.id));
+     failSecond=false;bulkCalls=0;
+   }
+   const result=await f.json('/api/sppb/import/confirm',{id:p.id,confirmed:true});assert.equal(result.inserted,666);
+   if(engine==='PostgreSQL'){assert.equal(bulkCalls,2);assert.equal(lookups,0);}
+   const replay=await f.json('/api/sppb/import/confirm',{id:p.id,confirmed:true});assert.equal(replay.replayed,true);assert.equal(replay.inserted,666);assert.equal(replay.batch,result.batch);
+   assert.equal(Number((await f.control.prepare('SELECT count(*) n FROM sppb_records').get()).n),666);
+   assert.equal(Number((await f.control.prepare('SELECT count(*) n FROM sppb_batches').get()).n),1);
+   const again=await f.save(matrix(...Array.from({length:666},(_,i)=>row('bulk-'+i))));assert.equal(again.result.inserted,0);
+ }finally{await f.close();}
+});

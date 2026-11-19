@@ -2543,6 +2543,29 @@ test('SPPB import requires only preview and confirm, keeps settings optional and
     assert.ok(screen.getByText(/Imported 2 new assessment records/));
   }finally{cleanup();globalThis.fetch=original;globalThis.FormData=originalFormData;}
 });
+
+test('SPPB review timeout does not block import and a timed-out confirmation retries the same preview',async()=>{
+ const {SppbAssessments}=await tsImport('../src/sppb-ui.tsx',import.meta.url);
+ const original=globalThis.fetch,originalFormData=globalThis.FormData;globalThis.FormData=dom.window.FormData;
+ let previews=0;const confirmations=[];
+ globalThis.fetch=async(url,options={})=>{
+  const path=String(url);
+  if(path.includes('/review'))return Response.json({error:'Review unavailable'},{status:504});
+  if(path.includes('/import/preview')){previews++;return Response.json({id:'recover-sppb',rows:666,matchedMembers:284,unmatchedMembers:113,newRecords:666,scoringWarnings:139,conflicts:69,missingDates:1,matchedMemberIds:[],unmatchedMemberIds:[]});}
+  if(path.includes('/import/confirm')){confirmations.push(JSON.parse(options.body));return confirmations.length===1?Response.json({error:'Save response unavailable'},{status:504}):Response.json({inserted:666,matchedMembers:284,unmatchedMembers:113,replayed:true});}
+  return Response.json({summary:null,rows:[],total:0,monthly:[],intervalMonths:6});
+ };
+ try{
+  render(React.createElement(SppbAssessments,{user:{username:'Admin',role:'admin'},initialSection:'Data quality & import'}));
+  await waitFor(()=>assert.ok(screen.getByText(/Assessment review could not be loaded/)));assert.equal(screen.queryByRole('alert'),null);
+  fireEvent.change(screen.getByLabelText('SPPB workbook'),{target:{files:[new dom.window.File(['fixture'],'sppb.xlsx')]}});
+  fireEvent.submit(screen.getByRole('button',{name:'Preview SPPB assessments'}).closest('form'));
+  await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Confirm SPPB import'})));fireEvent.click(screen.getByRole('button',{name:'Confirm SPPB import'}));
+  await waitFor(()=>assert.match(screen.getByRole('alert').textContent,/Keep this preview/));
+  fireEvent.click(screen.getByRole('button',{name:'Confirm SPPB import'}));await waitFor(()=>assert.equal(confirmations.length,2));
+  await waitFor(()=>assert.equal(screen.queryByRole('button',{name:'Confirm SPPB import'}),null));assert.equal(previews,1);assert.deepEqual(confirmations,[{id:'recover-sppb',confirmed:true},{id:'recover-sppb',confirmed:true}]);assert.equal(screen.queryByRole('alert'),null);
+ }finally{cleanup();globalThis.fetch=original;globalThis.FormData=originalFormData;}
+});
 test("client follow-up keeps clinical classifications out of the default table and records sourced voluntary feedback without sending messages", async () => {
   const original = globalThis.fetch;
   let contact;

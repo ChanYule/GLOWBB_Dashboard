@@ -16,6 +16,8 @@ async function performRequest<T>(url: string, options: RequestInit = {}): Promis
   const timeoutMessage =
     url.split("?")[0] === "/api/import/confirm"
       ? "The import response timed out. Completed batches stay saved. Retry this same preview to check the receipt and resume remaining batches; do not start a replacement import."
+      : url.split("?")[0] === "/api/sppb/import/confirm"
+      ? "The SPPB save response timed out. Keep this preview and retry Confirm SPPB import to recover the saved receipt. The same records will not be imported twice."
       : url.split("?")[0] === "/api/client-registry/confirm"
       ? "The save request timed out. Refresh the dashboard and check whether the registry was saved before trying again. If it was not saved, preview the file again."
       : "The data service timed out. Refresh the dashboard to check the latest saved data before trying again.";
