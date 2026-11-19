@@ -43,6 +43,7 @@ const DataManagement = lazy(() =>
 const ClientEngagement = lazy(() =>
   import("./client-ui").then((m) => ({ default: m.ClientEngagement })),
 );
+const SppbAssessments = lazy(() => import('./sppb-ui').then(m => ({ default: m.SppbAssessments })));
 const PersonalWorkspace = lazy(() =>
   import("./workspace").then((m) => ({ default: m.PersonalWorkspace })),
 );
@@ -137,6 +138,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
   } | null>(null);
   const [planSearch, setPlanSearch] = useState("");
   const [patternsInitial, setPatternsInitial] = useState("");
+  const [sppbSection, setSppbSection] = useState("Latest assessments");
   const [localTab, setLocalTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>({...emptyFilters,...initialDates}),
     [data, setData] = useState<Dashboard | null>(null),
@@ -151,6 +153,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
   const setTab=(next:string)=>{if(onPage)onPage(next);else setLocalTab(next);};
   useEffect(()=>{if(command)setModal(command.modal);},[command]);
   const contextOnly = [
+    "SPPB Assessments",
     "Participation Patterns & Insights",
     "Client Engagement",
     "Data management",
@@ -248,6 +251,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
       icon: Users,
     },
     { name: "Participant Needs & Accessibility", icon: HeartHandshake },
+    { name: "SPPB Assessments", icon: Activity },
     ...(user?.role === "admin"
       ? [{ name: "Data management", icon: Database }]
       : []),
@@ -275,6 +279,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
       onClick={() => {
         setTab(t.name);
         setPatternsInitial("");
+        setSppbSection("Latest assessments");
         setPlanSearch("");
         setNavigationOpen(false);
       }}
@@ -285,6 +290,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     </button>
   );
   const title = [
+    "SPPB Assessments",
     "Participation Patterns & Insights",
     "Data management",
     "Client Engagement",
@@ -503,6 +509,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                 {![
                   "Overview",
                   "Data management",
+                  "SPPB Assessments",
                   "Client Engagement",
                   "Participation Patterns & Insights",
                 ].includes(tab) && (
@@ -514,6 +521,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                 {user.role === "admin" &&
                   ![
                     "Data management",
+                    "SPPB Assessments",
                     "Client Engagement",
                     "Participation Patterns & Insights",
                   ].includes(tab) && (
@@ -526,6 +534,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             </div>
             {![
               "Data management",
+              "SPPB Assessments",
               "Client Engagement",
               "Participation Patterns & Insights",
             ].includes(tab) && (
@@ -537,6 +546,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             )}
             {![
               "Data management",
+              "SPPB Assessments",
               "Client Engagement",
               "Participation Patterns & Insights",
             ].includes(tab) && (
@@ -573,7 +583,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                 }
                 aria-busy={loading}
               >
-                {!['Data management','Participation Patterns & Insights'].includes(tab) && <AnalysisStamp metadata={data.metadata} coverage={data.coverage} />}
+                {!['Data management','SPPB Assessments','Participation Patterns & Insights'].includes(tab) && <AnalysisStamp metadata={data.metadata} coverage={data.coverage} />}
                 <Suspense
                   fallback={
                     <div className="panel" role="status">
@@ -588,6 +598,8 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                       initialDimension={patternsInitial}
                       onClients={() => setTab("Client Engagement")}
                     />
+                  ) : tab === "SPPB Assessments" ? (
+                    <SppbAssessments user={user} initialSection={sppbSection} />
                   ) : tab === "Client Engagement" ? (
                     <ClientEngagement
                       user={user}
@@ -612,6 +624,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                       onDefinitions={() => setModal("settings")}
                       onReporting={() => setModal("risk-settings")}
                       onClients={() => setTab("Client Engagement")}
+                      onSppb={() => { setSppbSection("Data quality & import"); setTab("SPPB Assessments"); }}
                       onChanged={refresh}
                     />
                   ) : tab === "Participant Needs & Accessibility" ? (

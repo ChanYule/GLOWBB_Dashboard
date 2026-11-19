@@ -1,0 +1,250 @@
+.sppb-page {
+  display: grid;
+  gap: 1.2rem;
+  color: #17314b;
+}
+.sppb-page .panel {
+  padding: 1.25rem;
+}
+.sppb-intro,
+.sppb-toolbar,
+.sppb-tabs {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.sppb-intro {
+  justify-content: space-between;
+}
+.sppb-intro h2 {
+  margin: 0.35rem 0;
+  font-size: 1.65rem;
+}
+.sppb-badge {
+  background: #e6f3f3;
+  color: #166a71;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+}
+.sppb-filters {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.sppb-page label,
+.sppb-dialog label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+.sppb-page input,
+.sppb-page select,
+.sppb-page textarea,
+.sppb-dialog input,
+.sppb-dialog select {
+  font: inherit;
+  min-height: 42px;
+  padding: 0.6rem;
+  border: 1px solid #bacbd5;
+  border-radius: 6px;
+  background: white;
+  color: #17314b;
+  max-width: 100%;
+}
+.sppb-page .checkbox {
+  display: flex;
+  align-items: center;
+}
+.sppb-page .checkbox input {
+  min-height: 1rem;
+}
+.sppb-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.sppb-kpis article {
+  background: white;
+  border: 1px solid #dce5ec;
+  border-radius: 10px;
+  padding: 1rem;
+}
+.sppb-kpis span {
+  display: block;
+  color: #506576;
+  font-size: 0.88rem;
+}
+.sppb-kpis strong {
+  display: block;
+  font-size: 1.6rem;
+  color: #153d50;
+  margin-top: 0.5rem;
+}
+.sppb-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.sppb-coverage {
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #e4eaf0;
+}
+.sppb-coverage span {
+  display: block;
+  height: 100%;
+  background: #248c92;
+}
+.sppb-tabs [aria-selected="true"] {
+  background: #153d50;
+  color: white;
+}
+.sppb-toolbar {
+  justify-content: space-between;
+  margin: 0.6rem 0 1rem;
+}
+.sppb-scroll {
+  overflow: auto;
+  width: 100%;
+}
+.sppb-page table,
+.sppb-dialog table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.sppb-page th,
+.sppb-page td,
+.sppb-dialog th,
+.sppb-dialog td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.85rem;
+  border-bottom: 1px solid #dce5ec;
+  min-width: 115px;
+}
+.sppb-page small,
+.sppb-dialog small {
+  display: block;
+  color: #586b7c;
+  margin-top: 0.35rem;
+}
+.sppb-dialog {
+  width: min(1100px, 94vw);
+  max-height: 90vh;
+  border: 1px solid #c6d5de;
+  border-radius: 14px;
+  padding: 1.5rem;
+  color: #17314b;
+  background: #f8fafc;
+  overflow: auto;
+}
+.sppb-dialog::backdrop {
+  background: #142a40a6;
+}
+.sppb-dialog header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.sppb-dialog h2 {
+  font-size: 1.4rem;
+}
+.sppb-dialog dl div,
+.sppb-source dl div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #dce5ec;
+}
+.sppb-dialog dd,
+.sppb-source dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sppb-components {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.sppb-notice {
+  padding: 1rem;
+  background: #f5f1e6;
+  border-left: 3px solid #aa852e;
+}
+.sppb-chart {
+  width: 100%;
+  max-height: 300px;
+  font: 13px system-ui;
+}
+.sppb-source {
+  border-top: 1px solid #dce5ec;
+  padding: 1rem 0;
+}
+.sppb-source summary {
+  cursor: pointer;
+}
+.sppb-source .form-stack {
+  margin-top: 1rem;
+}
+.sppb-page .form-stack {
+  gap: 1rem;
+}
+.sppb-page h3,
+.sppb-dialog h3 {
+  margin-top: 0;
+}
+.sppb-dialog details {
+  margin: 1rem 0;
+}
+.sppb-dialog .panel {
+  padding: 1rem;
+}
+.sppb-dialog .form-stack {
+  margin-top: 1.5rem;
+}
+.sppb-page textarea {
+  width: 100%;
+  min-height: 80px;
+}
+@media (max-width: 1000px) {
+  .sppb-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sppb-two {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .sppb-kpis,
+  .sppb-components {
+    grid-template-columns: 1fr;
+  }
+  .sppb-filters > label {
+    width: 100%;
+  }
+  .sppb-intro {
+    align-items: start;
+  }
+  .sppb-dialog {
+    padding: 1rem;
+    width: 96vw;
+  }
+  .sppb-toolbar {
+    align-items: start;
+  }
+  .sppb-dialog dl div {
+    grid-template-columns: 1fr;
+  }
+  .sppb-page .panel {
+    padding: 1rem;
+  }
+  .sppb-kpis strong {
+    font-size: 1.4rem;
+  }
+}

@@ -17,7 +17,6 @@ type Preview = {
   matched: number;
   newProfiles: number;
   clients: number;
-  withinBoundary: number;
   missingLiving: number;
   enrichments: number;
   omitted: number;
@@ -88,7 +87,9 @@ export function ClientRegistryImport({ onSaved }: { onSaved: () => void }) {
           <label className="client-upload">
             <Upload size={26} />
             <strong>Choose your client registry workbook</strong>
-            <span>Excel (.xlsx) or UTF-8 CSV · original ten-column layout</span>
+            <span>
+              Excel (.xlsx) or UTF-8 CSV · updated client registry layout
+            </span>
             <input
               name="file"
               type="file"
@@ -101,13 +102,20 @@ export function ClientRegistryImport({ onSaved }: { onSaved: () => void }) {
             <summary>Required source columns</summary>
             <p>
               Member ID, Gender, Current Living Arrangement, Age, Race, CFS,
-              Social Risk Factor(s), Is Client, Within Boundary, Block /
-              Building No.
+              Social Risk Factor(s), Block / Building No.
             </p>
             <p>
-              Registration Date and Preferred Language are optional. Block
-              numbers are retained as source identifiers; no addresses or
-              distances are inferred.
+              Date of Admission (A) (or Registration Date) and Preferred
+              Language are optional. Excel date cells and YYYY-MM-DD dates are
+              supported. Block numbers are retained as source identifiers; no
+              addresses or distances are inferred.
+            </p>
+            <p>
+              Is Client and Within Boundary are no longer required. Without Is
+              Client, each valid row is treated as a registered client. Missing
+              boundary values leave saved boundary status unchanged; new
+              profiles have no specified boundary status. Older exports with
+              these columns are still supported.
             </p>
           </details>
           <button className="button primary" disabled={busy}>
@@ -133,9 +141,8 @@ export function ClientRegistryImport({ onSaved }: { onSaved: () => void }) {
             <ShieldCheck size={17} /> {preview.note}
           </p>
           <p>
-            {preview.clients} records marked as clients ·{" "}
-            {preview.withinBoundary} within boundary · {preview.missingLiving}{" "}
-            missing living arrangements.
+            {preview.clients} client records · {preview.missingLiving} missing
+            living arrangements.
           </p>
           {preview.omitted > 0 && (
             <p className="client-notice">

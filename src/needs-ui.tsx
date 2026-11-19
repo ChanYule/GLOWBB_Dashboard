@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { api } from "./api";
 import { ClientRegistryImport } from "./client-import";
+import { SppbProfileSection } from './sppb-ui';
 import type { Dashboard, Filters, User } from "./types";
 import { AnalysisGraphic, PersonalWorkspace } from "./workspace";
 import "./needs.css";
@@ -1181,6 +1182,7 @@ export function ParticipantEditor({
   const update = <K extends keyof Profile>(key: K, value: Profile[K]) =>
     setProfile((p) => ({ ...p, [key]: value }));
   const tabs = [
+    "SPPB Assessments",
     "Basic Information",
     "Health and Functional Profile",
     "Social and Living Circumstances",
@@ -1278,6 +1280,7 @@ export function ParticipantEditor({
             ))}
           </div>
           <div role="tabpanel" aria-label={tab} className="needs-profile-body">
+            {tab === "SPPB Assessments" && <SppbProfileSection id={detail.base.id} />}
             {tab === "Basic Information" && (
               <>
                 <div className="needs-imported">

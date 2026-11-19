@@ -903,11 +903,11 @@ test("participation patterns loads one dimension, saves the staff view and print
         "false",
       ),
     );
-    assert.equal(
+    await waitFor(() => assert.equal(
       calls.filter((url) => url.startsWith("/api/participation-patterns?"))
         .length,
       5,
-    );
+    ));
     assert.ok(
       screen.getByRole("heading", { name: "Which groups participate most?" }),
     );
@@ -1935,7 +1935,7 @@ test("the needs dashboard restricts viewer access and makes the three analysis l
     globalThis.fetch = original;
   }
 });
-test("staff can edit all eight profile sections without losing drafts and feedback requires voluntary consent", async () => {
+test("staff can edit profile sections alongside SPPB history without losing drafts and feedback requires voluntary consent", async () => {
   const original = globalThis.fetch;
   const data = readData(db),
     base = {
@@ -1979,13 +1979,15 @@ test("staff can edit all eight profile sections without losing drafts and feedba
       target: { value: "fixture-member" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Find participant" }));
-    await waitFor(() => assert.equal(screen.getAllByRole("tab").length, 8));
+    await waitFor(() => assert.equal(screen.getAllByRole("tab").length, 9));
     fireEvent.click(
       screen.getByRole("tab", { name: "Health and Functional Profile" }),
     );
     fireEvent.change(screen.getByLabelText("Mobility support information"), {
       target: { value: "Participant requested a seated option" },
     });
+    fireEvent.click(screen.getByRole('tab',{name:'SPPB Assessments'}));
+    assert.ok(screen.getByRole('button',{name:'Open SPPB assessment history'}));
     fireEvent.click(
       screen.getByRole("tab", { name: "Care and Support Needs" }),
     );
@@ -2412,6 +2414,9 @@ test("client registry UI reviews conflicts and requires staff review before conf
   };
   try {
     render(React.createElement(ClientRegistryImport, { onSaved: () => {} }));
+    assert.ok(screen.getByText(/updated client registry layout/));
+    assert.ok(screen.getByText(/Is Client and Within Boundary are no longer required/));
+    assert.ok(screen.getByText(/Date of Admission \(A\)/));
     const file = new dom.window.File(["fixture"], "registry.xlsx");
     fireEvent.change(screen.getByLabelText("Client registry file"), {
       target: { files: [file] },
@@ -2429,6 +2434,8 @@ test("client registry UI reviews conflicts and requires staff review before conf
       true,
     );
     assert.ok(screen.getByText(/previously registered clients are absent/));
+    assert.ok(screen.getByText(/2 client records/));
+    assert.equal(screen.queryByText(/2 within boundary/), null);
     fireEvent.click(screen.getByLabelText("Approve Gender for C1"));
     fireEvent.click(screen.getByLabelText(/I reviewed the matches/));
     fireEvent.click(
@@ -2442,6 +2449,31 @@ test("client registry UI reviews conflicts and requires staff review before conf
     globalThis.fetch = original;
     globalThis.FormData = originalFormData;
   }
+});
+test('SPPB UI keeps imported out-of-range scores pending and loads a member history only after selection', async () => {
+  const { SppbAssessments } = await tsImport('../src/sppb-ui.tsx', import.meta.url);
+  const original = globalThis.fetch;
+  const requested = [];
+  const assessment = { id:'assessment', date:'2026-10-28', original:{balance:4,gait:8,chair:4,total:16}, standard:null, scoringVersion:null, validation:'Imported SPPB score, scoring validation pending', sourceDefinition:'caritahub-export-unverified', location:'Unknown', source:'sppb.xlsx', sourceRow:2, warnings:['Recorded scores do not meet standard SPPB ranges or sum'], raw:[], review:{revision:0,disposition:'unresolved'} };
+  const member = { id:'member',memberId:'SPPB-TEST-001',centres:['glow_bukit_batok'],count:1,distinctDates:1,latestDate:assessment.date,latest:assessment,previous:null,delta:null,change:'Validation required',followup:{status:'Follow-up interval not configured',due:null,days:22},followupTask:null };
+  globalThis.fetch = async url => {
+    requested.push(String(url));
+    if(String(url).includes('/api/sppb/members/'))return Response.json({...member,records:[assessment],participation:{from:null,to:null,sessions:0,programmes:[],domains:[],eventTypes:[]}});
+    return Response.json({summary:{eligible:1,assessed:1,coverage:null,repeated:0,latest:assessment.date,due:0,comparable:0,increased:0,unchanged:0,decreased:0,review:1},rows:[member],total:1,page:1,monthly:[],intervalMonths:null,note:'Verified client population only.'});
+  };
+  try {
+    render(React.createElement(SppbAssessments,{user:{username:'Planner',role:'planner'}}));
+    await waitFor(()=>assert.ok(screen.getByRole('button',{name:'SPPB-TEST-001'})));
+    assert.equal(requested.some(url=>url.includes('/members/')),false);
+    assert.ok(screen.getByText('Imported SPPB score, scoring validation pending'));
+    assert.ok(screen.getByText('No comparable validated scores yet. Imported scores remain available for authorised review.'));
+    fireEvent.click(screen.getByRole('button',{name:'SPPB-TEST-001'}));
+    await waitFor(()=>assert.ok(screen.getByRole('dialog',{name:'Member SPPB assessment history'})));
+    await waitFor(()=>assert.ok(screen.getByText(/scoring validation pending. Review the imported timeline/)));
+    assert.equal(screen.queryByRole('img',{name:/Validated SPPB total scores/}),null);
+    fireEvent.click(screen.getByRole('button',{name:'Close history'}));
+    assert.equal(screen.queryByRole('dialog'),null);
+  } finally { cleanup(); globalThis.fetch=original; }
 });
 test("client follow-up keeps clinical classifications out of the default table and records sourced voluntary feedback without sending messages", async () => {
   const original = globalThis.fetch;

@@ -1,5 +1,7 @@
 # Programme & Outreach Dashboard
 
+**SPPB Assessments:** Supplementary Member ID-linked assessment histories, protected unmatched staging, scoring validation, reviewed reassessment follow-up and Excel/print exports now sit within the existing four-centre platform. See the [SPPB staff and deployment guide](docs/SPPB-ASSESSMENTS.md). PostgreSQL adds shared control-plane **migration 007**; existing members and attendance are preserved. Source scoring remains pending until organisational approval.
+
 **Larger imports:** XLSX/CSV imports now support files up to **20 MB**. Large files upload in small requests before the normal preview and confirmation. Deploy frontend and backend together; no new SQL is required. Existing row-count and workbook-expansion checks remain.
 
 **Attendance import fix:** Full Tzu Chi SEEN location labels now route by physical location, while Activity Name determines GLOW or SEEN, including verified GLOW_ names. [Source reconciliation and staff import guide](docs/CENTRE-IMPORT-ALIASES.md). No new SQL migration beyond 006.

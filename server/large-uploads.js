@@ -8,6 +8,7 @@ import {
 import { dataTransaction } from "./data-management.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
 const paths = new Set([
+  "/api/sppb/import/preview",
   "/api/import/preview",
   "/api/client-registry/preview",
   "/api/registry/preview",

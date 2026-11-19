@@ -113,10 +113,10 @@ export async function reconcileClients(registryPath, attendancePath) {
         (p) => p["Current Living Arrangement"] === "Alone",
       ).length,
       maleAttending: matched.filter((p) => p.Gender === "MALE").length,
-      allClientsYes: raw.every((p) => p["Is Client"].toUpperCase() === "YES"),
-      allWithinBoundary: raw.every(
-        (p) => p["Within Boundary"].toUpperCase() === "YES",
-      ),
+      allClientsYes: parsed.rows.every((p) => p.client === true),
+      allWithinBoundary: matrix[0].includes("Within Boundary")
+        ? parsed.rows.every((p) => p.boundary === true)
+        : null,
       attendanceRaw: a.length,
       deduplicated: data.attendance.length,
       programmes: data.programmes.length,

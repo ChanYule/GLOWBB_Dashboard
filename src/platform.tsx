@@ -58,6 +58,7 @@ const mainPages = [
   ["Planning & Recommendations", "Planning", ClipboardList],
 ] as const;
 const analysisPages = [
+  ["SPPB Assessments", "SPPB Assessments", Activity],
   ["Participant Needs & Accessibility", "Participant Needs", HeartHandshake],
   ["Custom Analysis", "Custom Analysis", SlidersHorizontal],
 ] as const;

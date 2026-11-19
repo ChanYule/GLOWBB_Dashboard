@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import ExcelJS from "exceljs";
 import { openDb, readData, saveImport } from "../server/db.js";
 import { openPostgres } from "../server/postgres.js";
 import { createApp } from "../server/app.js";
@@ -43,6 +44,19 @@ const registryRow = (id, patch = {}) =>
       })[h],
   );
 const registry = (...rows) => [headers, ...rows];
+const revisedRegistry = (...rows) => {
+  const kept = headers.filter(
+    (h) => !["Is Client", "Within Boundary"].includes(h),
+  );
+  return [
+    [...kept, "Date of Admission (A)", "Preferred Language"],
+    ...rows.map((row) => [
+      ...kept.map((h) => row[headers.indexOf(h)]),
+      "2026-01-15",
+      "Mandarin",
+    ]),
+  ];
+};
 const attendance = (id, date = "2026-10-20") => [
   id,
   "MALE",
@@ -399,7 +413,80 @@ test("client registry parser preserves exact canonical IDs, leading zeros and so
     /Missing client registry headers/,
   );
 });
+test("revised registry supports native Excel admission dates without guessing boundary status", async () => {
+  const matrix = revisedRegistry(registryRow("0001"));
+  matrix[1][8] = new Date("2026-01-15T00:00:00Z");
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet("Members").addRows(matrix);
+  const parsed = parseClientRegistry(
+    await readMatrix(await workbook.xlsx.writeBuffer(), "members.xlsx", [
+      "Member ID",
+    ]),
+  );
+  assert.deepEqual(parsed.issues, []);
+  assert.equal(parsed.rows[0].memberId, "0001");
+  assert.equal(parsed.rows[0].client, true);
+  assert.equal(parsed.rows[0].boundary, null);
+  assert.equal(parsed.rows[0].registrationDate, "2026-01-15");
+  assert.equal(parsed.rows[0].preferredLanguage, "Mandarin");
+  matrix[1][8] = "01/02/2026";
+  matrix.push([...matrix[1]]);
+  matrix[2][0] = "valid";
+  matrix[2][8] = "2026-02-01";
+  assert.equal(parseClientRegistry(matrix).issues.length, 1);
+  const legacy = parseClientRegistry(
+    registry(
+      registryRow("legacy", {
+        "Is Client": "No",
+        "Within Boundary": "No",
+      }),
+    ),
+  );
+  assert.equal(legacy.rows[0].client, false);
+  assert.equal(legacy.rows[0].boundary, false);
+});
 for (const engine of ["SQLite", "PostgreSQL"]) {
+  test(`${engine}: revised registry preserves saved boundary values and links new clients through review`, async () => {
+    const f = await fixture(engine);
+    try {
+      await f.importAttendance([
+        HEADERS,
+        attendance("existing"),
+        attendance("outsider"),
+      ]);
+      const result = await f.save(
+        revisedRegistry(registryRow("existing"), registryRow("new")),
+      );
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.equal(result.preview.clients, 2);
+      assert.equal(
+        result.preview.conflicts.some((c) => c.field === "boundary"),
+        false,
+      );
+      const saved = await f.request(
+        "/api/clients/" + hash(["existing"]) + "/source",
+      );
+      assert.equal(saved.body.current.boundary, true);
+      assert.equal(saved.body.current.registrationDate, "2026-01-15");
+      const added = await f.request(
+        "/api/clients/" + hash(["new"]) + "/source",
+      );
+      assert.equal(added.body.current.boundary ?? null, null);
+      assert.equal(added.body.current.client, true);
+      const list = await f.request("/api/clients/followups", {
+        filters: {},
+        pageSize: 100,
+      });
+      assert.equal(list.body.total, 2);
+      assert.equal(await f.count("attendance"), 2);
+      const again = await f.save(
+        revisedRegistry(registryRow("existing"), registryRow("new")),
+      );
+      assert.equal(again.body.changed, 0);
+    } finally {
+      await f.close();
+    }
+  });
   test(`${engine}: client registry links attendance, preserves other participants, enriches blanks and supports explicit conflict review and repeat imports`, async () => {
     const f = await fixture(engine);
     try {

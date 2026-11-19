@@ -9,7 +9,7 @@ export const currentCentre = () => selectedCentre;
 export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;inFlight.clear();}
 export function centreUrl(url:string){
   if(!selectedCentre||!url.startsWith('/api/')||/^\/api\/(me|login|logout|users|centres)(?:[/?]|$)/.test(url))return url;
-  const parsed=new URL(url,'http://centre.local');parsed.searchParams.set('centre',selectedCentre.id);if(isReportingPath(parsed.pathname)||/^\/api\/clients\/(report|outreach|priorities|followups)$/.test(parsed.pathname)){parsed.searchParams.set('reportingMode',reportMode);if(reportMode==='exploratory')parsed.searchParams.set('includeExcluded','1');}return parsed.pathname+parsed.search;
+  const parsed=new URL(url,'http://centre.local');if(!(parsed.pathname.startsWith('/api/sppb/')&&parsed.searchParams.get('centre')==='all'))parsed.searchParams.set('centre',selectedCentre.id);if(isReportingPath(parsed.pathname)||/^\/api\/clients\/(report|outreach|priorities|followups)$/.test(parsed.pathname)){parsed.searchParams.set('reportingMode',reportMode);if(reportMode==='exploratory')parsed.searchParams.set('includeExcluded','1');}return parsed.pathname+parsed.search;
 }
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const generation=centreGeneration;

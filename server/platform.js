@@ -1,4 +1,5 @@
 import {REPORT_STYLES} from "./report-design.js";
+import { ensureSppb, mountSppb } from './sppb-routes.js';
 import {randomUUID} from 'node:crypto';
 import {reportingContext,policySummary,isReportingRequest,projectReportingData} from './reporting-policy.js';
 import {mountLargeUploads} from './large-uploads.js';
@@ -31,6 +32,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     await ensureOperations(control);
     await ensureLocations(control);
     await setupCentres(control);
+    await ensureSppb(control);
     if (!authRequired) {
       const user = await control
         .prepare("SELECT id FROM users WHERE username=?")
@@ -211,6 +213,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     res.json({ ok: true });
   });
   mountLargeUploads(app,{control,access});
+  mountSppb(app, { control, workspaces, access });
   mountCentreImports(app, {
     control,
     workspaces,

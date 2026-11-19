@@ -68,9 +68,10 @@ export function parseClientRegistry(matrix) {
   });
   if (new Set(headers).size !== headers.length)
     throw fail("Registry headers must be unique.");
-  const absent = Object.values(registryHeaders).filter(
-    (h) => !headers.includes(h),
-  );
+  const absent = Object.entries(registryHeaders)
+    .filter(([field]) => !["client", "boundary"].includes(field))
+    .map(([, header]) => header)
+    .filter((h) => !headers.includes(h));
   if (absent.length)
     throw fail("Missing client registry headers: " + absent.join(", "));
   const rows = [],
@@ -103,9 +104,27 @@ export function parseClientRegistry(matrix) {
     }
     ids.add(id);
     const age = values.Age ? Number(values.Age) : null;
-    const client = asBool(values["Is Client"]),
-      boundary = asBool(values["Within Boundary"]);
-    const registrationDate = values["Registration Date"] || null;
+    // Registry inclusion establishes membership when the legacy column is
+    // absent. It provides no evidence about the service boundary.
+    const client = headers.includes("Is Client")
+        ? asBool(values["Is Client"] || "")
+        : true,
+      boundary = asBool(values["Within Boundary"] || "");
+    const rawDate =
+      values["Registration Date"] || values["Date of Admission (A)"];
+    // ExcelJS exposes native Excel date cells as Date.toString() via cell.text.
+    // Accept that form and ISO dates; do not guess ambiguous CSV dates.
+    const excelDate =
+      rawDate &&
+      /^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{4} \d{2}:\d{2}:\d{2} GMT[+-]\d{4}(?: \(.+\))?$/.test(
+        rawDate,
+      )
+        ? new Date(rawDate)
+        : null;
+    const registrationDate =
+      excelDate && Number.isFinite(excelDate.getTime())
+        ? excelDate.toISOString().slice(0, 10)
+        : rawDate || null;
     if (
       (age != null && (!Number.isInteger(age) || age < 0 || age > 120)) ||
       (values["Is Client"] && client == null) ||

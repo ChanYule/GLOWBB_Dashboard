@@ -131,6 +131,7 @@ export function DataManagement({
   onDefinitions,
   onReporting,
   onClients,
+  onSppb,
   onChanged,
   version = 0,
 }: {
@@ -138,6 +139,7 @@ export function DataManagement({
   onDefinitions: () => void;
   onReporting: () => void;
   onClients?: () => void;
+  onSppb?: () => void;
   onChanged: (message: string) => void;
   version?: number;
 }) {
@@ -314,6 +316,7 @@ export function DataManagement({
             </div>
           )}
           <div className="data-primary-actions">
+            {onSppb && <button className="button" onClick={onSppb}><FileSpreadsheet size={17} /> Import SPPB Assessments</button>}
             <button className="button primary" onClick={onImport}>
               <Upload size={18} /> Import attendance
             </button>

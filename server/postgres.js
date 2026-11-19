@@ -6,7 +6,7 @@ import { inspectImport, defaults, hash } from "./domain.js";
 import { expiredPreview } from "./previews.js";
 
 const tables =
-  /\b(legacy_allocations|centres|centre_access|platform_preferences|platform_configuration|schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
+  /\b(sppb_records|sppb_batches|sppb_configuration|legacy_allocations|centres|centre_access|platform_preferences|platform_configuration|schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
