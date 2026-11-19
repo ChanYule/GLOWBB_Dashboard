@@ -1,7 +1,7 @@
 export function isReportingPath(path, method = "GET") {
   return (
     (method === "GET" &&
-      /^\/api\/(dashboard|social-risk|reporting(?:\/|$)|participation-patterns(?:\/|$)|event-types\/(?:report|export)|analysis\/(?:export|view)|export\/|operations(?:$|\/export)|needs\/(?:overview|programmes|export))/.test(
+      /^\/api\/(dashboard|social-risk|reporting(?:\/|$)|participation-patterns(?:\/|$)|programme-domains\/(?:report|export)|event-types\/(?:report|export)|analysis\/(?:export|view)|export\/|operations(?:$|\/export)|needs\/(?:overview|programmes|export))/.test(
         path,
       )) ||
     (method === "POST" &&

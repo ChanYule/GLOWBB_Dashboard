@@ -6,7 +6,9 @@ export type ProgrammeClassificationRow = {
   name: string;
   primaryDomain: string;
   subDomains: string[];
+  combinedDomains?:string[];
   sessions: number;
+  attendance?:number|null;
   unique: number | null;
   repeat: number | null;
   averageSessions: number | null;
@@ -41,7 +43,7 @@ export function ProgrammeClassificationTable({
         .filter(
           (row) =>
             !search ||
-            [row.name, activityDomains(row.primaryDomain,row.subDomains).join(', '),row.primaryDomain, ...row.subDomains]
+            [row.name, (row.combinedDomains??activityDomains(row.primaryDomain,row.subDomains)).join(', '),row.primaryDomain, ...row.subDomains]
               .join(" ")
               .toLocaleLowerCase()
               .includes(search.trim().toLocaleLowerCase()),
@@ -63,6 +65,7 @@ export function ProgrammeClassificationTable({
     ? filtered
     : filtered.slice(current * size, (current + 1) * size);
   const opportunity = rows.some((row) => Object.hasOwn(row, "opportunity"));
+  const attendance = rows.some(row=>Object.hasOwn(row,"attendance"));
   const coverage = rows.some((row) => Object.hasOwn(row, "rate"));
   return (
     <div className="programme-classifications">
@@ -81,13 +84,14 @@ export function ProgrammeClassificationTable({
         </label>
       )}
       <div className="work-table">
-        <table aria-label="Programme domains and sub-domains">
+        <table aria-label="Programme Domains">
           <thead>
             <tr>
               <th>Programme</th>
               <th>Domains</th>
               <th>Delivered sessions</th>
               <th>{reachLabel}</th>
+              {attendance&&<th>Attendance entries</th>}
               <th>
                 {opportunity
                   ? "Same-programme repeat / opportunity"
@@ -113,9 +117,10 @@ export function ProgrammeClassificationTable({
                     row.name
                   )}
                 </th>
-                <td>{activityDomains(row.primaryDomain,row.subDomains).join(', ')}</td>
+                <td>{(row.combinedDomains??activityDomains(row.primaryDomain,row.subDomains)).map(domain=><span className="badge soft" key={domain}>{domain}</span>)}</td>
                 <td>{fmt(row.sessions)}</td>
                 <td>{fmt(row.unique)}</td>
+                {attendance&&<td>{fmt(row.attendance??null)}</td>}
                 <td>
                   {fmt(row.repeat)}
                   {opportunity && <> / {fmt(row.opportunity ?? null)}</>}
@@ -170,9 +175,7 @@ export function ProgrammeClassificationTable({
         </div>
       )}
       <p className="muted">
-        One row per programme. Primary Domain is its recorded AAP Domain;
-        Sub-domain lists the Event Types recorded on its sessions in this
-        reporting period. Multiple labels describe the same programme, not
+        One row per programme. Programme Domains combine recognised AAP Domain and Event Type labels on qualifying sessions in this reporting period. Multiple labels describe the same programme, not
         additional programmes. Each person is counted once per programme; people
         attending several programmes overlap, so do not add unique reach across
         rows. Classification does not establish achieved outcomes.

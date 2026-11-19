@@ -128,6 +128,7 @@ export type RankingRow = {
   value: number | null;
   detail?: string;
   displayValue?: string;
+  colour?:string;
 };
 export function HorizontalRankingChart({
   rows,
@@ -206,6 +207,7 @@ export function HorizontalRankingChart({
               {r.value != null && (
                 <i
                   style={{
+                    backgroundColor:r.colour,
                     left: Math.min(zero, ((r.value - min) / range) * 100) + "%",
                     width: (Math.abs(r.value) / range) * 100 + "%",
                   }}

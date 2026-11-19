@@ -69,6 +69,11 @@ type Summary = {
   review: number;
 };
 type Report = {
+  recordedScores?: {
+    sourceDefinition: string;
+    total: number;
+    members: number;
+  }[];
   summary: Summary | null;
   rows: Member[];
   total: number;
@@ -187,6 +192,7 @@ export function SppbAssessments({
   };
   const refresh = () => setRevision((n) => n + 1);
   const summary = report?.summary;
+  const [notice, setNotice] = useState("");
   return (
     <div className="sppb-page">
       <div className="sppb-intro">
@@ -199,9 +205,24 @@ export function SppbAssessments({
           </p>
         </div>
         <span className="sppb-badge">
-          {scope === 'all' ? 'All authorised centres' : currentCentre()?.name || "Select a centre"}
+          {scope === "all"
+            ? "All authorised centres"
+            : currentCentre()?.name || "Select a centre"}
         </span>
+        {user.role === "admin" && (
+          <button
+            className="button primary"
+            onClick={() => setSection("Data quality & import")}
+          >
+            Import SPPB data
+          </button>
+        )}
       </div>
+      {notice && (
+        <p className="client-success" role="status">
+          {notice}
+        </p>
+      )}
       {user.role !== "viewer" && (
         <section className="panel sppb-filters" aria-label="Assessment filters">
           {user.canCompare && (
@@ -336,7 +357,7 @@ export function SppbAssessments({
                 report?.intervalMonths == null ? "Not configured" : summary.due,
                 "Reassessment due / overdue",
               ],
-              [summary.comparable, "Members with comparable validated scores"],
+              [summary.review, "Members with records to review"],
             ].map(([value, label]) => (
               <article className="panel" key={label}>
                 <span>{label}</span>
@@ -373,29 +394,59 @@ export function SppbAssessments({
               )}
             </section>
             <section className="panel">
-              <h3>Validated score changes</h3>
-              {summary.comparable ? (
-                <>
-                  <p>
-                    {summary.comparable} members with comparable assessments.
-                    Comparison uses each member’s latest eligible pair through
-                    the reporting date.
-                  </p>
-                  <p>
-                    {summary.increased} increased · {summary.unchanged}{" "}
-                    unchanged · {summary.decreased} decreased
-                  </p>
-                </>
+              <h3>Recorded score analysis</h3>
+              <p>
+                Latest recorded totals, shown exactly as imported. No scoring
+                setup is needed.
+              </p>
+              {report?.recordedScores?.length ? (
+                <div className="sppb-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Source scoring definition</th>
+                        <th>Recorded total</th>
+                        <th>Members</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.recordedScores.map((g) => (
+                        <tr key={g.sourceDefinition + ":" + g.total}>
+                          <td>{g.sourceDefinition}</td>
+                          <td>{g.total}</td>
+                          <td>{g.members}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <p>
-                  No comparable validated scores yet. Imported scores remain
-                  available for authorised review.
+                  No unambiguous latest scores in this selection. Open a member
+                  to see all recorded results.
                 </p>
               )}
               <p className="muted">
-                A numerical change is not a clinical diagnosis or proof of
-                programme impact.
+                Imported totals may use a different scoring scale. They are
+                descriptive records, not clinical interpretations; conflicting
+                same-day results stay separate.
               </p>
+              {!!summary.comparable && (
+                <details>
+                  <summary>Validated score changes</summary>
+                  <>
+                    <p>
+                      {summary.comparable} members with comparable assessments.
+                      Comparison uses each member’s latest eligible pair through
+                      the reporting date.
+                    </p>
+                    <p>
+                      {summary.increased} increased · {summary.unchanged}{" "}
+                      unchanged · {summary.decreased} decreased
+                    </p>
+                  </>
+                </details>
+              )}
             </section>
           </div>
         </>
@@ -424,12 +475,18 @@ export function SppbAssessments({
                 key={s}
                 onClick={() => setSection(s)}
               >
-                {s}
+                {s === "Data quality & import" ? "Import data" : s}
               </button>
             ))}
           </div>
           {section === "Data quality & import" ? (
-            <SppbAdministration onSaved={refresh} />
+            <SppbAdministration
+              onSaved={refresh}
+              onImported={(message) => {
+                setNotice(message);
+                setSection("Latest assessments");
+              }}
+            />
           ) : section === "Assessment activity" ? (
             <section className="panel">
               <h3>Assessment activity over time</h3>
@@ -534,8 +591,12 @@ export function SppbAssessments({
                             "Verified affiliation",
                             "Latest date",
                             "Imported total",
-                            "Previous comparable total",
-                            "Validated difference",
+                            ...(summary?.comparable
+                              ? [
+                                  "Previous comparable total",
+                                  "Validated difference",
+                                ]
+                              : []),
                             "Assessments",
                             "Reassessment status",
                           ]
@@ -573,19 +634,26 @@ export function SppbAssessments({
                                   ? "Review same-day records"
                                   : "Unavailable")}
                               <small>
-                                {m.latest?.validation ||
-                                  "No unambiguous latest result"}
+                                {(m.latest
+                                  ? m.latest.standard
+                                    ? "Validated score"
+                                    : "Imported score"
+                                  : null) || "No unambiguous latest result"}
                               </small>
                             </td>
-                            <td>
-                              {m.previous?.standard?.total ?? "Unavailable"}
-                            </td>
-                            <td>
-                              {m.delta == null
-                                ? "Validation / comparison required"
-                                : `${m.delta > 0 ? "+" : ""}${m.delta}`}
-                              <small>{m.change}</small>
-                            </td>
+                            {!!summary?.comparable && (
+                              <>
+                                <td>
+                                  {m.previous?.standard?.total ?? "Unavailable"}
+                                </td>
+                                <td>
+                                  {m.delta == null
+                                    ? "Validation / comparison required"
+                                    : `${m.delta > 0 ? "+" : ""}${m.delta}`}
+                                  <small>{m.change}</small>
+                                </td>
+                              </>
+                            )}
                             <td>
                               {m.count}
                               <small>{m.distinctDates} distinct dates</small>
@@ -641,13 +709,7 @@ function HistoryChart({ records }: { records: RecordRow[] }) {
   const validated = records
     .filter((r) => r.standard && r.date)
     .sort((a, b) => a.date!.localeCompare(b.date!));
-  if (!validated.length)
-    return (
-      <p className="sppb-notice">
-        {pending}. Review the imported timeline below; no performance trend is
-        inferred.
-      </p>
-    );
+  if (!validated.length) return <ImportedHistory records={records} />;
   const dates = validated.map((r) => Date.parse(r.date!)),
     min = Math.min(...dates),
     max = Math.max(...dates);
@@ -740,6 +802,73 @@ function HistoryChart({ records }: { records: RecordRow[] }) {
     </ChartCard>
   );
 }
+
+function ImportedHistory({ records }: { records: RecordRow[] }) {
+  const points = records
+    .filter(
+      (r) =>
+        r.date &&
+        r.original.total != null &&
+        r.review?.disposition !== "superseded",
+    )
+    .sort((a, b) => a.date!.localeCompare(b.date!));
+  if (!points.length)
+    return <p>No dated scores to plot. All source records are listed below.</p>;
+  const first = Date.parse(points[0].date!),
+    last = Date.parse(points.at(-1)!.date!);
+  const maximum = Math.max(12, ...points.map((r) => r.original.total));
+  const x = (date: string) =>
+    55 + ((Date.parse(date) - first) / Math.max(86400000, last - first)) * 560;
+  const y = (total: number) => 220 - (total / maximum) * 185;
+  return (
+    <ChartCard
+      title="Recorded scores over time"
+      description="Original imported totals. Points show recorded results without clinical interpretation or rescaling."
+    >
+      <svg
+        className="sppb-chart"
+        viewBox="0 0 680 270"
+        role="img"
+        aria-label="Original imported SPPB scores over time"
+      >
+        {[0, maximum / 2, maximum].map((n) => (
+          <g key={n}>
+            <line x1="50" x2="635" y1={y(n)} y2={y(n)} stroke="#dce5ec" />
+            <text x="25" y={y(n) + 5}>
+              {n}
+            </text>
+          </g>
+        ))}
+        {points.map((r) => (
+          <circle
+            key={r.id}
+            cx={x(r.date!)}
+            cy={y(r.original.total)}
+            r="5"
+            fill="#3869a8"
+            tabIndex={0}
+            aria-label={`${day(r.date)}: imported total ${r.original.total}; ${r.sourceDefinition}${r.conflict ? "; same-day conflict" : ""}`}
+          >
+            <title>
+              {day(r.date)}: {r.original.total} · {r.sourceDefinition}
+              {r.conflict ? " · Same-day conflict" : ""}
+            </title>
+          </circle>
+        ))}
+        <text x="50" y="255">
+          {day(points[0].date)}
+        </text>
+        <text x="500" y="255">
+          {day(points.at(-1)!.date)}
+        </text>
+      </svg>
+      <p className="muted">
+        Scoring validation is pending. Different source definitions and same-day
+        conflicts are identified in the timeline below.
+      </p>
+    </ChartCard>
+  );
+}
 export function SppbMemberDialog({
   id,
   onClose,
@@ -811,12 +940,21 @@ export function SppbMemberDialog({
             latest date {day(detail.latestDate)}
           </p>
           <p>
-            Validated latest total:{" "}
-            {detail.latest?.standard?.total ?? "Unavailable"} · previous
-            comparable total:{" "}
-            {detail.previous?.standard?.total ?? "Unavailable"} · difference:{" "}
-            {detail.delta ?? "Unavailable"}
+            Latest recorded total:{" "}
+            {detail.latest?.original.total ??
+              (detail.latestDate
+                ? "See same-day records below"
+                : "Unavailable")}
           </p>
+          {detail.previous?.standard && (
+            <p>
+              Validated latest total:{" "}
+              {detail.latest?.standard?.total ?? "Unavailable"} · previous
+              comparable total:{" "}
+              {detail.previous?.standard?.total ?? "Unavailable"} · difference:{" "}
+              {detail.delta ?? "Unavailable"}
+            </p>
+          )}
           <p>
             {detail.followup.status} · due {day(detail.followup.due)}
           </p>
@@ -832,18 +970,23 @@ export function SppbMemberDialog({
                       : "Balance"}
                 </h4>
                 <p>
-                  Latest validated:{" "}
-                  {detail.latest?.standard?.[k] ?? "Unavailable"}
+                  Latest recorded: {detail.latest?.original[k] ?? "Unavailable"}
                 </p>
-                <p>
-                  Previous: {detail.previous?.standard?.[k] ?? "Unavailable"}
-                </p>
-                <p>
-                  Difference:{" "}
-                  {detail.latest?.standard && detail.previous?.standard
-                    ? detail.latest.standard[k] - detail.previous.standard[k]
-                    : "Unavailable"}
-                </p>
+                {detail.previous?.standard && (
+                  <>
+                    <p>
+                      Previous:{" "}
+                      {detail.previous?.standard?.[k] ?? "Unavailable"}
+                    </p>
+                    <p>
+                      Validated difference:{" "}
+                      {detail.latest?.standard && detail.previous?.standard
+                        ? detail.latest.standard[k] -
+                          detail.previous.standard[k]
+                        : "Unavailable"}
+                    </p>
+                  </>
+                )}
               </article>
             ))}
           </div>
@@ -932,9 +1075,9 @@ export function SppbMemberDialog({
                     "None recorded"}
                 </p>
                 <p>
-                  AAP Domains:{" "}
+                  Programme Domains:{" "}
                   {detail.participation.domains.join(", ") || "None recorded"} ·
-                  Event Types:{" "}
+                  Source Event Types:{" "}
                   {detail.participation.eventTypes.join(", ") || "Unavailable"}
                 </p>
               </>
@@ -1032,14 +1175,19 @@ export function SppbProfileSection({ id }: { id: string }) {
   );
 }
 
-function SppbAdministration({ onSaved }: { onSaved: () => void }) {
+function SppbAdministration({
+  onSaved,
+  onImported,
+}: {
+  onSaved: () => void;
+  onImported: (message: string) => void;
+}) {
   const [data, setData] = useState<Review | null>(null),
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [preview, setPreview] = useState<Preview | null>(null),
-    [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false);
   useEffect(() => {
     const abort = new AbortController();
@@ -1083,7 +1231,6 @@ function SppbAdministration({ onSaved }: { onSaved: () => void }) {
                     body: new FormData(e.currentTarget),
                   }),
                 );
-                setConsent(false);
               } catch (e) {
                 setError((e as Error).message);
               } finally {
@@ -1102,18 +1249,24 @@ function SppbAdministration({ onSaved }: { onSaved: () => void }) {
         ) : (
           <div className="form-stack">
             <div className="sppb-kpis">
-              {Object.entries(preview)
-                .filter(
-                  ([key, value]) => typeof value === "number" && key !== "id",
-                )
-                .map(([key, value]) => (
-                  <article key={key}>
-                    <span>{key.replace(/([A-Z])/g, " $1")}</span>
-                    <strong>{String(value)}</strong>
-                  </article>
-                ))}
+              {[
+                [preview.rows, "Assessment records"],
+                [preview.matchedMembers, "Matched members"],
+                [preview.unmatchedMembers, "Unmatched members"],
+                [preview.newRecords, "New records"],
+              ].map(([value, label]) => (
+                <article key={label}>
+                  <span>{label}</span>
+                  <strong>{String(value)}</strong>
+                </article>
+              ))}
             </div>
-            <p>{preview.note}</p>
+            <p>
+              {preview.conflicts} same-day groups to review ·{" "}
+              {preview.scoringWarnings} source-score warnings ·{" "}
+              {preview.missingDates} missing dates. Import keeps the original
+              values.
+            </p>
             <details>
               <summary>
                 Matched Member IDs ({preview.matchedMemberIds.length})
@@ -1126,19 +1279,10 @@ function SppbAdministration({ onSaved }: { onSaved: () => void }) {
               </summary>
               <p>{preview.unmatchedMemberIds.join(", ") || "None"}</p>
             </details>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-              />{" "}
-              I reviewed matching, conflicts and scoring warnings. Retain
-              unmatched records in protected staging.
-            </label>
             <div className="sppb-toolbar">
               <button
                 className="button primary"
-                disabled={!consent || busy}
+                disabled={busy}
                 onClick={async () => {
                   setBusy(true);
                   try {
@@ -1155,6 +1299,9 @@ function SppbAdministration({ onSaved }: { onSaved: () => void }) {
                     );
                     setPreview(null);
                     refresh();
+                    onImported(
+                      `Imported ${r.inserted} new assessment records. ${r.matchedMembers} matched members; ${r.unmatchedMembers} unmatched members retained.`,
+                    );
                   } catch (e) {
                     setError((e as Error).message);
                   } finally {
@@ -1189,71 +1336,82 @@ function SppbAdministration({ onSaved }: { onSaved: () => void }) {
       </section>
       {data && (
         <>
-          <SppbSettings
-            key={data.config.revision}
-            config={data.config}
-            onSaved={refresh}
-          />
-          <section className="panel">
-            <h3>Data-quality review and unmatched staging</h3>
+          <details className="panel">
+            <summary>Optional settings</summary>
             <p>
-              {data.unmatchedMembers} unmatched Member IDs · {data.conflicts}{" "}
-              unresolved same-day groups · {data.total} records requiring
-              review.
+              These settings are not required to import data or analyse recorded
+              results.
             </p>
-            <p>
-              {pending}. Original test data and superseded records are retained.
-            </p>
-            <button
-              className="button"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  const r = await api<{ linked: number; unmatched: number }>(
-                    "/api/sppb/reprocess",
-                    { method: "POST", body: "{}" },
-                  );
-                  setMessage(
-                    `${r.linked} newly matched assessment records; ${r.unmatched} still unmatched.`,
-                  );
-                  refresh();
-                } catch (e) {
-                  setError((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Reprocess after member imports
-            </button>
-            {data.rows.map((r) => (
-              <SourceReview
-                key={r.id + ":" + r.review.revision}
-                record={r}
-                onSaved={refresh}
-              />
-            ))}
-            <div className="sppb-toolbar">
+            <SppbSettings
+              key={data.config.revision}
+              config={data.config}
+              onSaved={refresh}
+            />
+          </details>
+          <details className="panel">
+            <summary>Data-quality review and unmatched records</summary>
+            <section>
+              <h3>Data-quality review and unmatched staging</h3>
+              <p>
+                {data.unmatchedMembers} unmatched Member IDs · {data.conflicts}{" "}
+                unresolved same-day groups · {data.total} records requiring
+                review.
+              </p>
+              <p>
+                {pending}. Original test data and superseded records are
+                retained.
+              </p>
               <button
                 className="button"
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await api<{ linked: number; unmatched: number }>(
+                      "/api/sppb/reprocess",
+                      { method: "POST", body: "{}" },
+                    );
+                    setMessage(
+                      `${r.linked} newly matched assessment records; ${r.unmatched} still unmatched.`,
+                    );
+                    refresh();
+                  } catch (e) {
+                    setError((e as Error).message);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
               >
-                Previous review records
+                Reprocess after member imports
               </button>
-              <span>
-                Page {page} of {Math.max(1, Math.ceil(data.total / 25))}
-              </span>
-              <button
-                className="button"
-                disabled={page * 25 >= data.total}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next review records
-              </button>
-            </div>
-          </section>
+              {data.rows.map((r) => (
+                <SourceReview
+                  key={r.id + ":" + r.review.revision}
+                  record={r}
+                  onSaved={refresh}
+                />
+              ))}
+              <div className="sppb-toolbar">
+                <button
+                  className="button"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous review records
+                </button>
+                <span>
+                  Page {page} of {Math.max(1, Math.ceil(data.total / 25))}
+                </span>
+                <button
+                  className="button"
+                  disabled={page * 25 >= data.total}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next review records
+                </button>
+              </div>
+            </section>
+          </details>
           <section className="panel">
             <h3>Recent assessment imports</h3>
             {data.batches.map((b) => (
@@ -1295,14 +1453,18 @@ function SppbSettings({
     [reason, setReason] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const scoringChanged =
+    source !==
+      (config.definitions[0]?.sourceDefinition ||
+        "caritahub-export-unverified") ||
+    version !== (config.definitions[0]?.version || "") ||
+    method !== (config.definitions[0]?.method || "identity") ||
+    approved !== (config.definitions[0]?.approved || false);
   return (
     <section className="panel">
-      <h3>Approved reassessment interval and scoring rules</h3>
+      <h3>Reassessment settings</h3>
       <p>
-        No follow-up interval or scoring approval is assumed. Identity approval
-        validates only unchanged, internally consistent scores already within
-        standard ranges. Reviewed corrections require an approved version and
-        individual evidence.
+        Optional: set when members should be considered for another assessment.
       </p>
       <form
         className="form-stack"
@@ -1331,7 +1493,11 @@ function SppbSettings({
                 intervalMonths: months === "" ? null : Number(months),
                 approachDays: approach,
                 definitions,
-                reason,
+                reason:
+                  reason ||
+                  (scoringChanged
+                    ? ""
+                    : "Reassessment interval updated by administrator."),
               }),
             });
             onSaved();
@@ -1366,7 +1532,7 @@ function SppbSettings({
           </label>
         </div>
         <details>
-          <summary>Administrator scoring approval</summary>
+          <summary>Advanced scoring settings</summary>
           <div className="form-stack">
             <label>
               Source scoring definition
@@ -1406,25 +1572,25 @@ function SppbSettings({
               I approve this scoring definition based on documented source
               evidence.
             </label>
+            <label>
+              Scoring approval evidence
+              <textarea
+                required={scoringChanged}
+                minLength={10}
+                maxLength={2000}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
           </div>
         </details>
-        <label>
-          Organisational procedure / approval evidence
-          <textarea
-            required
-            minLength={10}
-            maxLength={2000}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </label>
         {error && (
           <p className="error" role="alert">
             {error}
           </p>
         )}
         <button className="button primary" disabled={busy}>
-          Save reviewed assessment configuration
+          Save settings
         </button>
       </form>
     </section>

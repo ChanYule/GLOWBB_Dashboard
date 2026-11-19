@@ -52,6 +52,8 @@ export type Programme = Stats & {
   name: string;
   domain: string;
   eventTypes?:string[];
+  combinedDomains?:string[];
+  sourceDomain?:string;
   recurring: boolean;
   trend: Trend[];
   sessionList: {
@@ -61,6 +63,9 @@ export type Programme = Stats & {
     end: number;
     venue?: string;
     eventTypes?: string[];
+    combinedDomains?:string[];
+    sourceDomain?:string;
+    sourceEventType?:string|null;
   }[];
   optional: Record<string, unknown>;
 };

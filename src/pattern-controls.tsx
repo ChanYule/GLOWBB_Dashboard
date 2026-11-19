@@ -86,8 +86,9 @@ export function PatternControls({
         </div>
       </div>
       <div className="patterns-primary-filters">
+        <details className="patterns-guided"><summary>Explore a staff question</summary>
         <label>
-          Analysis preset
+          What would you like to understand?
           <select
             aria-label="Analysis preset"
             value={preset}
@@ -110,24 +111,24 @@ export function PatternControls({
             }}
           >
             {[
-              ["age", "Age and Programme Participation"],
-              ["cfs", "CFS Participation Patterns"],
-              ["risk", "SRF Participation Patterns"],
-              ["race", "Race and Minority Outreach"],
-              ["living", "Living arrangement"],
-              ["repeat", "Repeat Programme Engagement"],
-              ["overall", "Overall Programme Planning"],
-              ["gender", "Gender Participation"],
-              ["block", "Residential Participation"],
-              ["distance", "Location and Participation"],
-              ["eventType", "Event Type Programme Planning"],
+              ["age", "Who attends in each age group?"],
+              ["cfs", "Does attendance differ by recorded CFS?"],
+              ["risk", "Does participation differ by recorded social risk?"],
+              ["race", "Which groups are we reaching?"],
+              ["living", "Does attendance differ by living arrangement?"],
+              ["repeat", "Which programmes bring people back?"],
+              ["overall", "Who attends across all programmes?"],
+              ["gender", "Which programmes attract male and female seniors?"],
+              ["block", "Which residential blocks have lower participation?"],
+              ["distance", "Does participation differ by distance?"],
+              ["eventType", "Which programme types attract participants?"],
             ].map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>
             ))}
           </select>
-        </label>
+        </label></details>
         <label>
           Population
           <select

@@ -1,3 +1,4 @@
+import {validDomainMapping} from '../shared/activity-domains.js';
 import {saveLegacyDefinitionVersion} from './configuration.js';
 import { randomUUID } from "node:crypto";
 import { clientReport } from "./client-domain.js";
@@ -897,6 +898,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
   app.put("/api/needs/settings", async (req, res) => {
     admin(req);
     const s = req.body;
+    if(s?.domainGroups&&Object.values(s.domainGroups).some(v=>!validDomainMapping(v)))throw fail(400,"Map exact source labels only to Physical, Cognitive, Learning, Social or Volunteerism.");
     if (
       !s ||
       !Array.isArray(s.inactivityBands) ||

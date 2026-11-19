@@ -361,6 +361,18 @@ test("client preserves API errors and handles lost connections", async () => {
     async () => assert.equal((await api("/api/dashboard")).summary.unique, 0),
   );
 });
+test('read requests have a recoverable deadline while write confirmations are never automatically retried or timed out by the client',async(t)=>{
+ const original=globalThis.fetch;let release,calls=0;
+ t.mock.timers.enable({apis:['setTimeout']});
+ try{
+  globalThis.fetch=async()=>new Promise(()=>{});
+  const stalled=api('/api/me');const rejected=assert.rejects(stalled,e=>e.status===408&&e.message.includes('try again'));
+  t.mock.timers.tick(30001);await rejected;
+  globalThis.fetch=async()=>{calls++;return new Promise(r=>{release=r;});};
+  const write=api('/api/settings',{method:'POST',body:'{}'});t.mock.timers.tick(30001);assert.equal(calls,1);
+  release(Response.json({ok:true}));assert.deepEqual(await write,{ok:true});
+ }finally{globalThis.fetch=original;t.mock.timers.reset();}
+});
 
 test("hosted upload size errors remain useful when Vercel returns plain text", async () => {
   await withFetch(

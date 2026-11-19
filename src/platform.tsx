@@ -32,6 +32,7 @@ import { api, setCentreContext, setReportingMode } from "./api";
 import type { Centre } from "../shared/centres.js";
 import "./platform.css";
 import "./professional-ui.css";
+import './experience.css';
 const CentreTools = lazy(() =>
   import("./centre-tools").then((m) => ({ default: m.CentreTools })),
 );

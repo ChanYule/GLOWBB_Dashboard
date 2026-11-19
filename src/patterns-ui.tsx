@@ -34,7 +34,7 @@ const LocationAdmin = lazy(() =>
   import("./location-admin").then((m) => ({ default: m.LocationAdmin })),
 );
 const EventTypeInsights = lazy(() =>
-  import("./event-types-ui").then((m) => ({ default: m.EventTypeInsights })),
+  import("./programme-domains-ui").then((m) => ({ default: m.ProgrammeDomainAnalysis })),
 );
 const LocationBlocks = lazy(() =>
   import("./location-ui").then((m) => ({ default: m.LocationBlocks })),
@@ -74,6 +74,7 @@ type Programme = {
   id: string;
   name: string;
   domain: string;
+  combinedDomains?:string[];
   eventTypes?:string[];
   sessions: number;
   unique: number;
@@ -210,7 +211,7 @@ export function Ranking({
               >
                 {p.name}
               </button> : <strong>{p.name}</strong>}
-              <small>{activityDomains(p.domain,p.eventTypes).join(', ')}</small>
+              <small>{(p.combinedDomains??activityDomains(p.domain,p.eventTypes)).join(', ')}</small>
               <dl>
                 <div>
                   <dt>Unique</dt>
@@ -265,7 +266,7 @@ export function Ranking({
                 ) : (
                   p.name
                 )}
-                <small>{activityDomains(p.domain,p.eventTypes).join(', ')}</small>
+                <small>{(p.combinedDomains??activityDomains(p.domain,p.eventTypes)).join(', ')}</small>
               </th>
               <td>{p.sessions}</td>
               <td>{p.unique}</td>

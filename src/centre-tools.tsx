@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { CENTRES } from "../shared/centres.js";
 import type { User } from "./types";
+import {PageHeader,LoadingState,ErrorState} from './experience';
 type Staff = User & { canCompare: boolean; centres?: { id: string }[] };
 export function CentreTools({
   staff,
@@ -11,14 +12,14 @@ export function CentreTools({
   onChanged: () => void;
 }) {
   const [tab, setTab] = useState(
-      staff.role === "admin" ? "migration" : "compare",
+      "overview",
     ),
     [snapshot, setSnapshot] = useState<{
       key: string;
       value: Record<string, unknown>;
     } | null>(null),
     [error, setError] = useState(""),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),[retry,setRetry]=useState(0);
   const [assignments, setAssignments] = useState<Record<string, string>>({}),
     [reason, setReason] = useState(""),
     [registry, setRegistry] = useState(false),
@@ -50,26 +51,27 @@ export function CentreTools({
     [compare, setCompare] = useState(false),
     [verified, setVerified] = useState(false);
   useEffect(() => {
-    let live = true;
+    const controller=new AbortController();
     setSnapshot(null);
     setError("");
     api<Record<string, unknown>>(
-      tab === "migration"
+      tab==='overview'?'/api/centres/status':tab === "migration"
         ? "/api/centres/migration"
         : tab === "access"
           ? "/api/centres/access"
           : "/api/centres/compare?" + comparisonQuery,
+      {signal:controller.signal},
     )
       .then((v) => {
-        if (live) setSnapshot({ key: requestKey, value: v });
+        if (!controller.signal.aborted) setSnapshot({ key: requestKey, value: v });
       })
       .catch((e) => {
-        if (live) setError(e.message);
+        if (!controller.signal.aborted) setError(e.message);
       });
     return () => {
-      live = false;
+      controller.abort();
     };
-  }, [tab, comparisonQuery, requestKey]);
+  }, [tab, comparisonQuery, requestKey,retry]);
   const run = async (task: () => Promise<unknown>) => {
     setError("");
     try {
@@ -92,27 +94,29 @@ export function CentreTools({
       | undefined;
   return (
     <main className="centre-tools panel">
-      <h1>Centre administration &amp; comparisons</h1>
-      <div className="work-actions">
+      <PageHeader title="Centre Administration" description="Check data availability, manage staff access and compare authorised centres." />
+      <div className="work-actions" role="tablist" aria-label="Centre administration sections">
+        <button role="tab" aria-selected={tab==='overview'} className="button" onClick={()=>setTab('overview')}>Centre Overview</button>
         {staff.role === "admin" && (
           <>
-            <button className="button" onClick={() => setTab("migration")}>
-              Review historical allocation
+            <button role="tab" aria-selected={tab==='migration'} className="button" onClick={() => setTab("migration")}>
+              Historical Data Review
             </button>
-            <button className="button" onClick={() => setTab("access")}>
-              Staff centre access
+            <button role="tab" aria-selected={tab==='access'} className="button" onClick={() => setTab("access")}>
+              Staff Access
             </button>
           </>
         )}
         {staff.canCompare && (
-          <button className="button" onClick={() => setTab("compare")}>
-            Compare authorised centres
+          <button role="tab" aria-selected={tab==='compare'} className="button" onClick={() => setTab("compare")}>
+            Centre Comparisons
           </button>
         )}
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && <ErrorState message={error} onRetry={()=>setRetry(n=>n+1)}/>}
       {message && <p role="status">{message}</p>}
-      {!value && !error && <p>Loading centre information…</p>}
+      {!value && !error && <LoadingState label="Loading centre information…"/>}
+      {tab==='overview'&&value&&<div className="centre-overview-grid">{(value.rows as {id:string;name:string;participants:number;attendance:number;sessions:number;lastImport:string|null;registryComplete:boolean}[]).map(c=><article key={c.id}><h2>{c.name}</h2><p>{c.participants.toLocaleString('en-SG')} stored participant profiles · {c.sessions.toLocaleString('en-SG')} sessions</p><p>{c.attendance.toLocaleString('en-SG')} programme attendances</p><p>Last attendance import: {c.lastImport?new Date(c.lastImport).toLocaleDateString('en-SG',{timeZone:'Asia/Singapore'}):'No import recorded'}</p><p>{c.registryComplete?'Complete client registry recorded':'Client registry completeness needs review'}</p>{staff.role==='admin'&&<button className="text-button" onClick={()=>setTab('migration')}>Review Centre Records</button>}</article>)}</div>}
       {tab === "migration" && value && (
         <>
           <button

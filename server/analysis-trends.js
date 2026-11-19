@@ -1,3 +1,4 @@
+import {domainMatches} from './programme-domains.js';
 import { clientPopulation, validDay } from "./client-domain.js";
 import {
   participationProportion,
@@ -166,7 +167,7 @@ export function monthlyClientTrends(state, domain, now) {
       const attended = history.some(
         (s) =>
           s.date >= start &&
-          (!domain || programmes.get(s.programmeId).domain === domain),
+          domainMatches(domain,s,programmes.get(s.programmeId),state.settings),
       );
       if (attended) {
         if (history[0].date >= start) firstObserved++;
@@ -187,7 +188,7 @@ export function monthlyClientTrends(state, domain, now) {
         (s) =>
           s.date >= start &&
           s.date <= anchor &&
-          (!domain || programmes.get(s.programmeId).domain === domain),
+          domainMatches(domain,s,programmes.get(s.programmeId),state.settings),
       ).length,
     });
     cursor = next.toISOString().slice(0, 10);

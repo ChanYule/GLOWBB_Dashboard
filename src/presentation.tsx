@@ -1,12 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AnalysisStamp } from "./analysis-stamp";
-import { currentCentre } from "./api";
+import { currentCentre, api } from "./api";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { Cards, Coverage, ReportBars, useBriefing } from "./management";
 import { TrendChart } from "./analytics-ui";
 import type { Briefing } from "./management";
-import type { Dashboard, Filters } from "./types";
+import type { Dashboard, Filters, User } from "./types";
 const fmt = (n: number | null | undefined) =>
   n == null
     ? "Unavailable"
@@ -32,7 +32,7 @@ function usePresentation(close: () => void) {
       if (e.key === "Tab") {
         const controls = [
           ...document.querySelectorAll<HTMLElement>(
-            ".presentation button:not(:disabled),.presentation a[href]",
+            ".presentation button:not(:disabled),.presentation a[href],.presentation select,.presentation input,.presentation summary",
           ),
         ].filter((e) => e.getClientRects().length);
         const first = controls[0],
@@ -101,13 +101,26 @@ export function PresentationView({
   revision,
   close,
   briefing,
+  user,
 }: {
   data: Dashboard;
   filters: Filters;
   revision: number;
   close: () => void;
   briefing?: Briefing;
+  user?: User;
 }) {
+  const [focus,setFocus]=useState('all'),[outreach,setOutreach]=useState<'male'|'minority'>('male');
+  const [assessments,setAssessments]=useState<{eligible:number;assessed:number;coverage:number|null;repeated:number;latest:string|null}|null>(null),[assessmentError,setAssessmentError]=useState('');
+  const assessmentQuery=new URLSearchParams({...(filters.from?{from:filters.from}:{}),...(filters.to?{to:filters.to}:{})}).toString();
+  useEffect(()=>{
+    if(focus!=='sppb'||!user||user.role==='viewer')return;
+    const controller=new AbortController();setAssessments(null);setAssessmentError('');
+    api<{summary:typeof assessments}>('/api/sppb/overview?'+assessmentQuery,{signal:controller.signal}).then(r=>setAssessments(r.summary)).catch(e=>{if(!controller.signal.aborted)setAssessmentError(e.message);});
+    return()=>controller.abort();
+  },[focus,assessmentQuery,user]);
+  const sections:Record<string,number[]>={all:[0,1,2,3,4,5,6],programme:[0,2,6,4,5],client:[0,1,4,5],outreach:[0,1,2,5],needs:[0,3,4,5],planning:[0,4,5],sppb:[0,7,5]};
+  const visible=(id:number)=>(sections[focus]||sections.all).includes(id);
   const fetchRegistry = !!briefing?.registryOmitted;
   const remote = useBriefing(filters, revision, !briefing || fetchRegistry);
   // Preserve the displayed outreach/needs/action snapshot. Registry coverage is
@@ -126,7 +139,7 @@ export function PresentationView({
     "Needs and accessibility",
     "Planning and actions",
     "Follow-up plan",
-    ...(value?.programmeMix ? ["Programme Mix and Engagement Types"] : []),
+    ...(value?.programmeMix ? ["Programme Domains"] : []),
   ];
   const audience =
     ["gender", "race", "ageBand", "client", "boundary"].some(
@@ -144,7 +157,7 @@ export function PresentationView({
           Back to dashboard
         </button>
         <nav aria-label="Report sections">
-          {titles.map((t, i) => (
+          {titles.map((t, i) => visible(i)&&(
             <a href={`#report-${i}`} key={t}>
               {i + 1}. {t}
             </a>
@@ -152,12 +165,13 @@ export function PresentationView({
         </nav>
         <button
           className="button primary"
-          disabled={!value || pending || !!error || audience}
+          disabled={!value || pending || !!error || audience || focus==='sppb'&&(!assessments||!!assessmentError)}
           onClick={() => window.print()}
         >
           Print / Save as PDF
         </button>
       </div>
+      <div className="report-focus-controls"><label>Report focus<select aria-label="Management report focus" value={focus} onChange={e=>setFocus(e.target.value)}><option value="all">Overall centre performance</option><option value="programme">Programme performance</option><option value="client">Client engagement</option><option value="outreach">Male and minority outreach</option><option value="needs">Participant needs and participation gaps</option><option value="planning">Programme planning</option>{user&&user.role!=='viewer'&&<option value="sppb">SPPB assessment coverage</option>}</select></label>{focus==='outreach'&&<label>Outreach group<select value={outreach} onChange={e=>setOutreach(e.target.value as typeof outreach)}><option value="male">Male seniors</option><option value="minority">Minority seniors</option></select></label>}<span>{currentCentre()?.name||'Selected centre'} · {filters.from||'Available history'} to {filters.to||data.period.to}</span></div>
       {error && <p role="alert">{error}</p>}
       {audience ? (
         <p className="note">
@@ -166,7 +180,7 @@ export function PresentationView({
         </p>
       ) : (
         <>
-          <section className="report-slide" id="report-0">
+          <section className="report-slide" id="report-0" hidden={!visible(0)}>
             <span className="eyebrow">
               PROGRAMME &amp; OUTREACH / MANAGEMENT REPORT
             </span>
@@ -181,38 +195,38 @@ export function PresentationView({
               Generated {new Date().toLocaleDateString("en-SG")}
             </p>
             <AnalysisStamp metadata={data.metadata} coverage={data.coverage} />
-            <Cards data={data} briefing={value} />
+            {focus!=='sppb'&&<Cards data={data} briefing={value} />}
             <p>
               Attendance describes recorded participation. It does not establish
               programme impact or explain non-participation.
             </p>
           </section>
-          <section className="report-slide" id="report-1">
+          <section className="report-slide" id="report-1" hidden={!visible(1)}>
             <h1>{titles[1]}</h1>
             <Coverage briefing={value} />
-            <h2>Senior participation over time</h2>
-            <TrendChart rows={data.trends} />
+            {focus!=='client'&&<><h2>{focus==='outreach'?(outreach==='male'?'Male senior':'Minority senior'):'Senior'} participation over time</h2>
+            <TrendChart rows={data.trends} metric={focus==='outreach'?outreach:'unique'} /></>}
           </section>
-          <section className="report-slide" id="report-2">
+          <section className="report-slide" id="report-2" hidden={!visible(2)}>
             <h1>{titles[2]}</h1>
             <p>
               {fmt(data.summary.sessions)} sessions ·{" "}
               {fmt(data.summary.programmes)} programmes ·{" "}
               {fmt(data.summary.average)} average attendance per session
             </p>
-            <h2>Top five programmes by unique senior reach</h2>
+            <h2>Top five programmes by {focus==='outreach'?(outreach==='male'?'male senior':'minority senior'):'unique senior'} reach</h2>
             <ReportBars
               rows={[...data.programmes]
-                .sort((a, b) => b.unique - a.unique)
+                .sort((a, b) => b[focus==='outreach'?outreach:'unique'] - a[focus==='outreach'?outreach:'unique'])
                 .slice(0, 5)
                 .map((p) => ({
                   label: p.name,
-                  value: p.unique,
+                  value: p[focus==='outreach'?outreach:'unique'],
                   detail: `${fmt(p.sessions)} sessions`,
                 }))}
             />
           </section>
-          <section className="report-slide" id="report-3">
+          <section className="report-slide" id="report-3" hidden={!visible(3)}>
             <h1>{titles[3]}</h1>
             <p>
               {fmt(value?.needs?.interests.denominator)} interest respondents;{" "}
@@ -238,9 +252,9 @@ export function PresentationView({
             </p>
           </section>
           {value?.programmeMix && (
-            <section className="report-slide" id="report-6">
-              <h1>Programme Mix and Engagement Types</h1>
-              <h2>Primary AAP Domain distribution</h2>
+            <section className="report-slide" id="report-6" hidden={!visible(6)}>
+              <h1>Programme Domains</h1>
+              <h2>Programme Domain distribution</h2>
               <ReportBars
                 rows={value.programmeMix.domains.map((d) => ({
                   label: d.label,
@@ -261,7 +275,7 @@ export function PresentationView({
               <p>{value.programmeMix.note}</p>
             </section>
           )}
-          <section className="report-slide" id="report-4">
+          <section className="report-slide" id="report-4" hidden={!visible(4)}>
             <h1>{titles[4]}</h1>
             <p>
               {fmt(value?.actions?.total)} recorded planning entries. Individual
@@ -303,23 +317,10 @@ export function PresentationView({
               </p>
             )}
           </section>
-          <section className="report-slide" id="report-5">
+          {focus==='sppb'&&<section className="report-slide" id="report-7"><h1>SPPB assessment coverage</h1>{assessmentError?<p role="alert">{assessmentError}</p>:!assessments?<p role="status">Loading assessment coverage…</p>:<><p>{fmt(assessments.assessed)} members with dated assessments of {fmt(assessments.eligible)} current verified clients.</p><p>Coverage: {assessments.coverage==null?'Unavailable without a complete verified registry':fmt(assessments.coverage)+'%'} · {fmt(assessments.repeated)} members with repeated assessment dates.</p><p>Latest assessment date: {assessments.latest||'Unavailable'}</p><p>Assessment dates use the selected report interval. No individual results are included. Original source scoring may be unvalidated; no clinical improvement is inferred.</p></>}</section>}
+          <section className="report-slide" id="report-5" hidden={!visible(5)}>
             <h1>{titles[5]}</h1>
-            <ol>
-              <li>
-                Review private client follow-up records and confirm contact
-                preferences.
-              </li>
-              <li>
-                Validate interests and accessibility requirements directly with
-                participants.
-              </li>
-              <li>Agree owners and 3–6 month targets in the action tracker.</li>
-              <li>
-                Review progress at the next reporting period using the same
-                definitions.
-              </li>
-            </ol>
+            {data.recommendations.length?<ol>{data.recommendations.slice(0,3).map(r=><li key={r.id}><strong>{r.programme}</strong>: {r.figures}. {r.action} {r.next}</li>)}</ol>:<p>No programme recommendations meet the current evidence rules. Review missing information before agreeing a new action.</p>}
             <p>
               Coverage: {data.coverage.from || "No attendance"} to{" "}
               {data.coverage.to || "No attendance"}. Profiles reflect latest

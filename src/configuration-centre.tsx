@@ -709,7 +709,7 @@ export function ConfigurationCentre({
                       {[
                         "Activity",
                         "Centre",
-                        "AAP Domain / Event Type",
+                        "Source AAP Domain / Event Type (audit)",
                         "Sessions",
                         "Entries",
                         "Unique participants",
@@ -850,7 +850,7 @@ export function ConfigurationCentre({
                     ["name", "Exact programme name"],
                     ["contains", "Name contains"],
                     ["prefix", "Name prefix"],
-                    ["domain", "AAP Domain"],
+                    ["domain", "Programme Domain"],
                     ["eventType", "Event Type"],
                     ["service", "Programme service (glow / seen)"],
                     ["flag", "Explicit reporting flag (duplicate / invalid)"],
@@ -1088,6 +1088,7 @@ export function ConfigurationCentre({
               separate from recorded UNKNOWN. No profile category or code is
               inferred from names or age.
             </p>
+            <p>Programme Domain aliases accept only Physical, Cognitive, Learning, Social and Volunteerism. Separate multiple domains with commas or &amp;. The exact source value is preserved; review and confirm configuration changes to refresh analytics.</p>
             <fieldset disabled={!admin || busy}>
               <legend>Add or revise an exact approved mapping</legend>
               <label>
@@ -1097,7 +1098,7 @@ export function ConfigurationCentre({
                   onChange={(e) => setMappingField(e.target.value)}
                 >
                   <option value="livingGroups">Living arrangement</option>
-                  <option value="domainGroups">Programme category</option>
+                  <option value="domainGroups">Programme Domains (approved exact aliases)</option>
                   <option value="cfsMappings">CFS</option>
                 </select>
               </label>
@@ -1197,7 +1198,7 @@ export function ConfigurationCentre({
                         cfs: "CFS",
                         srf: "SRF",
                         living: "living arrangement",
-                        domain: "AAP Domain",
+                        domain: "Programme Domain",
                         eventType: "Event Type",
                       } as Record<string, string>
                     )[name]

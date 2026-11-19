@@ -1,5 +1,7 @@
 # Programme & Outreach Dashboard
 
+**Staff experience update — 19 November 2026:** Compact shared layouts, question-led participation controls, contextual needs reviews, Centre Overview tabs, focused management reports and scoped summary reuse. [Page/chart audit, measured performance, test results and visual-verification limits](docs/REDESIGN-2026-11-19.md). No new migration is required for this redesign; existing centre and SPPB prerequisites remain.
+
 **SPPB Assessments:** Supplementary Member ID-linked assessment histories, protected unmatched staging, scoring validation, reviewed reassessment follow-up and Excel/print exports now sit within the existing four-centre platform. See the [SPPB staff and deployment guide](docs/SPPB-ASSESSMENTS.md). PostgreSQL adds shared control-plane **migration 007**; existing members and attendance are preserved. Source scoring remains pending until organisational approval.
 
 **Larger imports:** XLSX/CSV imports now support files up to **20 MB**. Large files upload in small requests before the normal preview and confirmation. Deploy frontend and backend together; no new SQL is required. Existing row-count and workbook-expansion checks remain.

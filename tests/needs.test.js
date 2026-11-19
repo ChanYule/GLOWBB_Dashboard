@@ -202,11 +202,12 @@ test("programme domain grouping deduplicates reach and keeps programmes, session
       {},
       "2026-11-03",
     );
-    assert.equal(r.alignment.length, 1);
-    assert.equal(r.alignment[0].unique, 10);
-    assert.equal(r.alignment[0].sessions, 3);
-    assert.equal(r.alignment[0].programmes, 2);
-    assert.equal(r.alignment[0].sessionShare, 100);
+    assert.equal(r.alignment.length, 5);
+    const social=r.alignment.find(d=>d.label==="Social");
+    assert.equal(social.unique, 10);
+    assert.equal(social.sessions, 3);
+    assert.equal(social.programmes, 2);
+    assert.equal(social.sessionShare, 100);
     assert.equal(r.programmeClassifications.length, 2);
     const dining = r.programmeClassifications.find(p => p.name === "Dining");
     assert.equal(dining.primaryDomain, "Social \u2013 Communal Dining");

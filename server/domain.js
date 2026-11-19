@@ -9,6 +9,8 @@ import { DEFAULT_RELIABILITY } from '../shared/participation-reliability.js';
 import { DEFAULT_ENGAGEMENT } from '../shared/engagement-depth.js';
 import { DEFAULT_OUTREACH_RULES } from "../shared/outreach-priority-rules.js";
 import { programmeDiagnostics } from '../shared/programme-diagnostics.js';
+import {activityDomains} from '../shared/activity-domains.js';
+import {combinedDomainData,sessionDomains,domainMatches,programmeDomains,PROGRAMME_DOMAINS} from './programme-domains.js';
 export const HEADERS = [
   "Name/Member ID",
   "Gender",
@@ -93,7 +95,7 @@ function boolean(x) {
 export function parseRows(matrix) {
   if (!matrix.length) throw Error("The file is empty.");
   const headers = matrix[0].map(str);
-  const missing = HEADERS.filter((x) => !headers.includes(x));
+  const missing = HEADERS.filter((x) => x!=='AAP Domain'&&!headers.includes(x));
   if (missing.length)
     throw Error("Missing required headers: " + missing.join(", "));
   if (new Set(headers).size !== headers.length)
@@ -180,7 +182,7 @@ export function parseRows(matrix) {
         participant,
         programme: { id: programmeId, name, domain },
         session: { id: sessionId, programmeId, ...session,
-          ...(headers.includes(EVENT_TYPE_HEADER) ? {optional:{eventTypeRaw:raw[EVENT_TYPE_HEADER],eventTypes:parseEventTypes(raw[EVENT_TYPE_HEADER])}} : {}) },
+          optional:{aapDomainRaw:raw['AAP Domain']||'',combinedDomains:activityDomains(raw['AAP Domain'],parseEventTypes(raw[EVENT_TYPE_HEADER])),domainClassificationVersion:'five-domains-v1',...(headers.includes(EVENT_TYPE_HEADER)?{eventTypeRaw:raw[EVENT_TYPE_HEADER],eventTypes:parseEventTypes(raw[EVENT_TYPE_HEADER])}:{})} },
         id: hash([participant.id, sessionId]),
         warnings,
         sourceSession: raw["Session Detail"],
@@ -202,7 +204,7 @@ export function parseRows(matrix) {
     blank,
   };
 }
-export async function readMatrix(buffer, name, requiredHeaders = HEADERS) {
+export async function readMatrix(buffer, name, requiredHeaders = HEADERS.filter(h=>h!=='AAP Domain')) {
   if (/\.csv$/i.test(name)) {
     let matrix;
     try {
@@ -276,7 +278,7 @@ export async function readFile(buffer, name) {
 }
 export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
   const updates = new Map();
-  const eventSources = new Map(), eventRows = new Map();
+  const eventSources = new Map(), eventRows = new Map(),primarySources=new Map();
   const missing = [];
   const original = existing;
   const originalAttendance = new Set(existing.attendance.map((a) => a.id));
@@ -300,8 +302,7 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
     else names.set(key, p.name);
   }
   for (let r of parsed.rows) {
-    const old = participants.get(r.participant.id),
-      pg = programmes.get(r.programme.id);
+    const old = participants.get(r.participant.id);
     const fields = [
       "age",
       "gender",
@@ -327,13 +328,12 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
       if (empty(r.participant[k])) missing.push({ row: r.row, field: k });
     const differences = changes.filter((k) => !empty(old[k]));
     if (
-      (mode === "add" && differences.length) ||
-      (pg && pg.domain !== r.programme.domain)
+      (mode === "add" && differences.length)
     ) {
       conflicts.push({
         row: r.row,
         message:
-          "Member details or programme domain differ. Row skipped; existing details retained.",
+          "Member details differ. Row skipped; existing details retained.",
       });
       continue;
     }
@@ -359,6 +359,10 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
       eventSources.get(r.session.id).set(JSON.stringify([...r.session.optional.eventTypes].sort()),r.session.optional);
       eventRows.set(r.session.id,r.row);
     }
+    if(Object.hasOwn(r.session.optional||{},'aapDomainRaw')){
+      if(!primarySources.has(r.session.id))primarySources.set(r.session.id,new Map());
+      primarySources.get(r.session.id).set(r.session.optional.aapDomainRaw,{raw:r.session.optional.aapDomainRaw,row:r.row,programmeId:r.programme.id});
+    }
     // Attendance identity never includes changing profile attributes.
     if (old) r = { ...r, participant: participants.get(old.id) };
     if (att.has(r.id)) {
@@ -377,7 +381,7 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
     const old=oldSessions.get(id), values=[...sources.values()];
     if(values.length>1) {
       warnings.push({row:eventRows.get(id),message:'Conflicting Event Types within the same session. Classification retained or left unclassified; review the source before importing again.'});
-      for(let i=0;i<fresh.length;i++)if(fresh[i].session.id===id)fresh[i]={...fresh[i],session:{...fresh[i].session,optional:old?.optional||{eventTypeRaw:null,eventTypes:[],eventTypeConflicts:values.map(v=>v.eventTypeRaw)}}};
+      for(let i=0;i<fresh.length;i++)if(fresh[i].session.id===id)fresh[i]={...fresh[i],session:{...fresh[i].session,optional:{...fresh[i].session.optional,...(old?.optional||{}),eventTypeRaw:old?.optional?.eventTypeRaw??null,eventTypes:old?.optional?.eventTypes||[],eventTypeConflicts:values.map(v=>v.eventTypeRaw)}}};
       continue;
     }
     const next=values[0];
@@ -386,6 +390,24 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
     if(JSON.stringify(old.optional?.eventTypes||[])!==JSON.stringify(next.eventTypes)) {
       warnings.push({row:eventRows.get(id),message:mode==='merge'?'Reviewed merge will update this session’s Event Types; original source values remain in history.':'Existing session Event Types differ; use reviewed Merge to update metadata.'});
       if(mode==='merge')sessionUpdates.push({id,optional:{...old.optional,...next,eventTypeHistory:[...(old.optional?.eventTypeHistory||[]),{raw:old.optional?.eventTypeRaw??null,labels:old.optional?.eventTypes||[],recordedAt:new Date().toISOString()}]}});
+    }
+  }
+  for(const [id,sources] of primarySources){
+    const values=[...sources.values()],old=oldSessions.get(id),oldProgramme=original.programmes.find(p=>p.id===(old?.programmeId||values[0].programmeId));
+    const previous=old?.optional?.aapDomainRaw??oldProgramme?.domain??'';
+    if(values.length>1){
+      warnings.push({row:values[0].row,message:'Conflicting source AAP Domains within one session. Attendance is preserved; review the original classifications.'});
+      for(let i=0;i<fresh.length;i++)if(fresh[i].session.id===id)fresh[i]={...fresh[i],session:{...fresh[i].session,optional:{...fresh[i].session.optional,aapDomainRaw:old?previous:'',aapDomainConflicts:values.map(v=>v.raw)}}};
+      const pending=sessionUpdates.find(s=>s.id===id);if(pending)pending.optional={...pending.optional,aapDomainRaw:previous,aapDomainConflicts:values.map(v=>v.raw)};
+      continue;
+    }
+    const next=values[0];
+    if(!old||!next.raw||previous===next.raw)continue;
+    warnings.push({row:next.row,message:mode==='merge'?'Reviewed merge updates the session source AAP Domain and retains its history.':'Existing session source AAP Domain differs; use reviewed Merge to update it.'});
+    if(mode==='merge'){
+      const index=sessionUpdates.findIndex(s=>s.id===id),prior=index<0?old.optional||{}:sessionUpdates[index].optional;
+      const update={id,optional:{...prior,aapDomainRaw:next.raw,aapDomainHistory:[...(old.optional?.aapDomainHistory||[]),{raw:previous,recordedAt:new Date().toISOString()}]}};
+      if(index<0)sessionUpdates.push(update);else sessionUpdates[index]=update;
     }
   }
   return {
@@ -510,12 +532,13 @@ function buildInsights({
       "pattern",
       "Engagement spans programme types",
       `${s.multiDomain} of ${s.unique} seniors`,
-      "These seniors attended programmes in two or more AAP domains in the selected view. Domain reach is overlapping and must not be summed.",
+      "These seniors attended programmes in two or more Programme Domains in the selected view. Domain reach is overlapping and must not be summed.",
       "Discuss which combinations participants value when planning the portfolio.",
     );
   return insights.slice(0, 6);
 }
 export function analytics(data,...args){
+ data=combinedDomainData(data,args[0]||defaults);
  const report=calculateAnalytics(data,...args);
  if(!report||!report.summary)return report;
  const performance=performanceData(data);
@@ -572,7 +595,7 @@ function calculateAnalytics(
           : filters.from && first.get(a.p.id) < filters.from)) &&
       (!filters.from || a.s.date >= filters.from) &&
       (!filters.to || a.s.date <= filters.to) &&
-      matchesSelection(filters.domain, a.pg.domain) &&
+      domainMatches(filters.domain, a.s, a.pg, settings) &&
       matchesSelection(filters.programme, a.pg.id) &&
       matchesSelection(filters.gender, a.p.gender) &&
       matchesSelection(filters.race, a.p.race) &&
@@ -617,7 +640,7 @@ function calculateAnalytics(
       if (!participantDomains.has(a.p.id))
         participantDomains.set(a.p.id, new Set());
       participantProgrammes.get(a.p.id).add(a.pg.id);
-      participantDomains.get(a.p.id).add(a.pg.domain);
+      for(const domain of sessionDomains(a.s,a.pg,settings))participantDomains.get(a.p.id).add(domain);
     }
     const repeat = [...counts.values()].filter((s) => s.size > 1).length;
     return {
@@ -777,13 +800,14 @@ function calculateAnalytics(
           ? []
           : [...new Map(r.map((a) => [a.s.id, a.s])).values()].sort((a, b) =>
               a.date.localeCompare(b.date),
-            ).map(s=>({...s,eventTypes:sessionEventTypes(s,settings)}));
+            ).map(s=>({...s,eventTypes:sessionEventTypes(s,settings),sourceEventType:s.optional?.eventTypeRaw??null,sourceDomain:s.optional?.aapDomainRaw??pg.domain}));
       return {
         ...g,
         diagnostics: programmeDiagnostics(g, settings.reliability),
         id: pg.id,
         name: pg.name,
-        domain: pg.domain,
+        domain: programmeDomains([...new Map(r.map(a=>[a.s.id,a.s])).values()],pg,settings).join(" & "),sourceDomain:pg.domain,
+        combinedDomains:programmeDomains([...new Map(r.map(a=>[a.s.id,a.s])).values()],pg,settings),
         ...(summaryOnly==='overview'?{}:{eventTypes:[...new Set(sessionList.flatMap(s=>s.eventTypes||[]))]}),
         optional: pg.optional || {},
         trend,
@@ -799,7 +823,7 @@ function calculateAnalytics(
       previous: previousFor(),
       trends,
       programmes: programmes.map((p) => ({ ...p, optional: {} })),
-      domains: group(base, (a) => a.pg.domain),
+      domains: PROGRAMME_DOMAINS.map(label=>({label,...stats(base.filter(a=>sessionDomains(a.s,a.pg,settings).includes(label)))})),
     };
   const people = [...new Map(seniors.map((a) => [a.p.id, a.p])).values()];
   const breakdown = (fn) =>
@@ -953,7 +977,7 @@ function calculateAnalytics(
     previous,
     trends,
     programmes,
-    domains: group(base, (a) => a.pg.domain),
+    domains: PROGRAMME_DOMAINS.map(label=>({label,...stats(base.filter(a=>sessionDomains(a.s,a.pg,settings).includes(label)))})),
     gender: breakdown((p) => p.gender),
     race: breakdown((p) => p.race),
     ages: breakdown((p) =>
@@ -1009,6 +1033,7 @@ function calculateAnalytics(
           .at(-1) || null,
     },
     quality: {
+      unclassifiedDomainSessions:data.sessions.filter(s=>!s.combinedDomains?.length).length,
       missingAge: data.participants.filter((p) => p.age === null).length,
       unknownGender: data.participants.filter(
         (p) => !["MALE", "FEMALE"].includes(p.gender),
@@ -1019,7 +1044,7 @@ function calculateAnalytics(
       missingVenue: data.sessions.filter((s) => !s.venue).length,
     },
     options: {
-      domains: [...new Set(data.programmes.map((p) => p.domain))].sort(),
+      domains: [...PROGRAMME_DOMAINS],
       programmes: data.programmes.map((p) => ({ id: p.id, name: p.name })),
       races: [...new Set(data.participants.map((p) => p.race))].sort(),
       cfs: [
@@ -1038,6 +1063,7 @@ export function analyticsContext(
   summary,
 ) {
   settings = { ...defaults, ...settings };
+  data=combinedDomainData(data,settings);
   const sessionMap = new Map(data.sessions.map((s) => [s.id, s])),
     programmeIds = new Set(data.programmes.map((p) => p.id)),
     personIds = new Set(data.participants.map((p) => p.id));
@@ -1071,6 +1097,7 @@ export function analyticsContext(
     },
     coverage: sourceCoverage(data, now) || { from: dates[0] || null, to: dates.at(-1) || null },
     quality: {
+      unclassifiedDomainSessions:data.sessions.filter(s=>!s.combinedDomains?.length).length,
       missingAge: data.participants.filter((p) => p.age === null).length,
       unknownGender: data.participants.filter(
         (p) => !["MALE", "FEMALE"].includes(p.gender),
@@ -1081,7 +1108,7 @@ export function analyticsContext(
       missingVenue: data.sessions.filter((s) => !s.venue).length,
     },
     options: {
-      domains: [...new Set(data.programmes.map((p) => p.domain))].sort(),
+      domains: [...PROGRAMME_DOMAINS],
       programmes: data.programmes.map((p) => ({ id: p.id, name: p.name })),
       races: [...new Set(data.participants.map((p) => p.race))].sort(),
     },

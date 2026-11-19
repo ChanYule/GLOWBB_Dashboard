@@ -1,3 +1,4 @@
+import {combinedDomainData,sessionDomains,domainMatches,programmeDomains,PROGRAMME_DOMAINS} from './programme-domains.js';
 import {performanceData,sourceCoverage} from './reporting-policy.js';
 import { defaults, todaySG } from "./domain.js";
 import { twoFactorAnalysis } from '../shared/two-factor-analysis.js';
@@ -189,6 +190,7 @@ export function validatePatternQuery(input = {}, now = todaySG()) {
 // One indexed attendance pass per requested dimension. No participant records
 // or source attributes leave this calculation; all output is protected aggregate.
 export function participationPatterns(state,input={},now=todaySG(),options={}){
+ state={...state,data:combinedDomainData(state.data,state.settings)};
  const result=calculatePatterns(state,input,now,options),performance=performanceData(state.data);
  if(performance!==state.data){const p=calculatePatterns({...state,data:performance},{...input,group:result.group},now,{...options,includeTrends:false});
  const present=p.groups.some(g=>g.label===result.group);result.rankings=present?p.rankings:{suppressed:false,rows:[],total:0,page:0,limit:p.rankings.limit};result.domains=present?p.domains:{suppressed:false,rows:[]};result.domainMix=present?p.domainMix:null;result.programmeDetail=present?p.programmeDetail:null;result.findings=[...result.findings.filter(f=>f.title!=='Leading programme for the selected metric'),...(present?p.findings.filter(f=>f.title==='Leading programme for the selected metric'):[])].slice(0,5);
@@ -240,7 +242,7 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
     if (
       (!q.from || s.date >= q.from) &&
       (!q.to || s.date <= q.to) &&
-      (!q.domain || programmes.get(s.programmeId).domain === q.domain) &&
+      domainMatches(q.domain,s,programmes.get(s.programmeId),settings) &&
       (!locationMode ||
         !q.destination ||
         q.destination === "centre" ||
@@ -393,9 +395,7 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
       attendance += rows.length;
       for (const s of rows) {
         ps.add(s.programmeId);
-        const domain = programmes.get(s.programmeId).domain;
-        domains.add(domain);
-        ownDomains.add(domain);
+        for(const domain of sessionDomains(s,programmes.get(s.programmeId),settings)){domains.add(domain);ownDomains.add(domain);}
         byProgramme.set(
           s.programmeId,
           (byProgramme.get(s.programmeId) || 0) + 1,
@@ -551,7 +551,8 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
     return {
       id,
       name: p.name,
-      domain: p.domain,
+      domain: programmeDomains([...delivered.get(id)].map(sid=>sessionMap.get(sid)),p,settings).join(" & "),
+      sourceDomain:p.domain,combinedDomains:programmeDomains([...delivered.get(id)].map(sid=>sessionMap.get(sid)),p,settings),
       eventTypes:[...new Set([...delivered.get(id)].flatMap(sid=>sessionEventTypes(sessionMap.get(sid),settings)))],
       sessions,
       unique,
@@ -573,7 +574,7 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
       ownDomains = new Set();
     for (const session of selected.get(p.id) || []) {
       own.set(session.programmeId, (own.get(session.programmeId) || 0) + 1);
-      ownDomains.add(programmes.get(session.programmeId).domain);
+      for(const domain of sessionDomains(session,programmes.get(session.programmeId),settings))ownDomains.add(domain);
     }
     for (const [id, visits] of own) {
       if (!programmeCounts.has(id)) {
@@ -603,6 +604,8 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
     });
     if (hiddenProgramme)
       for (const key of [
+        "domains",
+        "averageDomains",
         "attendance",
         "averageSessions",
         "sessionDistribution",
@@ -695,19 +698,11 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
         );
   const limit = q.all === "1" ? 20 : 5,
     offset = q.all === "1" ? Number(q.page || 0) * 20 : 0;
-  const domainRows = [
-    ...new Set(
-      members.flatMap((p) =>
-        (selected.get(p.id) || []).map(
-          (s) => programmes.get(s.programmeId).domain,
-        ),
-      ),
-    ),
-  ].map((label) => ({
+  const domainRows = PROGRAMME_DOMAINS.map((label) => ({
     label,
     unique: members.filter((p) =>
       (selected.get(p.id) || []).some(
-        (s) => programmes.get(s.programmeId).domain === label,
+        (s) => sessionDomains(s,programmes.get(s.programmeId),settings).includes(label),
       ),
     ).length,
   }));
@@ -719,14 +714,13 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
   const selectedGroup = groups.find(g => g.label === group);
   const mixEntries = new Map();
   for (const p of members) for (const session of selected.get(p.id) || []) {
-    const domain = programmes.get(session.programmeId).domain;
-    mixEntries.set(domain, (mixEntries.get(domain)||0)+1);
+    for(const domain of sessionDomains(session,programmes.get(session.programmeId),settings))mixEntries.set(domain, (mixEntries.get(domain)||0)+1);
   }
   const domainMix = {
     suppressed: !!domainsBlocked, available: !!coverage.from,
     unique: domainsBlocked || !coverage.from ? null : selectedGroup?.unique ?? null,
     attendance: domainsBlocked || !coverage.from ? null : selectedGroup?.attendance ?? null,
-    rows: domainsBlocked || !coverage.from ? [] : [...new Set(['Learning','Physical','Social','Cognitive',...domainRows.map(r=>r.label)])].map(label => ({
+    rows: domainsBlocked || !coverage.from ? [] : PROGRAMME_DOMAINS.map(label => ({
       label: label || 'Unclassified / unknown',
       unique: domainRows.find(r=>r.label===label)?.unique || 0,
       attendeeShare: ratio(domainRows.find(r=>r.label===label)?.unique || 0,selectedGroup?.unique),
@@ -1137,7 +1131,7 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
     },
     findings: findings.slice(0, 5),
     domainsAvailable: [
-      ...new Set(state.data.programmes.map((p) => p.domain)),
+      ...PROGRAMME_DOMAINS,
     ].sort(),
     limitations: [
       "Engagement depth counts distinct sessions matching this reporting period/domain/venue. No recorded history is separate from no attendance matching this view. Recency uses each person's latest full-history attendance through the attendance coverage end date, regardless of the selected period/domain. It is not their status at a historical period end or today's date. Available history does not establish that someone never attended; these segments do not change existing active/inactive definitions.",
@@ -1169,7 +1163,7 @@ function calculatePatterns(state, input = {}, now = todaySG(), { includeTrends =
         "Same-programme repeat participants / people with a multi-session opportunity",
       diagnosticRepeatRate: "Programme participants with 2+ distinct sessions / unique programme participants, including zero for a one-session programme. Existing repeat-opportunity metrics are unchanged.",
       representation: "Selected group's share of registered-client programme attendees versus its share of the same complete eligible registry. All-age/non-client attendance is excluded from both shares.",
-      domainMix: "Recorded primary-domain unique reach overlaps; primary-domain entry shares use the selected group's total entries. Event Types are not reassigned as primary domains.",
+      domainMix: "Combined Programme Domains use recognised values from both source fields. Domain reach and entry shares overlap and must not be summed.",
     },
   };
 }

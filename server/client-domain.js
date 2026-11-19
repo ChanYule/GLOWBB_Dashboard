@@ -1,3 +1,4 @@
+import {combinedDomainData,sessionDomains,domainMatches} from './programme-domains.js';
 import {sourceCoverage} from "./reporting-policy.js";
 import { defaults, hash, todaySG, matchesSelection } from "./domain.js";
 import { registrationContext } from '../shared/registration-context.js';
@@ -427,6 +428,7 @@ export function clientContext(
   now = todaySG(),
   includeArchived = false,
 ) {
+  state={...state,data:combinedDomainData(state.data,state.settings)};
   const settings = { ...defaults, ...state.settings },
     q = validateClientQuery(input, now);
   const sessions = new Map(state.data.sessions.map((s) => [s.id, s])),
@@ -446,7 +448,7 @@ export function clientContext(
       (!q.from || s.date >= q.from) &&
       (!q.to || s.date <= q.to) &&
       matchesSelection(q.programme, s.programmeId) &&
-      matchesSelection(q.domain, pg.domain)
+      domainMatches(q.domain,s,pg,settings)
     )
       allSelected.add(a.participantId);
   }
@@ -491,7 +493,7 @@ export function clientContext(
         (!q.from || s.date >= q.from) &&
         (!q.to || s.date <= q.to) &&
         matchesSelection(q.programme, s.programmeId) &&
-        matchesSelection(q.domain, s.domain),
+        domainMatches(q.domain,s,programmes.get(s.programmeId),settings),
     );
     return {
       ...p,
@@ -501,7 +503,7 @@ export function clientContext(
       ageGroup: ageGroup(p, settings),
       zone: settings.clientZones?.[p.blockRaw] || "Unassigned zone",
       selectedSessions: new Set(selected.map((s) => s.id)).size,
-      selectedDomains: [...new Set(selected.map((s) => s.domain))].sort(),
+      selectedDomains: [...new Set(selected.flatMap(s=>sessionDomains(s,programmes.get(s.programmeId),settings)))],
       selectedProgrammes: [...new Set(selected.map((s) => s.programmeId))],
       historySessionIds: [...new Set(rows.map((s) => s.id))].sort(),
     };
@@ -1015,7 +1017,7 @@ export function clientReport(
     programmes: ctx.programmes.map((p) => ({
       id: p.id,
       name: p.name,
-      domain: p.domain,
+      domain:(p.combinedDomains||[]).join(" & "),combinedDomains:p.combinedDomains||[],sourceDomain:p.domain,
     })),
     limitations: [
       "No attendance in this period does not mean never attended, unwilling or disengaged.",

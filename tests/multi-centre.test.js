@@ -9,6 +9,15 @@ import { createPlatformApp } from "../server/platform.js";
 import { HEADERS, hash, defaults } from "../server/domain.js";
 import { CLIENT_SNAPSHOT } from "../server/client-domain.js";
 const member = "VERIFIED-EXACT-001";
+test('centre administration overview counts only granted workspaces and reports registry completeness without identities',async()=>{
+ const f=await app();try{
+  await importAll(f);
+  const res=await f.request('/api/centres/status');assert.equal(res.status,200);const body=await res.json();
+  assert.equal(body.rows.length,4);assert.deepEqual(body.rows.map(r=>r.id),CENTRES.map(c=>c.id));
+  assert.ok(body.rows.every(r=>r.attendance===1&&r.sessions===1&&r.participants===1));assert.ok(body.rows.every(r=>r.registryComplete===false));
+  assert.equal(JSON.stringify(body).includes(member),false);
+ }finally{await f.close();}
+});
 const attendance = (name = "GLOW - Stretch & Flow") => [
   member,
   "MALE",
@@ -339,6 +348,7 @@ test("restricted centre access is enforced for reports, settings, client records
     });
     const headers = { cookie: login.headers.get("set-cookie").split(";")[0] };
     const me = await (await f.request("/api/me", undefined, headers)).json();
+    assert.equal((await f.request('/api/centres/status',undefined,headers)).status,403);
     assert.deepEqual(
       me.centres.map((c) => c.id),
       ["glow_bukit_batok"],
@@ -778,5 +788,11 @@ test('temporary large uploads remain owner-scoped and expired uploads cannot be 
   assert.equal((await f.request('/api/import/preview?mode=merge',{uploadId:p.id},two)).status,409);
   const put=()=>fetch(f.origin+'/api/centres/uploads/'+p.id+'/chunks/0',{method:'PUT',headers:{Origin:f.origin,'Content-Type':'application/json',...one},body:JSON.stringify({data:'eA=='})});
   f.db.prepare('UPDATE import_previews SET expires=? WHERE id=?').run(Date.now()-1,p.id);assert.equal((await put()).status,409);
+ }finally{await f.close();}
+});
+
+test('combined domains remain session-specific and isolated across all four centre imports and exports',async()=>{
+ const f=await app();try{const rows=matrix();rows[0].push('Activity Name/Event Type');rows.slice(1).forEach((r,i)=>{r[8]='Others';r.push(i%2?'Social & Volunterism':'Physical & Cognitive');});const p=await preview(f,rows);const confirmation=await f.request('/api/import/confirm',{id:p.id,confirmed:true});assert.equal(confirmation.status,200);
+ for(const centre of CENTRES){const response=await f.request('/api/programme-domains/report?selectedDomain=Cognitive',undefined,{'X-Centre-Id':centre.id});assert.equal(response.status,200);const report=await response.json();assert.equal(report.total.sessions,1);assert.equal(report.total.attendance,1);assert.deepEqual(report.domains.map(d=>d.label),['Physical','Cognitive','Learning','Social','Volunteerism']);const social=centre.id.startsWith('seen_');assert.equal(report.domains.find(d=>d.label==='Social').sessions,social?1:0);assert.equal(report.domains.find(d=>d.label==='Cognitive').sessions,social?0:1);const exported=await f.request('/api/programme-domains/export',undefined,{'X-Centre-Id':centre.id});assert.equal(exported.status,200);assert.deepEqual((await exported.json()).domains,report.domains);}
  }finally{await f.close();}
 });

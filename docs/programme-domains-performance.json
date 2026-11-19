@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-11-19T06:34:40.040Z",
+  "fixture": {
+    "sourceRows": 2400,
+    "registry": 400,
+    "centre": "glow_bukit_batok"
+  },
+  "environment": "Local loopback, SQLite in-memory, synthetic data; excludes browser render, initial API count, navigation, network and hosted latency.",
+  "api": [
+    {
+      "path": "/api/me",
+      "samples": 9,
+      "medianMs": 16,
+      "p95Ms": 17.48,
+      "bytes": 591
+    },
+    {
+      "path": "/api/dashboard?view=context&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 16.45,
+      "p95Ms": 24.59,
+      "bytes": 5152
+    },
+    {
+      "path": "/api/dashboard?view=overview&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 24.6,
+      "p95Ms": 40.5,
+      "bytes": 36296
+    },
+    {
+      "path": "/api/dashboard?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 31.85,
+      "p95Ms": 43.99,
+      "bytes": 113950
+    },
+    {
+      "path": "/api/reporting/briefing?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 30.42,
+      "p95Ms": 43.47,
+      "bytes": 2848
+    },
+    {
+      "path": "/api/programme-domains/report?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 16.99,
+      "p95Ms": 27.94,
+      "bytes": 21419
+    },
+    {
+      "path": "/api/participation-patterns?scope=clients&dimension=age&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 32.45,
+      "p95Ms": 43.1,
+      "bytes": 20734
+    },
+    {
+      "path": "/api/sppb/overview?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 16.4,
+      "p95Ms": 17.32,
+      "bytes": 10476
+    }
+  ],
+  "clientReuse": [
+    {
+      "mode": "uncached control",
+      "calls": 5,
+      "networkRequests": 5,
+      "warmMedianMs": 23.224
+    },
+    {
+      "mode": "15-second isolated reuse",
+      "calls": 5,
+      "networkRequests": 1,
+      "warmMedianMs": 0.521
+    }
+  ],
+  "bundle": {
+    "entry": [
+      {
+        "name": "index-GEaD6nbM.js",
+        "bytes": 328521,
+        "gzipBytes": 98898
+      }
+    ],
+    "javascript": 848821,
+    "css": 163750
+  }
+}

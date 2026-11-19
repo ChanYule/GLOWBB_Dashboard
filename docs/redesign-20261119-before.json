@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-11-19T05:44:31.881Z",
+  "fixture": {
+    "sourceRows": 2400,
+    "registry": 400,
+    "centre": "glow_bukit_batok"
+  },
+  "environment": "Local loopback, SQLite in-memory, synthetic data; excludes browser render, initial API count, navigation, network and hosted latency.",
+  "api": [
+    {
+      "path": "/api/me",
+      "samples": 9,
+      "medianMs": 4.26,
+      "p95Ms": 12.83,
+      "bytes": 591
+    },
+    {
+      "path": "/api/dashboard?view=context&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 18.96,
+      "p95Ms": 31.96,
+      "bytes": 5074
+    },
+    {
+      "path": "/api/dashboard?view=overview&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 32.3,
+      "p95Ms": 36.04,
+      "bytes": 33023
+    },
+    {
+      "path": "/api/dashboard?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 35.02,
+      "p95Ms": 41.19,
+      "bytes": 97117
+    },
+    {
+      "path": "/api/reporting/briefing?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 37.68,
+      "p95Ms": 57.6,
+      "bytes": 1391
+    },
+    {
+      "path": "/api/participation-patterns?scope=clients&dimension=age&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 44.31,
+      "p95Ms": 60.98,
+      "bytes": 20348
+    },
+    {
+      "path": "/api/sppb/overview?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 16.71,
+      "p95Ms": 20.46,
+      "bytes": 10476
+    }
+  ],
+  "bundle": {
+    "entry": [
+      {
+        "name": "index-D6PfddNw.js",
+        "bytes": 339832,
+        "gzipBytes": 101702
+      }
+    ],
+    "javascript": 824335,
+    "css": 157054
+  }
+}

@@ -12,9 +12,9 @@ import './analysis-quality.css';
 import type {Briefing} from "./management";
 import {activityDomains} from '../shared/activity-domains.js';
 import {ImportProgress} from "./import-progress";
-import {api,currentCentre} from "./api";
+import {api,currentCentre,invalidateReadCache} from "./api";
 import {reportingFilters} from "./view-config";
-import {ManagementHome} from "./management";
+const ManagementHome=lazy(()=>import('./management').then(m=>({default:m.ManagementHome})));
 import {useEffect,useRef,useState,lazy,Suspense} from "react";
 import type {FormEvent} from "react";
 import {Activity,ArrowDownToLine,ArrowRight,BarChart3,ChartNoAxesCombined,Check,ChevronRight,ClipboardList,Download,Database,Filter,HeartHandshake,LayoutDashboard,Menu,Plus,Search,ShieldCheck,Upload,Users,RefreshCw} from "lucide-react";
@@ -59,7 +59,7 @@ const Login = lazy(() =>
 const PresentationView = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationView })),
 );
-const EventTypeInsights=lazy(()=>import('./event-types-ui').then(m=>({default:m.EventTypeInsights})));
+const EventTypeInsights=lazy(()=>import('./programme-domains-ui').then(m=>({default:m.ProgrammeDomainAnalysis})));
 const OperationsPage = lazy(() =>
   import("./operations-ui").then((module) => ({
     default: module.OperationsPage,
@@ -179,7 +179,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
       api<Dashboard>(
         "/api/dashboard?" +
           new URLSearchParams({ ...filters, view: reportView }),
-        { signal: controller.signal },
+        { signal: controller.signal, reuseForMs:15000 },
       )
         .then((d) => {
           if (live) {
@@ -227,6 +227,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     return () => clearTimeout(t);
   }, [toast]);
   const refresh = (message = "Saved successfully.") => {
+    invalidateReadCache();
     setRevision((n) => n + 1);
     setToast(message);
   };
@@ -296,7 +297,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     "Client Engagement",
     "Participant Needs & Accessibility",
   ].includes(tab)
-    ? tab === "Client Engagement"
+    ? tab === 'Participation Patterns & Insights' ? 'Participation Insights' : tab === "Client Engagement"
       ? "Client Engagement & Outreach"
       : tab
     : tab === "Overview"
@@ -470,7 +471,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                 <h1>{title}</h1>
                 <p className="muted">
                   {tab === "Participation Patterns & Insights"
-                    ? "Understand who participates, which programmes attract them and where engagement gaps exist."
+                    ? "Understand who attends, how often they return and which programmes attract them."
                     : tab === "Client Engagement"
                       ? "Link your registered population to attendance, investigate gaps and plan reviewed outreach."
                       : tab === "Data management"
@@ -951,6 +952,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
         )}
         {modal === "presentation" && presentationSnapshot && (
           <PresentationView
+            user={user||undefined}
             data={presentationSnapshot.data}
             filters={presentationSnapshot.filters}
             revision={revision}
@@ -1245,7 +1247,7 @@ function FilterBar({
     </div>
   );
 }
-function ProgrammeDialog({
+export function ProgrammeDialog({
   programme: p,
   data,
   onClose,
@@ -1260,7 +1262,7 @@ function ProgrammeDialog({
   return (
     <Modal title={p.name} onClose={onClose} wide drawer>
       <div className="detail-intro">
-        <span className="badge soft">{activityDomains(p.domain,p.eventTypes||(p.sessionList||[]).flatMap(s=>s.eventTypes||[])).join(', ')}</span>
+        <span className="badge soft">{(p.combinedDomains??activityDomains(p.domain,p.eventTypes||(p.sessionList||[]).flatMap(s=>s.eventTypes||[]))).join(', ')}</span>
         <span>
           {p.sessions === 1
             ? "One observed session"
@@ -1356,10 +1358,11 @@ function ProgrammeDialog({
               {time(s.start)}–{time(s.end)} SGT
             </span>
             <span>{s.venue || "Venue not supplied"}</span>
-            <span>{activityDomains(p.domain,s.eventTypes).join(', ')}</span>
+            <span>{(s.combinedDomains??activityDomains(s.sourceDomain??p.sourceDomain??p.domain,s.eventTypes)).join(', ')}</span>
           </div>
         ))}
       </div>
+      <details><summary>Raw session classification audit</summary><p>Original imported labels are retained for review. Programme Domains above use only recognised labels and approved exact aliases.</p><div className="work-table"><table><thead><tr><th>Session date</th><th>Source AAP Domain</th><th>Source Event Type</th></tr></thead><tbody>{p.sessionList.map(s=><tr key={s.id}><td>{pretty(s.date)}</td><td>{s.sourceDomain??p.sourceDomain??'Not supplied'}</td><td>{s.sourceEventType??'Not supplied'}</td></tr>)}</tbody></table></div></details>
       {rec && (
         <div className="callout">
           <div>
@@ -1684,7 +1687,7 @@ function ImportDialog({
               ["Raw rows", preview.rawRows],
               ["Existing matches", preview.matched ?? 0],
               ["Profile updates", preview.updatedProfiles ?? 0],
-              ["Session Event Type updates", preview.updatedSessions ?? 0],
+              ["Session classification updates", preview.updatedSessions ?? 0],
               ["Missing values", preview.missing ?? 0],
               ["Resulting attendance", preview.resultingAttendance ?? 0],
               ["Resulting profiles", preview.resultingParticipants ?? 0],
@@ -1708,9 +1711,9 @@ function ImportDialog({
             and preserves blank incoming values; programme-domain conflicts
             remain skipped. Future sessions are stored but excluded from
             delivered attendance until their date.
-            {' '}Merge also applies the previewed session Event Type changes. Older or blank Event Types never erase existing classifications.
+            {' '}Merge also applies the previewed session classification changes. Older or blank Event Types never erase existing classifications.
           </Note>
-          {!!preview.sessionChanges?.length&&<details><summary>Review session Event Type changes · {preview.updatedSessions}</summary><div className="work-table"><table><thead><tr><th>Programme / date</th><th>Existing source</th><th>Incoming source</th></tr></thead><tbody>{preview.sessionChanges.map((s,i)=><tr key={i}><th>{s.programme} · {s.date}</th><td>{s.before}</td><td>{s.after}</td></tr>)}</tbody></table></div><p>Up to 100 changes shown; all proposed session updates are counted above.</p></details>}
+          {!!preview.sessionChanges?.length&&<details><summary>Review session classification changes · {preview.updatedSessions}</summary><div className="work-table"><table><thead><tr><th>Programme / date</th><th>Existing source</th><th>Incoming source</th></tr></thead><tbody>{preview.sessionChanges.map((s,i)=><tr key={i}><th>{s.programme} · {s.date}</th><td>{s.before}</td><td>{s.after}</td></tr>)}</tbody></table></div><p>Up to 100 changes shown; all proposed session updates are counted above.</p></details>}
           {preview.variants.length > 0 && (
             <div className="warning">
               <h3>Similar programme names remain separate</h3>
@@ -1804,7 +1807,7 @@ function ImportDialog({
               onChange={(e) => setConsent(e.target.checked)}
             />
             <span>
-              I reviewed the preview, mode, profile updates, session Event Types and issue report.
+              I reviewed the preview, mode, profile updates, session classifications and issue report.
               Apply the displayed changes; skip invalid rows and unresolved
               programme conflicts.
             </span>

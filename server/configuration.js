@@ -2,6 +2,7 @@ import { centreById } from "../shared/centres.js";
 import { needsAnalysis } from "./needs-domain.js";
 import { randomUUID } from "node:crypto";
 import { analytics, hash, todaySG } from "./domain.js";
+import {validDomainMapping} from '../shared/activity-domains.js';
 import { clientReport } from "./client-domain.js";
 import { dataTransaction } from "./data-management.js";
 import {
@@ -258,6 +259,7 @@ function definitionChanges(settings, value) {
         400,
         "Approved mappings need exact source values and concise labels.",
       );
+  if(value.domainGroups&&Object.values(value.domainGroups).some(v=>!validDomainMapping(v)))throw fail(400,'Programme Domain mappings must contain only Physical, Cognitive, Learning, Social or Volunteerism, separated by commas or &.');
   if (
     value.cfsMappings &&
     !Object.values(value.cfsMappings).every(

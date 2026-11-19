@@ -1,0 +1,403 @@
+/* Current application-wide density and accessibility contract. Page styles
+   retain their functional geometry; all values below share existing tokens. */
+.dashboard-shell {
+  --section-gap: 24px;
+  --card-pad: 18px;
+  overflow-x: clip;
+}
+.dashboard-shell .shell-topbar {
+  height: var(--platform-header-height);
+  min-height: var(--platform-header-height);
+}
+.dashboard-shell .shell-sidebar {
+  width: var(--sidebar-width);
+}
+.dashboard-shell.sidebar-collapsed .shell-sidebar {
+  width: 76px;
+}
+.dashboard-shell :is(.panel, .metric-tile) {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px #14263d04;
+}
+.dashboard-shell
+  :is(
+    .management-kpi,
+    .metric-card,
+    .client-kpi,
+    .patterns-kpis > article,
+    .needs-kpi,
+    .metric-tile,
+    .sppb-kpis > article
+  ) {
+  padding: 16px 18px;
+  min-height: 120px;
+  align-content: start;
+  gap: 6px;
+}
+.dashboard-shell
+  :is(
+    .management-kpi,
+    .client-kpi,
+    .needs-kpi,
+    .metric-tile,
+    .sppb-kpis > article
+  )
+  > strong,
+.dashboard-shell .patterns-kpis strong {
+  font-size: 30px;
+  line-height: 1.15;
+  margin: 5px 0;
+  font-weight: 650;
+}
+.dashboard-shell
+  :is(
+    .management-kpi,
+    .client-kpi,
+    .patterns-kpis > article,
+    .needs-kpi,
+    .metric-tile,
+    .sppb-kpis > article
+  )
+  > :is(span, small) {
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 0;
+}
+.dashboard-shell
+  :is(.management-kpis, .patterns-kpis, .client-kpis, .sppb-kpis) {
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.dashboard-shell .patterns-main-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 20px;
+  align-items: start;
+}
+.dashboard-shell :is(.chart-header, .report-section-heading, .panel-head) {
+  margin-bottom: 14px;
+}
+.dashboard-shell :is(.chart-footnote, .table-note) {
+  line-height: 1.5;
+  font-size: 13px;
+}
+.dashboard-shell
+  :is(.work-table, .client-table-scroll, .data-table-scroll, .sppb-scroll) {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+.dashboard-shell table {
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-shell th {
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dashboard-shell :is(th, td) {
+  padding: 11px 12px;
+  vertical-align: top;
+}
+.dashboard-shell :is(button, a, input, select, summary):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+.dashboard-shell summary {
+  cursor: pointer;
+}
+.dashboard-shell details.panel > summary {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+.dashboard-shell .patterns-basis {
+  font-size: 13px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--teal);
+  background: #f0f7f7;
+}
+.experience-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.experience-page-header h1 {
+  margin: 0;
+  font-size: 28px;
+}
+.experience-page-header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  max-width: 75ch;
+}
+.experience-context {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.experience-loading {
+  padding: 18px;
+  max-width: 640px;
+  min-height: 130px;
+}
+.experience-loading > div {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.experience-loading i {
+  height: 12px;
+  background: #e7edf4;
+  border-radius: 4px;
+}
+.experience-loading i:nth-child(2) {
+  width: 75%;
+}
+.experience-loading i:nth-child(3) {
+  width: 55%;
+}
+.experience-error {
+  padding: 18px;
+  border: 1px solid #dca965;
+  background: #fffbf2;
+  border-radius: 12px;
+}
+.experience-error h2 {
+  margin-top: 0;
+}
+.experience-insight {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.experience-insight h3 {
+  margin: 0 0 12px;
+}
+.experience-insight dl {
+  margin: 0;
+}
+.experience-insight dl div {
+  margin: 0 0 10px;
+}
+.experience-insight dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.experience-insight dd {
+  margin: 3px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.experience-action {
+  font-weight: 600;
+}
+.experience-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.needs-accessibility-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.needs-accessibility-grid article {
+  border: 1px solid var(--line);
+  padding: 16px;
+  border-radius: 10px;
+}
+.needs-accessibility-grid h3 {
+  margin: 0 0 8px;
+}
+.needs-accessibility-grid dl {
+  margin: 0;
+}
+.needs-accessibility-grid dt {
+  font-weight: 600;
+  font-size: 13px;
+}
+.needs-accessibility-grid dd {
+  margin: 3px 0 12px;
+  color: var(--muted);
+}
+.centre-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.centre-overview-grid article {
+  padding: 18px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.centre-overview-grid h2 {
+  margin: 0 0 8px;
+}
+.centre-overview-grid p {
+  margin: 6px 0;
+}
+.report-focus-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+}
+.report-focus-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-focus-controls select {
+  padding: 8px;
+  font: inherit;
+}
+.presentation .report-slide[hidden] {
+  display: none !important;
+}
+.dashboard-shell .engagement-group {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 8px 16px;
+  align-items: center;
+}
+.dashboard-shell .engagement-group > h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.dashboard-shell .engagement-group > p {
+  grid-column: 2;
+  font-size: 13px;
+  margin: 0;
+}
+.dashboard-shell .engagement-stack {
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+}
+.engagement-tone-oneTime {
+  background: #94a3b8;
+}
+.engagement-tone-occasional {
+  background: #60a5fa;
+}
+.engagement-tone-regular {
+  background: #0f766e;
+}
+@media (min-width: 1100px) {
+  .dashboard-shell .compact-pattern-controls .patterns-primary-filters {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .dashboard-shell .compact-pattern-controls .patterns-primary-filters > label {
+    flex: 1 1 160px;
+  }
+  .dashboard-shell .compact-pattern-controls .patterns-toolbar {
+    margin-bottom: 12px;
+  }
+}
+@media (max-width: 1100px) {
+  .experience-insight-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-shell
+    :is(.management-kpis, .patterns-kpis, .client-kpis, .sppb-kpis) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-shell .patterns-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 768px) {
+  .dashboard-shell .shell-sidebar,
+  .dashboard-shell.sidebar-collapsed .shell-sidebar {
+    top: var(--platform-header-height);
+    height: calc(100dvh - var(--platform-header-height));
+    width: 230px;
+  }
+  .dashboard-shell .shell-scrim {
+    top: var(--platform-header-height);
+  }
+  .experience-page-header {
+    flex-wrap: wrap;
+  }
+  .needs-accessibility-grid,
+  .centre-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-shell .engagement-group {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-shell .engagement-group > p {
+    grid-column: auto;
+  }
+  .dashboard-shell :is(.panel, .metric-tile) {
+    padding: 16px;
+  }
+  .experience-page-header h1 {
+    font-size: 26px;
+  }
+}
+@media (max-width: 450px) {
+  .dashboard-shell
+    :is(.management-kpis, .patterns-kpis, .client-kpis, .sppb-kpis) {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-shell
+    :is(
+      .management-kpi,
+      .metric-card,
+      .client-kpi,
+      .patterns-kpis > article,
+      .needs-kpi,
+      .metric-tile,
+      .sppb-kpis > article
+    ) {
+    min-height: 110px;
+  }
+  .report-focus-controls {
+    padding: 12px;
+    display: block;
+  }
+  .report-focus-controls label {
+    display: grid;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media print {
+  .report-focus-controls {
+    display: none !important;
+  }
+  .experience-insight-grid {
+    grid-template-columns: 1fr;
+  }
+  .experience-insight {
+    break-inside: avoid;
+  }
+  .dashboard-shell .engagement-group {
+    display: block;
+  }
+  .presentation .report-slide {
+    break-after: page;
+  }
+  .presentation table {
+    font-size: 12px;
+  }
+}

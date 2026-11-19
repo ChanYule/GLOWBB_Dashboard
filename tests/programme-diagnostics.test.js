@@ -133,7 +133,7 @@ test("programme diagnostics and representation use the selected client group and
   assert.equal(JSON.stringify(r.rankings).includes("memberId"), false);
 });
 
-test("domain mix shows all four primary domains, preserves overlap and uses entries for additive shares", () => {
+test("domain mix shows all five combined domains and preserves distinct attendance and overlapping reach", () => {
   const s = diagnosticFixture(),
     r = participationPatterns(s, query, "2026-11-06"),
     mix = r.domainMix;
@@ -141,7 +141,7 @@ test("domain mix shows all four primary domains, preserves overlap and uses entr
   assert.equal(mix.attendance, 51);
   assert.deepEqual(
     mix.rows.map((r) => r.label),
-    ["Learning", "Physical", "Social", "Cognitive"],
+    ["Physical", "Cognitive", "Learning", "Social", "Volunteerism"],
   );
   assert.equal(mix.rows.find((r) => r.label === "Learning").unique, 20);
   assert.equal(mix.rows.find((r) => r.label === "Physical").unique, 10);

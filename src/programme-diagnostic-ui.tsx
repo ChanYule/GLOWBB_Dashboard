@@ -84,7 +84,7 @@ export function ProgrammeDomainMix({ mix }: { mix?: DomainMix | null }) {
   if (!mix) return null;
   return (
     <section className="programme-domain-mix">
-      <h3>Selected group: primary domain mix</h3>
+      <h3>Selected group: Programme Domain mix</h3>
       {mix.suppressed ? (
         <p>
           Domain mix is withheld by the existing privacy rules. Missing and
@@ -98,14 +98,14 @@ export function ProgrammeDomainMix({ mix }: { mix?: DomainMix | null }) {
             {fmt(mix.unique)} unique people attended; {fmt(mix.attendance)}{" "}
             attendance entries in this period/domain. A person may appear in
             several domains; do not add unique counts or attendee percentages.
-            Entry shares use all group entries and sum to 100% when available.
+            Entry shares use all group entries. Multi-domain session shares may overlap and exceed 100% in total.
           </p>
           <div className="work-table">
             <table>
-              <caption>Recorded primary domains for the selected group</caption>
+              <caption>Programme Domains for the selected group</caption>
               <thead>
                 <tr>
-                  <th scope="col">Primary domain</th>
+                  <th scope="col">Programme Domain</th>
                   <th scope="col">Unique people</th>
                   <th scope="col">% of group attendees</th>
                   <th scope="col">Entries</th>
@@ -134,9 +134,7 @@ export function ProgrammeDomainMix({ mix }: { mix?: DomainMix | null }) {
             </table>
           </div>
           <small>
-            Learning, Physical, Social and Cognitive are shown alongside other
-            recorded primary-domain labels. Event Types are not reassigned or
-            added as primary-domain entries. Zero means no matching recorded
+            The five Programme Domains combine recognised AAP Domain and Event Type labels on each session. Original labels remain available in the source audit. Zero means no matching recorded
             attendance, not no interest or no support need.
           </small>
         </>

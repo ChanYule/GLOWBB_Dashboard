@@ -1,3 +1,4 @@
+import {domainMatches} from './programme-domains.js';
 import { hash, todaySG, defaults, matchesSelection } from "./domain.js";
 
 export const assessmentHeaders = [
@@ -225,9 +226,9 @@ function bounds(label, grain) {
   if (grain === "year") return [label + "-01-01", label + "-12-31"];
   return [label, grain === "week" ? iso(stamp(label) + 6 * dayMs) : label];
 }
-function matches(p, pg, f, settings) {
+function matches(p, pg, f, settings, session) {
   return (
-    matchesSelection(f.domain, pg?.domain) &&
+    domainMatches(f.domain,session,pg,settings) &&
     matchesSelection(f.programme, pg?.id) &&
     matchesSelection(f.gender, p.gender) &&
     matchesSelection(f.race, p.race) &&
@@ -272,7 +273,7 @@ export function operationsReport(
       first.set(a.p.id, a.s.date);
   const history = full.filter(
     (a) =>
-      matches(a.p, programmes.get(a.s.programmeId), filters, definitions) &&
+      matches(a.p, programmes.get(a.s.programmeId), filters, definitions,a.s) &&
       matchesSelection(filters.cfs, a.p.cfs) &&
       (!filters.weekday ||
         String(new Date(a.s.date + "T00:00:00Z").getUTCDay()) ===

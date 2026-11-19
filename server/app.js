@@ -1,3 +1,4 @@
+import {sourceClassification} from './programme-domains.js';
 import {mountConfiguration,saveLegacyDefinitionVersion} from './configuration.js';
 import {reportingStorage} from './reporting-policy.js';
 import { mountReporting } from "./reporting.js";
@@ -254,7 +255,8 @@ export function createApp(
     if (!["add", "merge", "replace"].includes(mode))
       throw error(400, "Select a valid import mode.");
     parsed.mode = mode;
-    const inspection = inspectImport(parsed, await storage.readData(db));
+    const existingData=await storage.readData(db);
+    const inspection = inspectImport(parsed, existingData);
     const reviewedProfiles = new Map(
       (
         await db
@@ -328,7 +330,7 @@ export function createApp(
       mode,
       updatedProfiles: inspection.updates.length,
       updatedSessions: inspection.sessionUpdates.length,
-      sessionChanges:inspection.sessionUpdates.slice(0,100).map(s=>{const source=parsed.rows.find(r=>r.session.id===s.id);return {programme:source?.programme.name||'Recorded programme',date:source?.session.date||'',before:s.optional.eventTypeHistory.at(-1)?.raw||'Unclassified / unknown',after:s.optional.eventTypeRaw};}),
+      sessionChanges:inspection.sessionUpdates.slice(0,100).map(s=>{const source=parsed.rows.find(r=>r.session.id===s.id);return {programme:source?.programme.name||'Recorded programme',date:source?.session.date||'',before:sourceClassification(existingData.sessions.find(old=>old.id===s.id),existingData.programmes.find(p=>p.id===source?.programme.id)),after:sourceClassification(s,source?.programme)};}),
       matched: inspection.matched,
       missing: inspection.missing.length,
       resultingAttendance: inspection.resultingAttendance,
@@ -663,7 +665,7 @@ export function createApp(
               ],
               ...r.programmes.map((p) => [
                 p.name,
-                activityDomains(p.domain,p.eventTypes).join(', '),
+                (p.combinedDomains??activityDomains(p.domain,p.eventTypes)).join(', '),
                 p.sessions,
                 p.attendance,
                 p.unique,
@@ -681,7 +683,7 @@ export function createApp(
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Programme &amp; Outreach planning summary</title><style>body{font:16px system-ui;color:#17314b;max-width:1000px;margin:40px auto;padding:20px}h1{font-size:30px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}article{break-inside:avoid;padding:12px 0}small{color:#536576}@media print{body{margin:0;padding:0}button{display:none}thead{display:table-header-group}}</style><h1>Programme impact & outreach</h1><p>${esc(period)}</p><p>${r.summary.unique} unique seniors · ${r.summary.attendance} attendance entries (all ages) · ${r.summary.sessions} recorded sessions</p><p>Available history: ${esc(r.coverage.from || "No records")} to ${esc(r.coverage.to || "No records")}. Senior threshold: ${r.settings.seniorAge}+. First observed means first in available records, not new to the centre. Incomplete periods are not full-period comparisons.</p><h2>Participation trends</h2><table><thead><tr><th>Period</th><th>Unique seniors</th><th>Attendance</th></tr></thead><tbody>${r.trends.map((t) => `<tr><td>${esc(t.label)}${t.partial ? " (in progress)" : ""}</td><td>${t.unique}</td><td>${t.attendance}</td></tr>`).join("")}</tbody></table><h2>Programme performance</h2><table><thead><tr><th>Programme</th><th>Domains</th><th>Sessions</th><th>Unique seniors</th><th>Attendance</th></tr></thead><tbody>${r.programmes.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(activityDomains(p.domain,p.eventTypes).join(", "))}</td><td>${p.sessions}</td><td>${p.unique}</td><td>${p.attendance}</td></tr>`).join("")}</tbody></table><h2>Findings & planning discussion</h2>${r.recommendations.map((p) => `<article><b>${esc(p.category)} · ${esc(p.programme)}</b><p>${esc(p.figures)}. Evidence: ${esc(p.evidence)}.</p><p>${esc(p.reason)} ${esc(p.action)} ${esc(p.next)}</p></article>`).join("")}<p>Demographic cells and staff notes are omitted from shared reports to reduce disclosure. Recommendations are discussion prompts, not evidence of causal impact. Venue, capacity, cost, language, feedback and living arrangements were not supplied. Attendance per session includes all ages. Participants may appear in several programmes or months; do not sum unique counts.</p><p>Use your browser’s Print ? Save as PDF.</p></html>`,
+        `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Programme &amp; Outreach planning summary</title><style>body{font:16px system-ui;color:#17314b;max-width:1000px;margin:40px auto;padding:20px}h1{font-size:30px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}article{break-inside:avoid;padding:12px 0}small{color:#536576}@media print{body{margin:0;padding:0}button{display:none}thead{display:table-header-group}}</style><h1>Programme impact & outreach</h1><p>${esc(period)}</p><p>${r.summary.unique} unique seniors · ${r.summary.attendance} attendance entries (all ages) · ${r.summary.sessions} recorded sessions</p><p>Available history: ${esc(r.coverage.from || "No records")} to ${esc(r.coverage.to || "No records")}. Senior threshold: ${r.settings.seniorAge}+. First observed means first in available records, not new to the centre. Incomplete periods are not full-period comparisons.</p><h2>Participation trends</h2><table><thead><tr><th>Period</th><th>Unique seniors</th><th>Attendance</th></tr></thead><tbody>${r.trends.map((t) => `<tr><td>${esc(t.label)}${t.partial ? " (in progress)" : ""}</td><td>${t.unique}</td><td>${t.attendance}</td></tr>`).join("")}</tbody></table><h2>Programme performance</h2><table><thead><tr><th>Programme</th><th>Domains</th><th>Sessions</th><th>Unique seniors</th><th>Attendance</th></tr></thead><tbody>${r.programmes.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc((p.combinedDomains??activityDomains(p.domain,p.eventTypes)).join(", "))}</td><td>${p.sessions}</td><td>${p.unique}</td><td>${p.attendance}</td></tr>`).join("")}</tbody></table><h2>Findings & planning discussion</h2>${r.recommendations.map((p) => `<article><b>${esc(p.category)} · ${esc(p.programme)}</b><p>${esc(p.figures)}. Evidence: ${esc(p.evidence)}.</p><p>${esc(p.reason)} ${esc(p.action)} ${esc(p.next)}</p></article>`).join("")}<p>Demographic cells and staff notes are omitted from shared reports to reduce disclosure. Recommendations are discussion prompts, not evidence of causal impact. Venue, capacity, cost, language, feedback and living arrangements were not supplied. Attendance per session includes all ages. Participants may appear in several programmes or months; do not sum unique counts.</p><p>Use your browser’s Print ? Save as PDF.</p></html>`,
       );
   });
   app.use("/api", (req, res) =>

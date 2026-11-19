@@ -1,3 +1,4 @@
+import {domainMatches} from './programme-domains.js';
 import { AsyncLocalStorage } from "node:async_hooks";
 import { sessionEventTypes } from "./event-types.js";
 import { isReportingPath } from "../shared/reporting-paths.js";
@@ -46,7 +47,7 @@ export function matchesActivity(
     case "prefix":
       return name.startsWith(text);
     case "domain":
-      return programme.domain.toLocaleLowerCase("en-SG") === text;
+      return sessions.some(s=>domainMatches(selector.value,s,programme,settings));
     case "eventType":
       return sessions.some((s) =>
         sessionEventTypes(s, settings).some(

@@ -15,7 +15,7 @@ This is a supplementary assessment source in the existing four-centre dashboard.
 
 Open **Data Management → Import SPPB Assessments**, or **SPPB Assessments → Data quality & import**. A shared-source import requires an administrator with access to all four active centres. A centre-limited administrator cannot inspect the cross-centre unmatched source.
 
-Upload the supplied XLSX (or a UTF-8 CSV with the same required score/date headers), review the counts and matched/unmatched Member ID lists, tick the review acknowledgement and choose **Confirm SPPB import**. Discard removes the owned preview. Preview expires after 20 minutes. Failed confirmation rolls back the entire shared import and leaves the preview retryable. Large uploads use the existing chunked-upload infrastructure.
+Choose **Import SPPB data**, upload the XLSX (or a UTF-8 CSV with the same required score/date headers), review the compact counts and choose **Confirm SPPB import**. There is no extra acknowledgement or settings prerequisite. After saving, the page opens **Latest assessments** automatically. Recorded score distributions, original score histories, coverage and monthly activity are available immediately. Original score distributions count members with one unambiguous latest result, grouped separately by source scoring definition; they do not calculate clinical improvement. Discard removes the owned preview. Preview expires after 20 minutes. Failed confirmation rolls back the entire shared import and leaves the preview retryable. Large uploads use the existing chunked-upload infrastructure.
 
 Exact trimmed Member ID is hashed using the existing `hash([memberId])` identity. Case, punctuation and leading zeros remain significant. Gender, date of birth and age never match identities. A matched participant may be attendance-only; this matches the source but does not establish verified client affiliation or permission to see results. There is no source-centre inference.
 
@@ -29,7 +29,7 @@ Default label: **Imported SPPB score, scoring validation pending**. There is no 
 
 Standard SPPB consists of balance, gait and chair components each scored 0–4, totalling 0–12. Source references: [WHO ICOPE locomotor-capacity training](https://cdn.who.int/media/docs/default-source/mca-documents/ageing/icope-training-programme/revised-modules-19-may-2025/who-icope_m9_locomotor-capacity_fg.pdf), [NIA SPPB resource](https://www.nia.nih.gov/research/resource/short-physical-performance-battery-sppb). These sources establish the standard ranges; they do not validate this export's scoring system.
 
-An all-centre administrator configures a source scoring definition, an approved version, validation method and evidence under **Approved reassessment interval and scoring rules**:
+Scoring configuration is optional and collapsed under **Import data → Optional settings → Advanced scoring settings**. It is not needed for importing or descriptive analysis. An all-centre administrator can configure a source scoring definition, an approved version, validation method and evidence there:
 
 - **Original standard-range scores only**: explicit identity approval can validate unchanged integer components within 0–4 and an internally consistent total within 0–12. It does not validate any out-of-range row.
 - **Individually reviewed standard scores only**: every validated result requires a separate record review referencing the approved version. Raw originals remain unchanged; corrected standard scores are stored separately. No general transformation is invented.
@@ -42,7 +42,7 @@ Latest assessment date uses dated, nonsuperseded records on or before the report
 
 ## Reassessment interval
 
-No interval is enabled by default. Under **Approved reassessment interval and scoring rules**, enter 3, 6, 12 or another whole number of months (1–120), the approaching-date window, and the organisational procedure/evidence. Choose **Save reviewed assessment configuration**. End-of-month due dates are clamped to the destination month's last calendar day. Due today, overdue, approaching, recently assessed, no assessment, date unavailable and interval unconfigured stay distinct. No clinical interval is assumed.
+No interval is enabled by default. Under **Import data → Optional settings → Reassessment settings**, enter 3, 6, 12 or another whole number of months (1–120) and the approaching-date window, then choose **Save settings**. Interval-only changes need no approval-evidence form; the staff action is recorded in the audit trail. Scoring changes still require documented evidence. End-of-month due dates are clamped to the destination month's last calendar day. Due today, overdue, approaching, recently assessed, no assessment, date unavailable and interval unconfigured stay distinct. No clinical interval is assumed.
 
 ## Database and deployment
 
@@ -72,6 +72,6 @@ Core files: `server/sppb-domain.js`, `server/sppb-routes.js`, `src/sppb-ui.tsx`,
 
 Tests cover source reconciliation and original-file preservation, native/serial dates, matching, all four centres, shared identities, attendance-only access denial, protected staging, reprocessing, duplicate imports, source conflicts, original scores, approval/version checks, comparison dates, calendar reassessment, coverage, profile-history API, exploratory participation, revision conflicts, permissions, real XLSX/print exports and transaction rollback with retry on SQLite and PostgreSQL. UI regression checks cover the ninth profile tab, retained drafts, pending-score labels and deferred member-history loading.
 
-Final local checks: **332 tests passed, zero failures or skips**, plus lint, TypeScript checking, production build and `git diff --check`. Source assertions ran against the supplied XLSX. The earlier profile-tab count assertion was updated for the added SPPB section; an existing participation test now waits for its four background Q&A requests before asserting the request count.
+Initial integration checks: **332 tests passed, zero failures or skips**, plus lint, TypeScript checking, production build and `git diff --check`. Source assertions ran against the supplied XLSX. The earlier profile-tab count assertion was updated for the added SPPB section; an existing participation test now waits for its four background Q&A requests before asserting the request count. The subsequent simplified import flow passed **8 focused SPPB/profile tests**, lint, TypeScript checking and production build, covering direct preview/confirmation, optional settings, recorded score analysis and automatic return to results after import.
 
 The browser preview host was unavailable in this session. Automated DOM checks and responsive CSS do not establish visual desktop, tablet or mobile behavior. No hosted migration, data import or deployment was performed. The source scoring discrepancy remains unresolved until the organisation supplies and approves the scoring protocol.

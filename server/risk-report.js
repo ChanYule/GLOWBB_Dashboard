@@ -1,4 +1,5 @@
-﻿import { defaults, riskState, todaySG } from "./domain.js";
+import {sessionDomains,programmeDomains} from './programme-domains.js';
+import { defaults, riskState, todaySG } from "./domain.js";
 
 // A fixed release uses equivalence classes across every profile/filter field and
 // exact delivered-session membership. No permitted general filter can split an
@@ -125,7 +126,7 @@ export function protectedRiskReport(
       rankings.push({
         category,
         programme: programmes.get(id).name,
-        domain: programmes.get(id).domain,
+        domain: programmeDomains([...new Map(items.map(a=>[a.s.id,a.s])).values()],programmes.get(id),settings).join(', '),
         ...stats(items),
       });
     for (const [dimension, key] of Object.entries({
@@ -144,13 +145,14 @@ export function protectedRiskReport(
           : a.p.boundary
             ? "Within boundary"
             : "Outside boundary",
-      "AAP domain": (a) => a.pg.domain,
+      "Programme Domain": (a) => sessionDomains(a.s,a.pg,settings),
     })) {
       const grouped = new Map();
       for (const a of selected) {
-        const label = key(a);
+        for(const label of [key(a)].flat()){
         if (!grouped.has(label)) grouped.set(label, []);
         grouped.get(label).push(a);
+        }
       }
       for (const [label, items] of grouped)
         demographics.push({ category, dimension, label, ...stats(items) });

@@ -39,6 +39,7 @@ export type Finding = {
   next: string;
 };
 export type NeedsReport = {
+  domainQuality?:{unclassifiedSessions:number};
   period: { from: string; to: string; now: string };
   summary: Dashboard["summary"];
   generatedAt: string;
@@ -1003,6 +1004,7 @@ export function NeedsPage({
 function DataQuality({ report }: { report: NeedsReport }) {
   return (
     <Panel title="Profile completeness and information gaps">
+      {report.domainQuality&&<p className="note">{report.domainQuality.unclassifiedSessions} sessions have no recognised Programme Domain. Their attendance is retained in overall reporting. Review the original AAP Domain / Event Type labels in Dashboard Configuration.</p>}
       <p>
         {report.qualityScope}: {report.quality[0]?.total || 0} profiles.
         Completeness means recorded information, not proof of accuracy or a
@@ -1060,7 +1062,7 @@ function DataQuality({ report }: { report: NeedsReport }) {
 function Alignment({ report }: { report: NeedsReport }) {
   return (
     <Panel title="Programme alignment and diversity">
-      <p>Review each programme's primary domain and recorded sub-domains together, with one set of reach and engagement figures for the same programme.</p>
+      <p>Review each programme's combined Programme Domains with one set of reach and engagement figures for its qualifying sessions.</p>
       <ProgrammeClassificationTable rows={report.programmeClassifications || []} />
       <p className="muted">Delivered sessions have recorded attendance. Recorded attendance is not a verified future schedule; participant feedback is still needed to assess programme alignment.</p>
     </Panel>

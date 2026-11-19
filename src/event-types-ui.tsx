@@ -1,3 +1,4 @@
+import {ProgrammeDomainAnalysis} from './programme-domains-ui';
 import { useEffect, useState, lazy, Suspense } from "react";
 import { api } from "./api";
 import {activityDomains} from '../shared/activity-domains.js';
@@ -81,7 +82,7 @@ const factors = {
   participation: "Participation Status",
   block: "Residential Area",
 };
-export function EventTypeInsights({
+export function RawClassificationAudit({
   user,
   revision = 0,
   initial = {},
@@ -192,7 +193,7 @@ export function EventTypeInsights({
   return (
     <div className="patterns-page event-insights" aria-busy={loading}>
       <section className="panel">
-        <h2>Programme Domains &amp; Event Types</h2>
+        <h2>Raw source classification audit</h2>
         <p className="note">
           Primary AAP Domain and secondary Event Types describe programme
           objectives. They do not establish achieved outcomes.
@@ -848,3 +849,5 @@ function MappingEditor({ onSaved }: { onSaved: () => void }) {
     </>
   );
 }
+
+export const EventTypeInsights=ProgrammeDomainAnalysis;

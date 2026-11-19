@@ -92,7 +92,7 @@ test("Event Type parser preserves combined ampersand labels, literal raw source,
     "Social & Volunterism",
   ]);
   assert.equal(
-    parseRows([HEADERS, row("a").slice(0, 10)]).rows[0].session.optional,
+    parseRows([HEADERS, row("a").slice(0, 10)]).rows[0].session.optional.eventTypes,
     undefined,
   );
 });

@@ -109,6 +109,20 @@ test('centre API keys isolate concurrent requests and discard obsolete responses
  globalThis.fetch=async url=>{calls.push(String(url));if(String(url).includes('glow_bukit_batok'))return new Promise(r=>{release=r;});return Response.json({scope:'new centre'});};
  try{setCentreContext(CENTRES[0]);const old=centreApi('/api/dashboard');const rejected=assert.rejects(old,e=>e.name==='AbortError');setCentreContext(CENTRES[2]);const current=await centreApi('/api/dashboard');assert.equal(current.scope,'new centre');release(Response.json({scope:'old centre'}));await rejected;assert.equal(calls.length,2);assert.ok(calls[0].includes('centre=glow_bukit_batok'));assert.ok(calls[1].includes('centre=glow_nanyang'));assert.match(centreUrl('/api/export/report?from=2026-05-04'),/centre=glow_nanyang/);assert.equal(centreUrl('/api/centres/compare'),'/api/centres/compare');}finally{setCentreContext(null);globalThis.fetch=original;}
 });
+test('short-lived dashboard reuse is isolated, clone-safe and invalidated by writes, refresh and reporting context',async()=>{
+ const {api,setCentreContext,setReportingMode,invalidateReadCache}=await tsImport('../src/api.ts',import.meta.url);
+ const original=globalThis.fetch;let reads=0;
+ globalThis.fetch=async(_url,options)=>Response.json(options?.method==='POST'?{ok:true}:{summary:{unique:++reads}});
+ try{
+  setCentreContext(CENTRES[0]);const first=await api('/api/dashboard?view=overview',{reuseForMs:15000});first.summary.unique=999;
+  assert.equal((await api('/api/dashboard?view=overview',{reuseForMs:15000})).summary.unique,1);assert.equal(reads,1);
+  await api('/api/preferences',{method:'POST',body:'{}'});assert.equal((await api('/api/dashboard?view=overview',{reuseForMs:15000})).summary.unique,2);
+  invalidateReadCache();await api('/api/dashboard?view=overview',{reuseForMs:15000});assert.equal(reads,3);
+  setReportingMode('exploratory');await api('/api/dashboard?view=overview',{reuseForMs:15000});assert.equal(reads,4);
+  setCentreContext(CENTRES[2]);await api('/api/dashboard?view=overview',{reuseForMs:15000});assert.equal(reads,5);
+  await api('/api/sppb/members/private',{reuseForMs:15000});await api('/api/sppb/members/private',{reuseForMs:15000});assert.equal(reads,7,'individual histories are never cached');
+ }finally{setCentreContext(null);globalThis.fetch=original;}
+});
 
 test('global centre selector shows authorised options, resets child views, preserves dates and cannot show a stale old-centre dashboard',async()=>{
  const original=globalThis.fetch,calls=[],empty={...dashboard(),coverage:{from:null,to:null},summary:{...dashboard().summary,attendance:0}};let release;
@@ -125,8 +139,8 @@ test('global centre selector shows authorised options, resets child views, prese
 
 test('centre administration tab switches never render the previous response shape or stale comparison scope',async()=>{
  const original=globalThis.fetch;let release;
- globalThis.fetch=async url=>String(url).includes('/compare')?new Promise(r=>{release=r;}):Response.json({programmes:[],attendance:0,note:'Reviewed source',users:[],grants:[],preferences:[]});
- try{const {CentreTools}=await tsImport('../src/centre-tools.tsx',import.meta.url);render(React.createElement(CentreTools,{staff:{role:'admin',canCompare:true,centres:CENTRES},onChanged:()=>{}}));await waitFor(()=>assert.ok(screen.getByText('Historical records require reviewed centre allocation')));fireEvent.click(screen.getByRole('button',{name:'Compare authorised centres'}));assert.equal(screen.queryByText('Historical records require reviewed centre allocation'),null);await waitFor(()=>assert.ok(release));release(Response.json({rows:[],combined:{unique:null},note:'Exact ID verification required'}));await waitFor(()=>assert.ok(screen.getByText('Authorised centre comparison')));fireEvent.change(screen.getByLabelText('Cross-centre comparison scope'),{target:{value:'glow_nanyang,seen_nanyang'}});assert.equal(screen.queryByText('Exact ID verification required'),null);}finally{cleanup();globalThis.fetch=original;}
+ globalThis.fetch=async url=>String(url).includes('/compare')?new Promise(r=>{release=r;}):Response.json({rows:CENTRES.map(c=>({...c,participants:0,sessions:0,attendance:0,lastImport:null,registryComplete:false})),programmes:[],attendance:0,note:'Reviewed source',users:[],grants:[],preferences:[]});
+ try{const {CentreTools}=await tsImport('../src/centre-tools.tsx',import.meta.url);render(React.createElement(CentreTools,{staff:{role:'admin',canCompare:true,centres:CENTRES},onChanged:()=>{}}));await waitFor(()=>assert.equal(document.querySelectorAll('.centre-overview-grid article').length,4));fireEvent.click(screen.getByRole('tab',{name:'Historical Data Review'}));await waitFor(()=>assert.ok(screen.getByText('Historical records require reviewed centre allocation')));fireEvent.click(screen.getByRole('tab',{name:'Centre Comparisons'}));assert.equal(screen.queryByText('Historical records require reviewed centre allocation'),null);await waitFor(()=>assert.ok(release));release(Response.json({rows:[],combined:{unique:null},note:'Exact ID verification required'}));await waitFor(()=>assert.ok(screen.getByText('Authorised centre comparison')));fireEvent.change(screen.getByLabelText('Cross-centre comparison scope'),{target:{value:'glow_nanyang,seen_nanyang'}});assert.equal(screen.queryByText('Exact ID verification required'),null);}finally{cleanup();globalThis.fetch=original;}
 });
 
 test('centre import review requires provenance and applies an explicit unresolved-row centre override',async()=>{
@@ -180,7 +194,7 @@ test('programme diagnostics show explicit repeat denominators, tiny-sample cavea
     assert.ok(screen.getByText('Repeat attendance: Unavailable'));assert.ok(screen.getByText(/One-off draw diagnostic unavailable/));assert.ok(screen.getByText(/Representation unavailable/));
     const report=participationPatterns(diagnosticFixture(),{scope:'clients',dimension:'age',group:'60 to 69'},'2026-11-06');
     view.rerender(React.createElement(ProgrammeDomainMix,{mix:report.domainMix}));
-    const table=screen.getByRole('table',{name:'Recorded primary domains for the selected group'});assert.ok(within(table).getByText('Cognitive'));assert.match(table.textContent,/Physical/);assert.ok(screen.getByText(/do not add unique counts/));
+    const table=screen.getByRole('table',{name:'Programme Domains for the selected group'});assert.ok(within(table).getByText('Cognitive'));assert.match(table.textContent,/Physical/);assert.ok(screen.getByText(/do not add unique counts/));
     const row=report.rankings.rows[0];
     view.rerender(React.createElement(Ranking,{report:{...report,rankings:{...report.rankings,rows:Array.from({length:12},(_,i)=>({...row,id:'p'+i,name:'Programme '+i}))}},printing:true}));
     assert.equal(screen.getByRole('table',{name:/Programme rankings/}).querySelectorAll('tbody tr').length,12,'printing must not silently truncate diagnostic rows at five');
@@ -207,7 +221,7 @@ test('Programme Analysis keeps search/detail metrics and lazily loads staff-only
     await waitFor(()=>assert.ok(screen.getByRole('list',{name:'Programme rankings for 60 to 69'})));
     const groupList=screen.getByRole('list',{name:'Programme rankings for 60 to 69'});
     assert.match(groupList.textContent,/10 \/ 70 registered-client attendees/);assert.match(groupList.textContent,/One-off draw signal/);
-    assert.ok(screen.getByRole('table',{name:'Recorded primary domains for the selected group'}));
+    assert.ok(screen.getByRole('table',{name:'Programme Domains for the selected group'}));
   }finally{cleanup();globalThis.fetch=original;}
 });
 
@@ -629,7 +643,7 @@ const { LocationAdmin } = await tsImport(
   "../src/location-admin.tsx",
   import.meta.url,
 );
-const {EventTypeInsights, EventTypePresentation}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
+const {RawClassificationAudit:EventTypeInsights, EventTypePresentation}=await tsImport('../src/event-types-ui.tsx',import.meta.url);
 const {ClientOutreach}=await tsImport('../src/client-outreach.tsx',import.meta.url);
 test('outreach work list filters block and attendance without shrinking registered denominators, and opens the existing review flow',async()=>{
  const original=globalThis.fetch,state=locationFixture(),requests=[];let reviewed;
@@ -969,6 +983,23 @@ const { PresentationView } = await tsImport(
   "../src/presentation.tsx",
   import.meta.url,
 );
+test('report builder selects only relevant sections and loads assessment coverage on demand without individual results',async()=>{
+ const original=globalThis.fetch,calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));return Response.json({summary:{eligible:10,assessed:6,coverage:60,repeated:3,latest:'2026-10-28'}});};
+ try{
+  render(React.createElement(PresentationView,{data:dashboard(),filters:{...filters,target:'all',gender:'',race:'',ageBand:'',client:'',boundary:''},revision:0,briefing:{clients:null,needs:null,actions:null},user:{username:'planner',role:'planner'},close:()=>{}}));
+  assert.equal(calls.length,0);
+  fireEvent.change(screen.getByLabelText('Management report focus'),{target:{value:'programme'}});
+  assert.equal(document.getElementById('report-1').hidden,true);assert.equal(document.getElementById('report-2').hidden,false);
+  fireEvent.change(screen.getByLabelText('Management report focus'),{target:{value:'outreach'}});
+  assert.ok(screen.getByRole('heading',{name:'Male senior participation over time'}));
+  fireEvent.change(screen.getByLabelText('Management report focus'),{target:{value:'sppb'}});
+  await waitFor(()=>assert.ok(screen.getByText(/6 members with dated assessments of 10 current verified clients/)));
+  assert.equal(calls.length,1);assert.ok(calls[0].includes('/api/sppb/overview?'));
+  assert.equal(document.getElementById('report-3').hidden,true);
+  assert.equal(document.querySelector('.presentation').textContent.includes('memberId'),false);
+ }finally{cleanup();globalThis.fetch=original;}
+});
 
 test("management overview has four headline cards and presentation preserves the same figures without private records", async () => {
   const original = globalThis.fetch;
@@ -2459,21 +2490,58 @@ test('SPPB UI keeps imported out-of-range scores pending and loads a member hist
   globalThis.fetch = async url => {
     requested.push(String(url));
     if(String(url).includes('/api/sppb/members/'))return Response.json({...member,records:[assessment],participation:{from:null,to:null,sessions:0,programmes:[],domains:[],eventTypes:[]}});
-    return Response.json({summary:{eligible:1,assessed:1,coverage:null,repeated:0,latest:assessment.date,due:0,comparable:0,increased:0,unchanged:0,decreased:0,review:1},rows:[member],total:1,page:1,monthly:[],intervalMonths:null,note:'Verified client population only.'});
+    return Response.json({recordedScores:[{sourceDefinition:'caritahub-export-unverified',total:16,members:1}],summary:{eligible:1,assessed:1,coverage:null,repeated:0,latest:assessment.date,due:0,comparable:0,increased:0,unchanged:0,decreased:0,review:1},rows:[member],total:1,page:1,monthly:[],intervalMonths:null,note:'Verified client population only.'});
   };
   try {
     render(React.createElement(SppbAssessments,{user:{username:'Planner',role:'planner'}}));
     await waitFor(()=>assert.ok(screen.getByRole('button',{name:'SPPB-TEST-001'})));
     assert.equal(requested.some(url=>url.includes('/members/')),false);
-    assert.ok(screen.getByText('Imported SPPB score, scoring validation pending'));
-    assert.ok(screen.getByText('No comparable validated scores yet. Imported scores remain available for authorised review.'));
+    assert.ok(screen.getByText('Recorded score analysis'));
+    assert.ok(screen.getByText('Imported score'));
+    assert.equal(screen.queryByText('Validated difference'),null);
     fireEvent.click(screen.getByRole('button',{name:'SPPB-TEST-001'}));
     await waitFor(()=>assert.ok(screen.getByRole('dialog',{name:'Member SPPB assessment history'})));
-    await waitFor(()=>assert.ok(screen.getByText(/scoring validation pending. Review the imported timeline/)));
+    await waitFor(()=>assert.ok(screen.getByRole('img',{name:'Original imported SPPB scores over time'})));
     assert.equal(screen.queryByRole('img',{name:/Validated SPPB total scores/}),null);
     fireEvent.click(screen.getByRole('button',{name:'Close history'}));
     assert.equal(screen.queryByRole('dialog'),null);
   } finally { cleanup(); globalThis.fetch=original; }
+});
+test('SPPB import requires only preview and confirm, keeps settings optional and opens analysis after saving',async()=>{
+  const {SppbAssessments}=await tsImport('../src/sppb-ui.tsx',import.meta.url);
+  const original=globalThis.fetch,originalFormData=globalThis.FormData;
+  let savedConfig,confirmed;
+  globalThis.FormData=dom.window.FormData;
+  globalThis.fetch=async(url,options={})=>{
+    const path=String(url);
+    if(path.includes('/configuration')){savedConfig=JSON.parse(options.body);return Response.json({ok:true});}
+    if(path.includes('/review'))return Response.json({rows:[],total:0,unmatchedMembers:0,conflicts:0,config:{revision:1,intervalMonths:6,approachDays:30,definitions:[]},batches:[]});
+    if(path.includes('/import/preview'))return Response.json({id:'simple-import',rows:2,matchedMembers:1,unmatchedMembers:1,newRecords:2,scoringWarnings:1,conflicts:0,missingDates:0,matchedMemberIds:['MATCHED'],unmatchedMemberIds:['UNMATCHED']});
+    if(path.includes('/import/confirm')){confirmed=JSON.parse(options.body);return Response.json({inserted:2,matchedMembers:1,unmatchedMembers:1});}
+    return Response.json({summary:null,rows:[],total:0,monthly:[],intervalMonths:6});
+  };
+  try{
+    render(React.createElement(SppbAssessments,{user:{username:'Admin',role:'admin'},initialSection:'Data quality & import'}));
+    await waitFor(()=>assert.ok(screen.getByText('Optional settings')));
+    const settings=screen.getByText('Optional settings').closest('details');
+    assert.equal(settings.open,false);
+    settings.open=true;
+    assert.equal(screen.getByLabelText('Scoring approval evidence').required,false);
+    fireEvent.change(screen.getByLabelText('Reassessment interval (months)'),{target:{value:'12'}});
+    fireEvent.submit(screen.getByRole('button',{name:'Save settings'}).closest('form'));
+    await waitFor(()=>assert.ok(savedConfig));
+    assert.equal(savedConfig.intervalMonths,12);assert.deepEqual(savedConfig.definitions,[]);
+    const file=new dom.window.File(['fixture'],'sppb.xlsx');
+    fireEvent.change(screen.getByLabelText('SPPB workbook'),{target:{files:[file]}});
+    fireEvent.submit(screen.getByRole('button',{name:'Preview SPPB assessments'}).closest('form'));
+    await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Confirm SPPB import'})));
+    assert.equal(screen.getByRole('button',{name:'Confirm SPPB import'}).disabled,false);
+    fireEvent.click(screen.getByRole('button',{name:'Confirm SPPB import'}));
+    await waitFor(()=>assert.ok(confirmed));
+    assert.deepEqual(confirmed,{id:'simple-import',confirmed:true});
+    await waitFor(()=>assert.equal(screen.getByRole('tab',{name:'Latest assessments'}).getAttribute('aria-selected'),'true'));
+    assert.ok(screen.getByText(/Imported 2 new assessment records/));
+  }finally{cleanup();globalThis.fetch=original;globalThis.FormData=originalFormData;}
 });
 test("client follow-up keeps clinical classifications out of the default table and records sourced voluntary feedback without sending messages", async () => {
   const original = globalThis.fetch;
@@ -2680,12 +2748,12 @@ test("programme classification table keeps secondary labels on one metric row an
   const rows = Array.from({length:25}, (_, i) => ({id:String(i),name:`Programme ${String(i).padStart(2,'0')}`,primaryDomain:'Physical',subDomains:['Learning','Social & Cognitive'],sessions:2,unique:10,repeat:10,averageSessions:2}));
   try {
     render(React.createElement(ProgrammeClassificationTable,{rows}));
-    const table = screen.getByRole('table',{name:'Programme domains and sub-domains'});
+    const table = screen.getByRole('table',{name:'Programme Domains'});
     assert.ok(within(table).getByRole('columnheader',{name:'Domains'}));
     assert.equal(within(table).queryByRole('columnheader',{name:'Primary Domain'}),null);
     assert.equal(within(table).getAllByRole('row').length,21);
     const first = within(table).getByRole('rowheader',{name:'Programme 00'}).closest('tr');
-    assert.ok(within(first).getByText('Physical, Learning, Social, Cognitive'));
+    assert.deepEqual([...first.querySelectorAll('.badge')].map(b=>b.textContent),['Physical','Cognitive','Learning','Social']);
     assert.equal(within(first).getAllByRole('cell').length,5);
     fireEvent.click(screen.getByRole('button',{name:'Next classifications'}));
     assert.equal(within(table).getAllByRole('row').length,6);
@@ -2792,4 +2860,12 @@ test('operational trends never bridge a missing observation or draw it as zero',
  try{render(React.createElement(OperationalChart,{title:'Screening observations',mode:'line',series:[{key:'count',label:'Recorded',color:'#0f766e'}],rows:[{label:'Jan',count:0},{label:'Feb',count:null},{label:'Mar',count:5}]}));
  const path=document.querySelector('svg path').getAttribute('d');assert.equal((path.match(/M /g)||[]).length,2);assert.equal(path.includes('L '),false);assert.equal(document.querySelectorAll('circle').length,2);assert.ok(screen.getByLabelText('Jan: Recorded 0'));
  }finally{cleanup();}
+});
+
+const {ProgrammeDomainAnalysis}=await tsImport('../src/programme-domains-ui.tsx',import.meta.url);
+const {programmeDomainReport}=await import('../server/event-report.js');
+test('combined domain view defaults to five categories and one ranking, saves scoped preferences and opens programme detail',async()=>{
+ const original=globalThis.fetch,s=locationFixture();s.settings.staffAnalysisFull=true;for(const session of s.data.sessions)session.optional={eventTypes:['Learning','Social & Cognitive']};let saved,opened;const queries=[];
+ globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/programme-domains/report?')){queries.push(url);return Response.json(programmeDomainReport(s,Object.fromEntries(new URL(url,'http://local').searchParams),'2026-11-05'));}if(url==='/api/programme-domains/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
+ try{render(React.createElement(ProgrammeDomainAnalysis,{user:{role:'planner'},initial:{from:'2026-11-01',to:'2026-11-03'},onProgramme:id=>opened=id}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'What Types of Programmes Are We Offering?'})));assert.equal(document.querySelectorAll('.horizontal-ranking').length,1);assert.equal(screen.getByLabelText('Programme Domain').options.length,5);assert.equal(document.querySelector('details').open,false);assert.equal(screen.queryByText('AAP Domain ? Event Type')===null,true);fireEvent.change(screen.getByLabelText('Programme Domain'),{target:{value:'Cognitive'}});await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Which Cognitive Programmes Attract the Most Seniors?'})));fireEvent.change(screen.getByLabelText('Programme ranking'),{target:{value:'repeat'}});await waitFor(()=>assert.ok(queries.at(-1).includes('ranking=repeat')));fireEvent.click(screen.getByRole('button',{name:'Save domain view'}));await waitFor(()=>assert.equal(saved.selectedDomain,'Cognitive'));assert.equal(saved.from,'2026-11-01');const programme=document.querySelector('.domain-programme-ranking button');assert.ok(programme);fireEvent.click(programme);assert.ok(opened);assert.ok(screen.getByText(/Domain totals may overlap/));}finally{cleanup();globalThis.fetch=original;}
 });

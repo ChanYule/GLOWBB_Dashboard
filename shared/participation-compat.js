@@ -39,7 +39,7 @@ export const analysisDimensions = {
   living: "Living Arrangement",
   block: "Residential block",
   distance: "Location & Distance",
-  eventType: "Event Type",
+  eventType: "Programme Domains",
 };
 export const patternKeys = [
   "dimension",

@@ -3,7 +3,7 @@ import {staffAnalysisState} from './staff-analysis.js';
 import { dataTransaction } from "./data-management.js";
 import { hash } from "./domain.js";
 import { eventTypeInventory } from "./event-types.js";
-import { eventTypeReport, validateEventQuery } from "./event-report.js";
+import { eventTypeReport, programmeDomainReport, validateEventQuery } from "./event-report.js";
 import { ensureLocations, locationRow } from "./location-store.js";
 import { decodeLocations } from "./location-model.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
@@ -15,7 +15,7 @@ export function mountEventTypes(app, { db, storage }) {
         "Programme type analysis is restricted to authorised staff.",
       );
   };
-  async function report(query,user) {
+  async function report(query,user,combined=false) {
     validateEventQuery(query);
     if (query.factor === "distance") await ensureLocations(db);
     return dataTransaction(
@@ -36,7 +36,7 @@ export function mountEventTypes(app, { db, storage }) {
             };
         if (query.factor === "distance")
           state.locations = decodeLocations(yield locationRow(tx));
-        return eventTypeReport(staffAnalysisState(state,user), query);
+        return (combined?programmeDomainReport:eventTypeReport)(staffAnalysisState(state,user), query);
       },
       true,
     );
@@ -44,6 +44,12 @@ export function mountEventTypes(app, { db, storage }) {
   app.get("/api/event-types/report", async (req, res) => {
     allowed(req);
     res.json(await report(req.query,req.user));
+  });
+  app.get('/api/programme-domains/report',async(req,res)=>{allowed(req);res.json(await report(req.query,req.user,true));});
+  app.get('/api/programme-domains/export',async(req,res)=>{
+    allowed(req);const q=validateEventQuery(req.query);
+    if(['factor','group','gender','race','cfs','ageBand','client','boundary'].some(key=>q[key])||['male','minority'].includes(q.target))throw fail(403,'Reset participant-group filters before sharing this domain report.');
+    res.json(await report(req.query,req.user,true));
   });
   app.put("/api/event-types/preferences", async (req, res) => {
     allowed(req);
@@ -62,6 +68,30 @@ export function mountEventTypes(app, { db, storage }) {
           .run(
             req.user.id,
             JSON.stringify({ ...existing, eventTypes: req.body }),
+          );
+      },
+      false,
+      ["staff_preferences"],
+    );
+    res.json({ ok: true });
+  });
+  app.put("/api/programme-domains/preferences", async (req, res) => {
+    allowed(req);
+    validateEventQuery(req.body);
+    await dataTransaction(
+      db,
+      function* (tx) {
+        const row = yield tx
+          .prepare("SELECT value FROM staff_preferences WHERE user_id=?")
+          .get(req.user.id);
+        const existing = row ? JSON.parse(row.value) : {};
+        yield tx
+          .prepare(
+            "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+          )
+          .run(
+            req.user.id,
+            JSON.stringify({ ...existing, programmeDomains: req.body }),
           );
       },
       false,

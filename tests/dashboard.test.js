@@ -152,7 +152,7 @@ test("idempotence, exact duplicates and persistent data preservation", () => {
   assert.equal(db.prepare("SELECT count(*) AS n FROM imports").get().n, 2);
   db.close();
 });
-test("conflicts skipped and programme variants remain distinct", () => {
+test("profile conflicts are skipped; session domain changes and programme variants are preserved", () => {
   const db = database();
   importRows(db, [row()]);
   const p = source([
@@ -163,8 +163,8 @@ test("conflicts skipped and programme variants remain distinct", () => {
     row("c", "Movement", undefined, { "AAP Domain": "Learning" }),
   ]);
   const inspected = inspectImport(p, readData(db));
-  assert.equal(inspected.conflicts.length, 2);
-  assert.equal(inspected.fresh.length, 1);
+  assert.equal(inspected.conflicts.length, 1);
+  assert.equal(inspected.fresh.length, 2);
   assert.ok(inspected.variants.length > 0);
   saveImport(db, p, inspected, 1);
   assert.equal(

@@ -5,7 +5,7 @@ import { clientReport } from "./client-domain.js";
 import { needsAnalysis } from "./needs-domain.js";
 import { materializeProfiles } from "./needs-domain.js";
 import { participationReport } from "./participation.js";
-import {eventTypeReport} from './event-report.js';
+import {programmeDomainReport as eventTypeReport} from './event-report.js';
 
 // A deliberately narrow report contract: never serialize source records, notes,
 // profile distributions or staff-written action text into the presentation.
@@ -136,9 +136,9 @@ export function mountReporting(app, { db, storage, filters }) {
           }
           const mixSensitive=['gender','race','ageBand','client','boundary','cfs','risk','observed','weekday','timeSlot'].some(k=>f[k])||(f.target&&f.target!=='all');
           let programmeMix=null;
-          if(!mixSensitive&&state.data.sessions.some(s=>s.optional?.eventTypes?.length)){
+          if(!mixSensitive){
             const mix=eventTypeReport(state,{from:f.from||'',to:f.to||'',domain:f.domain||'',programme:f.programme||'',target:'senior'});
-            programmeMix={domains:mix.domains.map(r=>({label:r.label,sessions:r.sessions})),types:[...mix.types].sort((a,b)=>b.sessions-a.sessions).slice(0,3).map(r=>({label:r.label,sessions:r.sessions,unique:r.unique,repeat:r.repeat})),findings:mix.findings.slice(0,2),note:'Overlapping labels describe recorded programme objectives, not achieved outcomes. Unclassified historical sessions are retained.'};
+            programmeMix={domains:mix.domains.map(r=>({label:r.label,sessions:r.sessions})),types:mix.types.map(r=>({label:r.label,sessions:r.sessions,unique:r.unique,repeat:r.repeat})),findings:mix.findings.slice(0,2),note:'Overlapping labels describe recorded programme objectives, not achieved outcomes. Unclassified historical sessions are retained.'};
           }
           return {
             programmeMix,

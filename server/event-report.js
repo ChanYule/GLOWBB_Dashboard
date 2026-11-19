@@ -1,3 +1,4 @@
+import {combinedDomainData,sessionDomains,domainMatches,programmeDomains,PROGRAMME_DOMAINS} from './programme-domains.js';
 import {performanceData} from './reporting-policy.js';
 import { defaults, todaySG } from "./domain.js";
 import {populations} from '../shared/participation-compat.js';
@@ -31,6 +32,7 @@ export function validateEventQuery(input = {}) {
     "all",
     "distanceMetric",
     "destination",
+    "selectedDomain",
   ];
   for (const [k, v] of Object.entries(input))
     if (!allowed.includes(k) || typeof v !== "string" || v.length > 500)
@@ -74,8 +76,9 @@ export function validateEventQuery(input = {}) {
   if (q.all && q.all !== "1") throw fail("Choose a valid list size.");
   return q;
 }
-export function eventTypeReport(state, input = {}, now = todaySG()) {
+export function eventTypeReport(state, input = {}, now = todaySG(), combined = false) {
   state={...state,data:performanceData(state.data)};
+  if(combined)state={...state,data:combinedDomainData(state.data,state.settings)};
   const q = validateEventQuery(input),
     settings = { ...defaults, ...state.settings },
     minimum = settings.staffAnalysisFull ? 0 : Math.max(5, settings.privacyMinimum || 5);
@@ -96,6 +99,10 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       .filter((s) => s.date <= now && programmes.has(s.programmeId))
       .map((s) => [s.id, s]),
   );
+  const sourceLabels=s=>combined?sessionDomains(s,programmes.get(s.programmeId),settings):sessionEventTypes(s,settings);
+  const labelsFor=s=>{const labels=sourceLabels(s);return labels.length?labels:combined?[]:[UNCLASSIFIED];};
+  const rankDomain=q.selectedDomain||PROGRAMME_DOMAINS[0];
+  if(combined&&!PROGRAMME_DOMAINS.includes(rankDomain))throw fail("Choose one of the five Programme Domains.");
   const history = new Map(),
     attendees = new Set(),
     seen = new Set();
@@ -111,7 +118,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     (s) =>
       (!q.from || s.date >= q.from) &&
       (!q.to || s.date <= q.to) &&
-      (!q.domain || programmes.get(s.programmeId).domain === q.domain) &&
+      (combined?domainMatches(q.domain,s,programmes.get(s.programmeId),settings):!q.domain || programmes.get(s.programmeId).domain === q.domain) &&
       (!q.programme || s.programmeId === q.programme),
   );
   const historyDates = [...allSessions.values()].map(s => s.date).sort();
@@ -123,10 +130,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       .filter(
         (s) =>
           !q.eventType ||
-          (sessionEventTypes(s, settings).length
-            ? sessionEventTypes(s, settings)
-            : [UNCLASSIFIED]
-          ).includes(q.eventType),
+          labelsFor(s).includes(q.eventType),
       )
       .map((s) => s.id),
   );
@@ -215,35 +219,25 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     matrix = new Map(),
     ranks = new Map();
   const total = bucket("Total");
+  if(combined)for(const domain of PROGRAMME_DOMAINS){domainBuckets.set(domain,bucket(domain));typeBuckets.set(domain,bucket(domain));}
   const addSession = (b, s) => {
     b.sessionIds.add(s.id);
     b.programmeIds.add(s.programmeId);
     b.delivered.set(s.programmeId, (b.delivered.get(s.programmeId) || 0) + 1);
   };
   for (const s of sessions) {
-    const domain = programmes.get(s.programmeId).domain,
-      types = sessionEventTypes(s, settings),
-      labels = types.length ? types : [UNCLASSIFIED];
-    if (!selectedSessions.has(s.id)) continue;
-    if (!domainBuckets.has(domain)) domainBuckets.set(domain, bucket(domain));
-    for (const b of [total, domainBuckets.get(domain)]) addSession(b, s);
-    if (!ranks.has(s.programmeId))
-      ranks.set(s.programmeId, {
-        ...bucket(programmes.get(s.programmeId).name),
-        id: s.programmeId,
-        domain,
-        eventTypes: new Set(),
-      });
-    const rank = ranks.get(s.programmeId);
-    addSession(rank, s);
-    for (const label of labels) rank.eventTypes.add(label);
-    for (const label of labels) {
-      if (!typeBuckets.has(label)) typeBuckets.set(label, bucket(label));
-      if (!matrix.has(domain)) matrix.set(domain, new Map());
-      if (!matrix.get(domain).has(label))
-        matrix.get(domain).set(label, bucket(label));
-      for (const b of [typeBuckets.get(label), matrix.get(domain).get(label)])
-        addSession(b, s);
+    const programme=programmes.get(s.programmeId), domain=programme.domain;
+    const domains=combined?sourceLabels(s):[domain], labels=labelsFor(s);
+    if(!selectedSessions.has(s.id))continue;
+    addSession(total,s);
+    for(const label of domains){if(!domainBuckets.has(label))domainBuckets.set(label,bucket(label));addSession(domainBuckets.get(label),s);}
+    if(!combined||domains.includes(rankDomain)){
+      if(!ranks.has(s.programmeId))ranks.set(s.programmeId,{...bucket(programme.name),id:s.programmeId,domain,eventTypes:new Set()});
+      const rank=ranks.get(s.programmeId);addSession(rank,s);for(const label of labels)rank.eventTypes.add(label);
+    }
+    for(const label of labels){
+      if(!typeBuckets.has(label))typeBuckets.set(label,bucket(label));addSession(typeBuckets.get(label),s);
+      if(!combined){if(!matrix.has(domain))matrix.set(domain,new Map());if(!matrix.get(domain).has(label))matrix.get(domain).set(label,bucket(label));addSession(matrix.get(domain).get(label),s);}
     }
   }
   const attach = (b, pid, s) => {
@@ -256,18 +250,12 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     if (!cohortIds.has(pid)) continue;
     for (const sid of ids) {
       if (!selectedSessions.has(sid)) continue;
-      const s = allSessions.get(sid),
-        domain = programmes.get(s.programmeId).domain,
-        types = sessionEventTypes(s, settings);
-      for (const b of [
-        total,
-        domainBuckets.get(domain),
-        ranks.get(s.programmeId),
-      ])
-        attach(b, pid, s);
-      for (const label of types.length ? types : [UNCLASSIFIED])
-        for (const b of [typeBuckets.get(label), matrix.get(domain).get(label)])
-          attach(b, pid, s);
+      const s=allSessions.get(sid),domain=programmes.get(s.programmeId).domain;
+      const domains=combined?sourceLabels(s):[domain], labels=labelsFor(s);
+      attach(total,pid,s);
+      for(const label of domains)attach(domainBuckets.get(label),pid,s);
+      if(!combined||domains.includes(rankDomain))attach(ranks.get(s.programmeId),pid,s);
+      for(const label of labels){attach(typeBuckets.get(label),pid,s);if(!combined)attach(matrix.get(domain).get(label),pid,s);}
     }
   }
   const small = (n) => n > 0 && n < minimum;
@@ -287,7 +275,8 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
         attendance += ids.size;
         again ||= ids.size >= 2;
         eligible ||= (b.delivered.get(pg) || 0) >= 2;
-        domains.add(programmes.get(pg).domain);
+        if(combined)for(const sid of ids)for(const domain of sourceLabels(allSessions.get(sid)))domains.add(domain);
+        else domains.add(programmes.get(pg).domain);
       }
       repeat += Number(again);
       opportunity += Number(eligible);
@@ -375,7 +364,9 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
         return {
           ...r,
           id: source.id,
-          domain: source.domain,
+          domain: combined?programmeDomains([...source.sessionIds].map(id=>allSessions.get(id)),programmes.get(source.id),settings).join(" & "):source.domain,
+          sourceDomain:source.domain,
+          combinedDomains:combined?programmeDomains([...source.sessionIds].map(id=>allSessions.get(id)),programmes.get(source.id),settings):undefined,
           eventTypes: [...source.eventTypes].sort(),
         };
       })
@@ -456,6 +447,16 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       action:
         "Use a reviewed metadata merge where a reliable source is available.",
     });
+  if(combined){
+    const delivery=[...types].filter(t=>t.sessions>0).sort((a,b)=>b.sessions-a.sessions)[0];
+    if(delivery)findings.unshift({finding:`${delivery.label} has the most delivered sessions.`,evidence:`${delivery.sessions} of ${totalStats.sessions} overall sessions carry this domain.`,implication:'Multi-domain sessions appear in each applicable domain, while the overall total counts each session once.',investigate:'Review whether the programme mix matches centre objectives and recorded interests.',action:'Discuss the balance of provision; session volume alone is not programme effectiveness.'});
+    const male=[...types].filter(t=>t.male>=evidenceMinimum).sort((a,b)=>b.male-a.male)[0];
+    if(male)findings.push({finding:`${male.label} reaches ${male.male} distinct male participants in this selection.`,evidence:`${male.unique} unique participants across ${male.sessions} delivered sessions.`,implication:'This describes the selected recorded population, not the reason people chose to attend.',investigate:'Compare session availability and participant-reported preferences before planning outreach.',action:'Review the domain programme ranking and relevant feedback.'});
+  }
+  const unclassifiedSessions=combined?sessions.filter(s=>selectedSessions.has(s.id)&&!sourceLabels(s).length):[];
+  const breadth=new Map();
+  if(combined)for(const [pid,ids]of history){if(!cohortIds.has(pid))continue;const selectedIds=[...ids].filter(id=>selectedSessions.has(id));if(!selectedIds.length)continue;const count=new Set(selectedIds.flatMap(id=>sourceLabels(allSessions.get(id)))).size;breadth.set(count,(breadth.get(count)||0)+1);}
+  const breadthBlocked=blocked||types.some(t=>t.suppressed)||[...breadth.values()].some(n=>small(n)||small(total.people.size-n));
   const groups = q.factor ? [...new Set(base.map(factorLabel))].sort() : [];
   const page = Number(q.page || 0),
     limit = q.all === "1" ? 20 : 5;
@@ -505,6 +506,11 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     });
   }
   return {
+    rankingMetric:q.ranking,
+    classificationMode:combined?"Combined five-domain classification":"Raw source classification audit",
+    selectedDomain:combined?rankDomain:null,
+    unclassified: {sessions:unclassifiedSessions.length,programmes:new Set(unclassifiedSessions.map(s=>s.programmeId)).size},
+    domainBreadth:combined&&!breadthBlocked?[...breadth].sort((a,b)=>a[0]-b[0]).map(([domains,members])=>({domains,members})):[],
     period: {
       from: q.from || sessions.map((s) => s.date).sort()[0] || null,
       to:
@@ -529,8 +535,8 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     types,
     matrix: cells,
     programmeClassifications: rankRows.map(r => ({
-      id: r.id, name: r.label, primaryDomain: r.domain, subDomains: r.eventTypes,
-      sessions: r.sessions, unique: r.unique, repeat: r.repeat, averageSessions: r.averageSessions,
+      id: r.id, name: r.label, primaryDomain: r.sourceDomain||r.domain, subDomains: r.eventTypes,combinedDomains:r.combinedDomains,
+      sessions: r.sessions, attendance:r.attendance, unique: r.unique, repeat: r.repeat, averageSessions: r.averageSessions,
       opportunity: r.opportunity, repeatRate: r.repeatRate, rate: r.rate,
     })),
     rankings: {
@@ -540,11 +546,11 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       limit,
     },
     options: {
-      domains: [...new Set(data.programmes.map((p) => p.domain))].sort(),
-      eventTypes: [
+      domains: combined?[...PROGRAMME_DOMAINS]:[...new Set(data.programmes.map((p) => p.domain))].sort(),
+      eventTypes: combined?[...PROGRAMME_DOMAINS]:[
         ...new Set(
           data.sessions.flatMap((s) => {
-            const labels = sessionEventTypes(s, settings);
+            const labels = sourceLabels(s);
             return labels.length ? labels : [UNCLASSIFIED];
           }),
         ),
@@ -557,6 +563,7 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
       : "More participant feedback is required to assess programme alignment.",
     alignmentRows,
     limitations: [
+      ...(combined?["Programmes may belong to more than one domain. Domain totals may overlap. Raw AAP Domain and Event Type remain unchanged; only recognised domains and approved exact aliases contribute."]:[]),
       "Engagement depth counts distinct sessions in this period/filter within each Event Type. Registered-client depth includes the eligible client cohort for each type; attendance-only depth includes attendees of that type. Event Types overlap; neither their counts nor segment totals can be added across types. No recorded history is not proof that someone never attended. Recency uses full-history latest attendance through the coverage end date, independent of the selected period or Event Type, and does not change active/inactive rules.",
       "Event Type totals overlap; do not sum category totals.",
       "Unique reach counts Member IDs attending qualifying delivered sessions.",
@@ -568,3 +575,5 @@ export function eventTypeReport(state, input = {}, now = todaySG()) {
     ],
   };
 }
+
+export function programmeDomainReport(state,input={},now=todaySG()){return eventTypeReport(state,input,now,true);}

@@ -1,3 +1,5 @@
+import {sourceClassification} from './programme-domains.js';
+import {activityDomains} from '../shared/activity-domains.js';
 import {IMPORT_BATCH_ROWS} from "./import-batches.js";
 import {MAX_IMPORT_ROWS} from "../shared/upload-limits.js";
 import {reportingConfiguration} from './reporting-policy.js';
@@ -173,8 +175,9 @@ export function mountCentreImports(
       await mirror(db, req.user);
       const storage = db.storage || { readData, getSettings };
       const current = await storage.readData(db);
-      const config=reportingConfiguration(await storage.getSettings(db));
-      for(const row of rows){for(const [key,missing,label]of [['cfs',!row.participant.cfs,'CFS'],['srf',!row.participant.riskRaw,'SRF'],['living',!row.participant.livingRaw,'living arrangement'],['domain',!row.programme.domain||row.programme.domain==='Unspecified','AAP Domain'],['eventType',!row.session.optional?.eventTypes?.length,'Event Type']])if(config.qualityWarnings[key]&&missing)issues.push({row:row.row,message:'Missing '+label+'; valid attendance remains eligible unless an approved reporting rule applies.'});}
+      const domainSettings=await storage.getSettings(db);
+      const config=reportingConfiguration(domainSettings);
+      for(const row of rows){for(const [key,missing,label]of [['cfs',!row.participant.cfs,'CFS'],['srf',!row.participant.riskRaw,'SRF'],['living',!row.participant.livingRaw,'living arrangement'],['domain',!activityDomains(row.programme.domain,row.session.optional?.eventTypes,domainSettings).length,'recognised Programme Domain'],['eventType',!row.session.optional?.eventTypes?.length,'Event Type']])if(config.qualityWarnings[key]&&missing)issues.push({row:row.row,message:'Missing '+label+'; valid attendance remains eligible unless an approved reporting rule applies.'});}
 
       const existing = new Map(current.participants.map((p) => [p.id, p]));
       for (const r of rows)
@@ -246,10 +249,8 @@ export function mountCentreImports(
             " / " +
             (source?.programme.name || "Recorded programme"),
           date: source?.session.date || "",
-          before:
-            update.optional.eventTypeHistory?.at(-1)?.raw ||
-            "Unclassified / unknown",
-          after: update.optional.eventTypeRaw || "Unclassified / unknown",
+          before:sourceClassification(current.sessions.find(s=>s.id===update.id),current.programmes.find(p=>p.id===source?.programme.id)),
+          after:sourceClassification(update,source?.programme),
         });
       }
     }

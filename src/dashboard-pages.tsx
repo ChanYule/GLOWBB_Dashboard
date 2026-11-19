@@ -8,7 +8,7 @@ const ProgrammeGroupDiagnostics = lazy(() =>
   })),
 );
 import { Button, Select, Panel, Note, Bars } from "./ui-primitives";
-import { HorizontalRankingChart, ChartCard } from "./chart-system";
+import { HorizontalRankingChart, ChartCard, MetricCard } from "./chart-system";
 import { ProgrammeDiagnosticLabels } from "./programme-diagnostic-ui";
 import { MetricHelp } from "./metric-help";
 import { activityDomains } from "../shared/activity-domains.js";
@@ -300,6 +300,12 @@ export function Programmes({
     .sort((a, b) => b[sort] - a[sort] || a.name.localeCompare(b.name));
   return (
     <>
+      <div className="management-kpis" aria-label="Programme summary">
+        <MetricCard label="Programmes delivered" value={data.coverage.from?number(data.summary.programmes):'Unavailable'} note="Distinct programmes in this period"/>
+        <MetricCard label="Sessions delivered" value={data.coverage.from?number(data.summary.sessions):'Unavailable'} note="Distinct recorded sessions · all ages"/>
+        <MetricCard label="Unique seniors" value={data.coverage.from?number(data.summary.unique):'Unavailable'} note={`Age ${data.settings.seniorAge}+ · each person counted once`}/>
+        <MetricCard label="Repeat participants" value={data.coverage.from?number(data.summary.repeat):'Unavailable'} note="Seniors attending the same programme more than once"/>
+      </div>
       <ChartCard
         title="Which programmes lead on the selected measure?"
         description="Top five programmes; compare session frequency before deciding what to expand."
@@ -318,6 +324,11 @@ export function Programmes({
               <option value="attendance">Attendance entries</option>
               <option value="repeat">Repeat participants</option>
               <option value="average">Average attendance per session</option>
+              <option value="male">Male seniors</option>
+              <option value="minority">Minority seniors</option>
+              <option value="sessions">Sessions delivered</option>
+              <option value="firstObserved">First observed seniors</option>
+              <option value="returning">Returning seniors</option>
             </select>
           </label>
         }
@@ -325,7 +336,6 @@ export function Programmes({
         <HorizontalRankingChart
           rows={[...list]
             .sort((a, b) => Number(b[sort]) - Number(a[sort]))
-            .slice(0, 5)
             .map((p) => ({
               label: p.name,
               value: Number(p[sort]),
@@ -459,13 +469,13 @@ export function Programmes({
                         className="programme-domains"
                         aria-label="Programme domains"
                       >
-                        {activityDomains(
+                        {(p.combinedDomains??activityDomains(
                           p.domain,
                           p.eventTypes ||
                             (p.sessionList || []).flatMap(
                               (s) => s.eventTypes || [],
                             ),
-                        ).map((domain) => (
+                        )).map((domain) => (
                           <li key={domain}>{domain}</li>
                         ))}
                       </ul>

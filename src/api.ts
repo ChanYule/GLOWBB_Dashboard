@@ -4,14 +4,14 @@ import {MAX_IMPORT_BYTES,MAX_IMPORT_MB,DIRECT_UPLOAD_BYTES,UPLOAD_CHUNK_BYTES} f
 let selectedCentre: Centre | null = null;
 let centreGeneration = 0;
 let reportMode:'official'|'exploratory'='official';
-export function setReportingMode(mode:'official'|'exploratory'){reportMode=mode;centreGeneration++;inFlight.clear();}
+export function setReportingMode(mode:'official'|'exploratory'){reportMode=mode;centreGeneration++;inFlight.clear();invalidateReadCache();}
 export const currentCentre = () => selectedCentre;
-export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;inFlight.clear();}
+export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;inFlight.clear();invalidateReadCache();}
 export function centreUrl(url:string){
   if(!selectedCentre||!url.startsWith('/api/')||/^\/api\/(me|login|logout|users|centres)(?:[/?]|$)/.test(url))return url;
   const parsed=new URL(url,'http://centre.local');if(!(parsed.pathname.startsWith('/api/sppb/')&&parsed.searchParams.get('centre')==='all'))parsed.searchParams.set('centre',selectedCentre.id);if(isReportingPath(parsed.pathname)||/^\/api\/clients\/(report|outreach|priorities|followups)$/.test(parsed.pathname)){parsed.searchParams.set('reportingMode',reportMode);if(reportMode==='exploratory')parsed.searchParams.set('includeExcluded','1');}return parsed.pathname+parsed.search;
 }
-async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+async function performRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const generation=centreGeneration;
   const timeoutMessage =
     url.split("?")[0] === "/api/import/confirm"
@@ -89,6 +89,19 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
   return data as T;
 }
+async function request<T>(url:string,options:RequestInit={}):Promise<T>{
+  // Writes retain their resumable server workflow; only reads have a client
+  // deadline. Never retry a write automatically after an uncertain response.
+  if((options.method||'GET')!=='GET')return performRequest<T>(url,options);
+  const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+  const signal=options.signal?AbortSignal.any([options.signal,controller.signal]):controller.signal;
+  try{
+    return await Promise.race([performRequest<T>(url,{...options,signal}),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{reject(Object.assign(Error('Loading took longer than expected. Check your connection and try again.'),{status:408}));controller.abort();},30000);})]);
+  }finally{clearTimeout(timer);}
+}
+let readEpoch=0;
+const recentReads=new Map<string,{expires:number;value:unknown}>();
+export function invalidateReadCache(){readEpoch++;recentReads.clear();}
 
 // Coalesce only concurrent GETs. Never persist protected results across sessions
 // and never share a cancellable request with another caller.
@@ -108,7 +121,7 @@ async function uploadInChunks<T>(url:string,options:RequestInit,file:File):Promi
     active();return await request<T>(url,{...options,body:JSON.stringify({uploadId:session.id}),headers:{...options.headers,'Content-Type':'application/json'}});
   }finally{await request('/api/centres/uploads/'+session.id,{method:'DELETE'}).catch(()=>{});}
 }
-export function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+function requestApi<T>(url: string, options: RequestInit = {}): Promise<T> {
   url=centreUrl(url);
   if ((options.method || "GET") !== "GET") {
     inFlight.clear();
@@ -133,4 +146,20 @@ export function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   });
   inFlight.set(url, pending);
   return pending;
+}
+export function api<T>(url:string,options:RequestInit & {reuseForMs?:number}={}):Promise<T>{
+  const {reuseForMs=0,...init}=options;
+  if((init.method||'GET')!=='GET')invalidateReadCache();
+  const scoped=centreUrl(url),generation=centreGeneration,epoch=readEpoch;
+  const allowed=(init.method||'GET')==='GET'&&reuseForMs>0&&!init.headers&&!init.body&&/^\/api\/(dashboard|reporting\/briefing|programme-domains\/report)(?:\?|$)/.test(scoped);
+  const key=generation+':'+scoped,prior=allowed?recentReads.get(key):null;
+  if(init.signal?.aborted)return requestApi<T>(url,init);
+  if(prior&&prior.expires>Date.now())return Promise.resolve(structuredClone(prior.value) as T);
+  return requestApi<T>(url,init).then(value=>{
+    if(allowed&&epoch===readEpoch&&generation===centreGeneration&&!init.signal?.aborted){
+      if(recentReads.size>=12)recentReads.delete(recentReads.keys().next().value!);
+      recentReads.set(key,{expires:Date.now()+Math.min(reuseForMs,15000),value:structuredClone(value)});
+    }
+    return value;
+  });
 }

@@ -7,6 +7,7 @@ import type {
 } from "../shared/engagement-depth.js";
 import { sortGroups } from "../shared/participation-reliability.js";
 import "./engagement-panel.css";
+import {InsightCard} from './experience';
 
 type Group = {
   label: string;
@@ -41,6 +42,8 @@ export function EngagementPanel({
     : [mode];
   const labels = engagementLabels(metadata);
   const rows = sortGroups(groups, "label", dimension);
+  const candidates=rows.filter(g=>!g.suppressed&&g.engagement&&g.engagement.population>=5).map(g=>({label:g.label,n:g.engagement!.population,once:g.engagement!.depth.find(c=>c.id==='oneTime')?.count??0})).sort((a,b)=>b.once/b.n-a.once/a.n);
+  const finding=candidates.length>1&&candidates[0].once>0?candidates[0]:null;
   return (
     <section className="panel engagement-panel" aria-labelledby={id}>
       <h2 id={id}>How often do participants return?</h2>
@@ -119,9 +122,9 @@ export function EngagementPanel({
         );
         return (
           <div key={view} className="engagement-view">
-            <h3>{title}</h3><MetricHelp label={title} definition="Depth: distinct sessions in the selected period/domain, as a count and percentage of this population. Recency: days since latest full-history attendance, anchored to coverage end. No recorded history and no matching attendance are separate; unavailable/withheld values are not zero."/>
+            <h3>{view==='depth'?'Attendance frequency by group':'How recently people attended'}</h3><MetricHelp label={title} definition="Depth: distinct sessions in the selected period/domain, as a count and percentage of this population. Recency: days since latest full-history attendance, anchored to coverage end. No recorded history and no matching attendance are separate; unavailable/withheld values are not zero."/>
             <ul className="engagement-legend" aria-label={`${title} legend`}>
-              {labels[view].map((cell) => (
+              {labels[view].filter(cell=>rows.some(g=>!g.suppressed&&(g.engagement?.[view].find(v=>v.id===cell.id)?.count||0)>0)).map((cell) => (
                 <li key={cell.id}>
                   <i
                     className={`engagement-tone-${cell.id}`}
@@ -158,15 +161,6 @@ export function EngagementPanel({
                             >{cell.percentage!=null&&cell.percentage>=12&&<b aria-hidden="true">{fmt(cell.count)}</b>}<span className="chart-tooltip" role="tooltip">{cell.label}: {fmt(cell.count)} people ({fmt(cell.percentage,'%')})</span></span>
                           ))}
                       </div>
-                      <p>
-                        {data[view]
-                          .filter((cell) => cell.count > 0)
-                          .map(
-                            (cell) =>
-                              `${cell.label}: ${cell.count} (${fmt(cell.percentage, "%")})`,
-                          )
-                          .join(" · ")}
-                      </p>
                     </>
                   ) : (
                     <p className="note">
@@ -193,6 +187,7 @@ export function EngagementPanel({
           </div>
         );
       })}
+      {!printing&&mode==='depth'&&finding&&<InsightCard title="A group worth following up" finding={`${finding.label}: ${finding.once} of ${finding.n} people (${fmt(finding.once/finding.n*100,'%')}) attended once in this selection.`} why="A single recorded visit may warrant a review of opportunities to return." check="Which programmes did this group attend, and were suitable follow-up sessions available?" action="Review programme availability and reported feedback before changing plans." />}
       <details className="chart-methodology" open={printing}><summary>How frequency and recency are defined</summary>      <p>
         {populationLabel}. Depth counts distinct sessions matching the selected
         reporting period and filters. Each bar uses the eligible people in that

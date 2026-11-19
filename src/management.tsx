@@ -5,6 +5,7 @@ import { api } from "./api";
 import { TrendChart } from "./analytics-ui";
 import type { Dashboard, Filters } from "./types";
 import type { ProtectedSeries } from "./needs-ui";
+import {InsightCard} from './experience';
 
 export type Briefing = {
   programmeMix?:null|{domains:{label:string;sessions:number}[];types:{label:string;sessions:number;unique:number|null;repeat:number|null}[];findings:{finding:string;evidence:string;implication:string;investigate:string;action:string}[];note:string};
@@ -49,6 +50,7 @@ export function useBriefing(
     const controller = new AbortController();
     api<Briefing>("/api/reporting/briefing?" + query, {
       signal: controller.signal,
+      reuseForMs:15000,
     })
       .then((v) => {
         if (controller.signal.aborted) return;
@@ -66,7 +68,7 @@ export function ReportBars({
   rows,
   maxValue,
 }: {
-  rows: { label: string; value: number; detail?: string }[];
+  rows: { label: string; value: number | null; detail?: string; colour?:string }[];
   maxValue?: number;
 }) {
   return <HorizontalRankingChart rows={rows} maxValue={maxValue}/>;
@@ -218,20 +220,8 @@ function Findings({
   ];
   return (
     <div className="management-findings">
-      {rows.map((r) => (
-        <article className="panel" key={r.title}>
-          <h3>{r.title}</h3>
-          <p>
-            <b>Evidence:</b> {r.evidence}
-          </p>
-          <p>{r.why}</p>
-          <p>
-            <b>Next step:</b> {r.next}
-          </p>
-          <button className="text-button" onClick={() => navigate(r.tab)}>
-            View analysis →
-          </button>
-        </article>
+      {rows.filter(r=>data.coverage.from&&(r.title!=='Ask before planning'||briefing?.needs?.respondents!=null)).map((r) => (
+        <InsightCard key={r.title} title={r.title} finding={r.evidence} why={r.why} check={r.next} action="View supporting analysis" onAction={()=>navigate(r.tab)}/>
       ))}
     </div>
   );
@@ -303,7 +293,7 @@ export function ManagementHome({
         <ChartCard title="How is participation changing?" description="Distinct seniors in each reporting period. People may appear in several periods.">
           <TrendChart rows={data.trends} metric={audience} />
         </ChartCard>
-        <ChartCard title="Which programmes reach the most seniors?" description="Top five by the selected reach measure. Session frequency adds context.">
+        <ChartCard title="Which programmes reach the most seniors?" description="Top five by the selected reach measure. Session frequency adds context." toolbar={<button className="text-button" onClick={()=>navigate('Programme Performance')}>View all programmes</button>}>
           <ReportBars
             rows={[...data.programmes]
               .sort((a, b) => b[audience] - a[audience])
@@ -321,7 +311,7 @@ export function ManagementHome({
         revision={revision}
         available={!!data.coverage.from}
       />
-      {value?.programmeMix&&<section className="panel"><h2>Programme Mix and Engagement Types</h2><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore programme domains and Event Types</button></section>}
+      {value?.programmeMix&&<details className="panel"><summary>Programme Domains</summary><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore Programme Domains</button></details>}
       <section className="panel simple-next-step">
         <h2>Plan the next step</h2>
         <p>

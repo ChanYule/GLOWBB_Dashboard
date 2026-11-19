@@ -194,7 +194,7 @@ test("batched merge matches whole-file profile precedence, blank retention and s
   }
 });
 
-test("observations from skipped rows survive when their participant is first inserted in a later batch", async () => {
+test("batched session domain differences preserve attendance and source profile observations", async () => {
   const rejected = [
     "p0",
     "MALE",
@@ -243,11 +243,14 @@ test("observations from skipped rows survive when their participant is first ins
     const first = await f.step();
     assert.equal(first.status, 200, JSON.stringify(first.body));
     assert.equal(first.body.pending, true);
-    assert.equal(readData(f.db).participants.length, 0);
+    assert.equal(readData(f.db).participants.length, 1);
     const last = await f.step();
     assert.equal(last.status, 200, JSON.stringify(last.body));
-    assert.equal(last.body.imported, 1);
-    assert.equal(last.body.centres.glow_bukit_batok.skipped, 2000);
+    assert.equal(last.body.imported, 2);
+    assert.equal(last.body.centres.glow_bukit_batok.skipped, 0);
+    assert.equal(readData(f.db).attendance.length,2);
+    assert.equal(readData(f.db).programmes.find(p=>p.name==="GLOW Batch Movement").domain,"Learning");
+    assert.ok(readData(f.db).sessions.every(s=>s.optional.aapDomainRaw==="Physical"));
     assert.deepEqual(
       f.db
         .prepare("SELECT raw FROM risk_observations ORDER BY raw")

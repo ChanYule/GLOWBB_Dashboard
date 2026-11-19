@@ -114,15 +114,13 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
       aria-label="Selected group and overall context"
     >
       <p>
-        <strong>Selected group: {report.group || "Unavailable"}.</strong> All
-        primary figures below refer to this group; muted lines show the overall
-        population for the same period and domain.
+        <strong>Selected group: {report.group || "Unavailable"}.</strong>
       </p>
-      <p className="table-note">
+      <details className="chart-methodology"><summary>Population and data coverage</summary><p className="table-note">
         Known characteristic: {fmt(report.completeness, "%")} of this overall
         population. Missing registration dates do not establish historical membership;
         attendance coverage is limited to the records available.
-      </p>
+      </p></details>
       <div className="patterns-kpis">
         {cards.map((card) => (
           <article className="panel" key={card.title} aria-label={card.title}>
@@ -133,23 +131,19 @@ export function ParticipationGroupSummary({ report }: { report: Report }) {
           </article>
         ))}
         <article className="panel" aria-label="Median sessions per participant">
-          <span>Median sessions / participant</span>
+          <span>Typical sessions attended</span>
           <strong
             title={`Mean sessions per group participant: ${value(d?.mean)}`}
           >
             {value(d?.median)}
           </strong>
-          <p>Middle 50% (IQR): {withheld ? "Withheld" : middle(d)}.</p>
-          <p>
-            {d && !withheld
-              ? `Among ${fmt(d.participants)} group participants who attended at least once.`
-              : "Participating-person session counts are unavailable or withheld."}
-          </p>
           <details>
             <summary aria-label="How median sessions per participant is calculated">
               Definition and mean
             </summary>
             <p>
+              Middle 50% (IQR): {withheld ? 'Withheld' : middle(d)}. {d&&!withheld?`Among ${fmt(d.participants)} group participants who attended at least once.`:'Participating-person session counts are unavailable or withheld.'}
+            </p><p>
               Median is the middle session count per attendee. The interquartile
               range (IQR) spans the middle 50%. Quartiles use linear
               interpolation. Each person-session counts once; nonattenders are

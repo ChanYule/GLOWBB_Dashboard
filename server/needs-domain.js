@@ -1,3 +1,4 @@
+import {sessionDomains,combinedDomainData} from './programme-domains.js';
 import {performanceData} from "./reporting-policy.js";
 import { analytics, defaults, hash, todaySG } from "./domain.js";
 export const interests = [
@@ -168,7 +169,7 @@ export function participantHistory(
     attendance: rows.length,
     sessions: new Set(rows.map((a) => a.session.id)).size,
     programmes: new Set(rows.map((a) => a.programme.id)).size,
-    domains: new Set(rows.map((a) => a.programme.domain)).size,
+    domains: new Set(rows.flatMap(a=>a.session.combinedDomains??sessionDomains(a.session,a.programme))).size,
     first: dates[0] || null,
     last,
     daysSince: days,
@@ -196,6 +197,7 @@ export function needsAnalysis(
   now = todaySG(),
   briefingOnly = false,
 ) {
+  data=combinedDomainData(data,configured);
   const settings = { ...defaults, ...configured },
     effective = materializeProfiles(data, profiles),
     pmap = new Map(effective.participants.map((p) => [p.id, p]));
@@ -700,12 +702,12 @@ export function needsAnalysis(
   const programmeReport = programmeData === effective ? report : analytics(programmeData, settings, filters, now);
   const groupedDomains = new Map();
   for (const d of report.domains) {
-    const label = settings.domainGroups[d.label] || d.label;
+    const label = d.label;
     if (!groupedDomains.has(label)) groupedDomains.set(label, []);
     groupedDomains.get(label).push(d.label);
   }
   const alignment = [...groupedDomains].map(([label, domains]) => {
-    const pg = report.programmes.filter((p) => domains.includes(p.domain)),
+    const pg = report.programmes.filter((p) => p.combinedDomains?.some(d=>domains.includes(d))),
       ids = new Set(pg.map((p) => p.id));
     const subset = analytics(
       programmeData,
@@ -874,6 +876,7 @@ export function needsAnalysis(
       note: "Latest attendance across full available history, independent of reporting dates. This describes recorded activity, not willingness to participate.",
     },
     quality,
+    domainQuality:{unclassifiedSessions:data.sessions.filter(s=>!s.combinedDomains?.length).length},
     qualityScope: registryKnown
       ? "Complete attested member registry snapshot (all ages)"
       : "Full known/imported profile database (all ages); membership completeness is not established",
@@ -927,7 +930,7 @@ export function needsAnalysis(
       const small = count => count > 0 && count < minimum;
       const protectedRows = !settings.staffAnalysisFull && (sensitive || report.programmes.some(p => small(p.unique) || small(report.summary.unique - p.unique)));
       return report.programmes.map(p => ({
-        id: p.id, name: p.name, primaryDomain: p.domain,
+        id: p.id, name: p.name, primaryDomain: p.sourceDomain||p.domain,combinedDomains:p.combinedDomains||[],
         subDomains: [...new Set(p.sessionList.flatMap(session => session.eventTypes?.length ? session.eventTypes : ["Unclassified / unknown"]))].sort(),
         sessions: p.sessions,
         unique: protectedRows ? null : p.unique,

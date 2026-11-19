@@ -116,6 +116,23 @@ export function createPlatformApp(control = openDb(), options = {}) {
   app.get("/api/me", async (req, res) =>
     res.json({ ...req.user, ...(await access(req.user)), platform: true }),
   );
+  app.get('/api/centres/status',async(req,res)=>{
+    const grants=await access(req.user);
+    if(req.user.role!=='admin'&&!grants.canCompare)throw fail(403,'Centre administration access is required.');
+    const rows=[];
+    for(const centre of grants.centres){
+      const db=await workspaces.get(centre.id);
+      const [people,sessions,attendance,last,settings]=await Promise.all([
+        db.prepare('SELECT COUNT(*) AS n FROM participants').get(),
+        db.prepare('SELECT COUNT(*) AS n FROM sessions').get(),
+        db.prepare('SELECT COUNT(*) AS n FROM attendance').get(),
+        db.prepare('SELECT MAX(created) AS created FROM imports').get(),
+        db.storage?db.storage.getSettings(db):getSettings(db),
+      ]);
+      rows.push({...centre,participants:Number(people.n),sessions:Number(sessions.n),attendance:Number(attendance.n),lastImport:last.created||null,registryComplete:settings.registry?.complete===true});
+    }
+    res.json({rows});
+  });
   app.put("/api/centres/preference", async (req, res) => {
     const a = await access(req.user);
     if (!a.ids.includes(req.body.centreId))

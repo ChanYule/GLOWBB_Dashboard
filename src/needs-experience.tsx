@@ -4,6 +4,7 @@ import { NeedsPage, ProtectedDistribution } from "./needs-ui";
 import type { NeedsReport } from "./needs-ui";
 import { SocialRisk } from "./workspace";
 import type { Filters, User } from "./types";
+import {LoadingState,ErrorState} from './experience';
 
 type Offering = {
   id: string;
@@ -27,6 +28,7 @@ export function NeedsExperience({
   const [showAccess, setShowAccess] = useState(false),
     [offerings, setOfferings] = useState<Offering[]>([]),
     [accessSearch, setAccessSearch] = useState("");
+  const [retry,setRetry]=useState(0);
   useEffect(() => {
     if (!showAccess || user.role === "viewer") return;
     const controller = new AbortController();
@@ -52,7 +54,7 @@ export function NeedsExperience({
         if (!controller.signal.aborted) setError(e.message);
       });
     return () => controller.abort();
-  }, [query, user.role]);
+  }, [query, user.role,retry]);
   if (user.role === "viewer")
     return (
       <p className="panel">
@@ -91,9 +93,7 @@ export function NeedsExperience({
         ))}
       </div>
       {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+        <ErrorState message={error} onRetry={()=>setRetry(n=>n+1)}/>
       )}
       {section !== "summary" ? (
         <NeedsPage
@@ -103,7 +103,7 @@ export function NeedsExperience({
           onRefresh={onRefresh}
         />
       ) : !report ? (
-        <p role="status">Loading recorded needs…</p>
+        <LoadingState label="Loading recorded needs…"/>
       ) : (
         <>
           <div className="needs-experience-grid">
@@ -181,33 +181,14 @@ export function NeedsExperience({
               Compare stated needs with verified programme information. Missing
               metadata requires staff review.
             </p>
-            <div className="work-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Participant requirement</th>
-                    <th>Programme information to verify</th>
-                    <th>Next step</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["Language preference", "Languages used"],
-                    [
-                      "Mobility or stamina support",
-                      "Venue access and seated options",
-                    ],
-                    ["Preferred timing", "Session dates and times"],
-                    ["Reported interests", "Staff-reviewed programme tags"],
-                  ].map(([a, b]) => (
-                    <tr key={a}>
-                      <th>{a}</th>
-                      <td>{b}</td>
-                      <td>Review programme accessibility</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="needs-accessibility-grid">
+              {[
+                {title:'Language and communication',series:report.responses.preferences.languages,check:'Languages used during the activity and communication support.',action:'Review language support',response:'languages'},
+                {title:'Mobility and physical accessibility',series:report.responses.needs,check:'Verified venue access, seated options and recorded mobility requirements.',action:'Check seated activity options',response:'needs'},
+                {title:'Programme timing',series:null,check:'Ask about suitable time slots; attendance alone does not establish a preferred time.',action:'Review suitable time slots',response:'barriers'},
+                {title:'Interests and preferences',series:report.responses.interests,check:'Compare recorded interests with staff-reviewed programme descriptions.',action:'Compare interests with programmes',response:'interests'},
+                {title:'Social support and reported barriers',series:report.responses.barriers,check:'Use participant or caregiver reports; living arrangements do not establish isolation.',action:'Review reported participation barriers',response:'barriers'},
+              ].map(item=><article key={item.title}><h3>{item.title}</h3><dl><dt>What we know</dt><dd>{item.series?.suppressed?'Recorded responses are withheld under the reporting rules.':item.series?.denominator!=null?`${item.series.denominator.toLocaleString('en-SG')} people in this question's recorded response population. Categories may overlap.`:'Structured preference information is not available in this summary.'}</dd><dt>What is missing / what to check</dt><dd>{item.check} A missing response does not mean no support is needed.</dd></dl><button className="text-button" onClick={()=>{setResponse(item.response);setSection(item.response==='barriers'?'gaps':'alignment');}}>{item.action}</button></article>)}
             </div>
             <details onToggle={(e) => setShowAccess(e.currentTarget.open)}>
               <summary>Compare recorded programme accessibility</summary>

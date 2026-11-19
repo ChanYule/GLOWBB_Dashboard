@@ -8,7 +8,7 @@ import { currentClientRows, validDay } from "./client-domain.js";
 import { dataTransaction } from "./data-management.js";
 import { importFileUpload } from "./large-uploads.js";
 import { sessionEventTypes } from "./event-types.js";
-import { activityDomains } from "../shared/activity-domains.js";
+import { sessionDomains,PROGRAMME_DOMAINS } from "./programme-domains.js";
 import {
   sppbDefaults,
   sppbFail as fail,
@@ -142,6 +142,8 @@ export function mountSppb(app, { control, workspaces, access }) {
       const profiles = await db
         .prepare("SELECT * FROM participant_profiles")
         .all();
+      const participantById=new Map(data.participants.map(p=>[p.id,p]));
+      const profileById=new Map(profiles.map(p=>[p.participant_id,JSON.parse(p.details).basic||{}]));
       for (const p of data.participants) existing.add(p.id);
       complete &&=
         settings.registry?.type === "clients" &&
@@ -154,11 +156,8 @@ export function mountSppb(app, { control, workspaces, access }) {
             (r.registrationDate && r.registrationDate > todaySG())
           )
             continue;
-          const base = data.participants.find((p) => p.id === r.id) || {};
-          const basic =
-            JSON.parse(
-              profiles.find((p) => p.participant_id === r.id)?.details || "{}",
-            ).basic || {};
+          const base = participantById.get(r.id) || {};
+          const basic = profileById.get(r.id) || {};
           const person = people.get(r.id) || {
             id: r.id,
             memberId: r.memberId || null,
@@ -169,7 +168,7 @@ export function mountSppb(app, { control, workspaces, access }) {
           person.centres.push(id);
           people.set(r.id, person);
         }
-      states.push({ id, data });
+      states.push({ id, data, settings });
     }
     return { people, existing, complete, ids, states };
   }
@@ -278,6 +277,22 @@ export function mountSppb(app, { control, workspaces, access }) {
           monthly.get(month).add(m.id);
         }
     const assessed = selected.filter((m) => m.latestDate).length;
+    const scoreGroups = new Map();
+    for (const m of selected) {
+      const latest = m.latest;
+      if (latest?.original.total == null) continue;
+      const key = JSON.stringify([
+        latest.sourceDefinition,
+        latest.original.total,
+      ]);
+      const group = scoreGroups.get(key) || {
+        sourceDefinition: latest.sourceDefinition,
+        total: latest.original.total,
+        members: 0,
+      };
+      group.members++;
+      scoreGroups.set(key, group);
+    }
     const summary = {
       eligible: visible.length,
       assessed,
@@ -334,6 +349,11 @@ export function mountSppb(app, { control, workspaces, access }) {
       selected,
       filtered,
       summary,
+      recordedScores: [...scoreGroups.values()].sort(
+        (a, b) =>
+          a.sourceDefinition.localeCompare(b.sourceDefinition) ||
+          a.total - b.total,
+      ),
       monthly: [...monthly]
         .sort()
         .map(([month, ids]) => ({ month, members: ids.size })),
@@ -384,6 +404,7 @@ export function mountSppb(app, { control, workspaces, access }) {
       }));
     res.json({
       summary: r.summary,
+      recordedScores: r.recordedScores,
       rows,
       total: r.filtered.length,
       page: r.q.page,
@@ -450,7 +471,7 @@ export function mountSppb(app, { control, workspaces, access }) {
             const p = catalogue.get(s.programmeId);
             if (p) {
               programmes.add(p.name);
-              for (const domain of activityDomains(p.domain))
+              for (const domain of sessionDomains(s,p,state.settings))
                 domains.add(domain);
               for (const e of sessionEventTypes(s)) events.add(e);
             }
@@ -458,7 +479,7 @@ export function mountSppb(app, { control, workspaces, access }) {
       }
       participation.sessions = seen.size;
       participation.programmes = [...programmes];
-      participation.domains = [...domains];
+      participation.domains = PROGRAMME_DOMAINS.filter(d=>domains.has(d));
       participation.eventTypes = [...events];
     }
     await dataTransaction(

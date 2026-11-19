@@ -584,6 +584,13 @@ for (const engine of ["SQLite", "PostgreSQL"])
       assert.equal(overview.summary.assessed, 1);
       assert.equal(overview.summary.repeated, 1);
       assert.equal(overview.summary.comparable, 0);
+      assert.deepEqual(overview.recordedScores, [
+        {
+          sourceDefinition: "caritahub-export-unverified",
+          total: 9,
+          members: 1,
+        },
+      ]);
       assert.equal(
         overview.rows.some((r) => r.memberId === "attendance-only"),
         false,
