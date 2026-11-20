@@ -20,6 +20,7 @@ import {
 import { readData, saveImport } from "../server/db.js";
 import { CLIENT_SNAPSHOT } from "../server/client-domain.js";
 import { tsImport } from "tsx/esm/api";
+import {parseSppb,sppbHeaders} from '../server/sppb-domain.js';
 const f = await centreQaFixture();
 const actor = f.control
   .prepare("SELECT id FROM users WHERE username='__local_workspace__'")
@@ -77,6 +78,8 @@ f.db
       },
     }),
   );
+const assessments=parseSppb([sppbHeaders,...Array.from({length:666},(_,i)=>['QA-'+(i%400),i<400?'2026-04-01':'2026-10-01',2,2,i%5,4+i%5])]);
+for(const record of assessments.rows)f.control.prepare('INSERT INTO sppb_records VALUES(?,?,?)').run(record.id,record.memberKey,JSON.stringify(record));
 const server = f.app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
 const origin = "http://127.0.0.1:" + server.address().port,
@@ -134,19 +137,20 @@ try {
       calls++;
       return originalFetch(origin + path, options);
     };
-    for (const reuse of [false, true]) {
+    for(const readPath of ['/api/dashboard?view=overview','/api/sppb/overview'])for (const reuse of [false, true]) {
       invalidateReadCache();
       calls = 0;
       const timings = [];
       for (let i = 0; i < 5; i++) {
         const start = performance.now();
-        await clientApi("/api/dashboard?view=overview", {
+        await clientApi(readPath, {
           reuseForMs: reuse ? 15000 : 0,
         });
         timings.push(performance.now() - start);
       }
       const warm = timings.slice(1).sort((a, b) => a - b);
       clientReuse.push({
+        path:readPath,
         mode: reuse ? "15-second isolated reuse" : "uncached control",
         calls: 5,
         networkRequests: calls,
@@ -174,6 +178,7 @@ try {
     fixture: {
       sourceRows: source.length,
       registry: 400,
+      assessments:assessments.rows.length,
       centre: "glow_bukit_batok",
     },
     environment:

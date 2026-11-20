@@ -969,3 +969,26 @@ for(const engine of ['SQLite','PostgreSQL'])test(`${engine}: 666-record SPPB imp
    const again=await f.save(matrix(...Array.from({length:666},(_,i)=>row('bulk-'+i))));assert.equal(again.result.inserted,0);
  }finally{await f.close();}
 });
+
+for(const engine of ['SQLite','PostgreSQL'])test(`${engine}: SPPB scores join current profiles and permitted pre-assessment programme attendance`,async()=>{
+ const f=await fixture(engine),centre=CENTRES[0].id;
+ try{
+  const db=await f.seed(centre,'linked-a');await f.seed(centre,'linked-b');await f.seed(CENTRES[1].id,'other-centre-private');
+  await db.prepare("INSERT OR IGNORE INTO users(id,username,password,role) VALUES(1,'analysis-fixture','disabled','admin')").run();
+  await db.prepare('INSERT INTO participant_profiles VALUES(?,?,?,?,?)').run(hash(['linked-a']),1,JSON.stringify({basic:{age:85,cfs:'5',riskRaw:'0',livingRaw:'Alone',gender:'FEMALE'}}),'2026-11-01',1);
+  await db.prepare('INSERT INTO programmes(id,name,domain) VALUES(?,?,?)').run('linked-programme','Movement','Physical');
+  for(const [id,date]of [['before','2026-09-01'],['before2','2026-09-02'],['after','2026-10-02']]){
+   await db.prepare('INSERT INTO sessions(id,programme_id,date,start,end,optional) VALUES(?,?,?,?,?,?)').run(id,'linked-programme',date,540,600,JSON.stringify({eventTypes:['Cognitive & Social']}));
+   await db.prepare('INSERT INTO attendance VALUES(?,?,?,?,?)').run(id,hash(['linked-a']),id,date,null);
+  }
+  await f.save(matrix(row('linked-a','2026-10-01',[4,8,4,16]),row('linked-b','2026-10-01',[2,2,2,6]),row('other-centre-private','2026-10-01')));
+  let snapshots=0;if(db.storage){const read=db.storage.readPlanningState;db.storage.readPlanningState=async(...args)=>{snapshots++;return read(...args);};}
+  const report=await f.json('/api/sppb/overview?centre='+centre);assert.equal(report.analysis.population,2);assert.equal(report.analysis.scored,2);const source=report.analysis.sourceGroups[0];assert.equal(source.medianTotal,11);assert.equal(source.cohorts.attendance.find(c=>c.label==='Two or more sessions').medianSessions,2);assert.equal(source.cohorts.cfs.find(c=>c.label==='5').members,1);assert.equal(source.cohorts.srf.find(c=>c.label==='0').members,1);assert.equal(source.cohorts.age.find(c=>c.label==='80+').members,1);assert.equal(source.domains.find(d=>d.label==='Cognitive').attended.members,1);assert.equal(source.programmes[0].sessions,2);assert.equal(JSON.stringify(report).includes('other-centre-private'),false);if(db.storage)assert.equal(snapshots,1);
+  const file=await f.request('/api/sppb/export?centre='+centre+'&format=xlsx');assert.equal(file.status,200);const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(Buffer.from(await file.arrayBuffer()));assert.ok(workbook.getWorksheet('Scores and participation').rowCount>1);
+  const pdf=await f.request('/api/sppb/export?centre='+centre+'&format=pdf');assert.equal(pdf.status,200);assert.match(await pdf.text(),/Scores and programme participation/);
+  const viewer=await f.json('/api/sppb/overview?centre='+centre,undefined,'viewer');assert.equal(viewer.analysis,undefined);assert.equal(viewer.rows,undefined);
+  const filtered=await f.json('/api/sppb/overview?centre='+centre+'&cfs=5');assert.equal(filtered.analysis.population,1);assert.equal(filtered.analysis.scored,1);
+  await db.prepare('UPDATE member_registry SET details=? WHERE participant_id=? AND snapshot=?').run(JSON.stringify({memberId:'linked-a',client:true,membershipStatus:'Archived'}),hash(['linked-a']),CLIENT_SNAPSHOT);
+  const archived=await f.json('/api/sppb/overview?centre='+centre);assert.equal(archived.analysis.population,1);assert.equal(archived.analysis.sourceGroups[0].medianTotal,6);
+ }finally{await f.close();}
+});

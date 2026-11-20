@@ -1828,3 +1828,5 @@ body {
   white-space: normal;
   text-align: left;
 }
+
+.workspace-view-control{display:flex;align-items:center;gap:.75rem;margin:1rem 0;font-weight:600}.workspace-view-control select{max-width:100%;min-width:min(20rem,70vw)}@media(max-width:600px){.workspace-view-control{align-items:stretch;flex-direction:column}}

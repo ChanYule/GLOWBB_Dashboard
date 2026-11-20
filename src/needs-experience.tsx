@@ -75,23 +75,7 @@ export function NeedsExperience({
     : null;
   return (
     <>
-      <div className="section-tabs" role="group" aria-label="Needs workspaces">
-        {[
-          ["summary", "Needs summary"],
-          ["profile", "Participant records"],
-          ["gaps", "Participation barriers"],
-          ["alignment", "Programme accessibility"],
-        ].map(([key, label]) => (
-          <button
-            className={section === key ? "button primary" : "button"}
-            aria-pressed={section === key}
-            key={key}
-            onClick={() => setSection(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <label className="workspace-view-control">Show<select aria-label="Participant needs view" value={section} onChange={e=>setSection(e.target.value)}>{[["summary","Needs summary"],["profile","Participant records"],["gaps","Participation barriers"],["alignment","Programme accessibility"]].map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
       {error && (
         <ErrorState message={error} onRetry={()=>setRetry(n=>n+1)}/>
       )}

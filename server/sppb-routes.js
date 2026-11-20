@@ -9,6 +9,7 @@ import { dataTransaction } from "./data-management.js";
 import { importFileUpload } from "./large-uploads.js";
 import { sessionEventTypes } from "./event-types.js";
 import { sessionDomains,PROGRAMME_DOMAINS } from "./programme-domains.js";
+import {sppbParticipationAnalysis} from './sppb-analysis.js';
 import {
   sppbDefaults,
   sppbFail as fail,
@@ -77,8 +78,9 @@ async function configuration(db) {
     revision: row.revision,
   };
 }
-async function allRecords(db) {
-  return (await db.prepare("SELECT * FROM sppb_records").all()).map((r) => ({
+async function allRecords(db,keys=null) {
+  const rows=keys===null?await db.prepare('SELECT * FROM sppb_records').all():!keys.size?[]:db.storage?(await db.query('SELECT * FROM glowbb.sppb_records WHERE member_key=ANY($1::text[])',[[...keys]])).rows:await db.prepare('SELECT * FROM sppb_records WHERE member_key IN (SELECT value FROM json_each(?))').all(JSON.stringify([...keys]));
+  return rows.map((r) => ({
     id: r.id,
     memberKey: r.member_key,
     ...JSON.parse(r.details),
@@ -140,12 +142,11 @@ export function mountSppb(app, { control, workspaces, access }) {
         for(const p of await db.prepare('SELECT id FROM participants').all())existing.add(p.id);
         continue;
       }
-      const data = await storage.readData(db),
-        settings = await storage.getSettings(db);
-      const registry = await db.prepare("SELECT * FROM member_registry").all();
-      const profiles = await db
-        .prepare("SELECT * FROM participant_profiles")
-        .all();
+      const snapshot=storage.readPlanningState?await storage.readPlanningState(db):null;
+      const data = snapshot?.data??await storage.readData(db),
+        settings = snapshot?.settings??await storage.getSettings(db);
+      const registry = snapshot?.registry??await db.prepare("SELECT * FROM member_registry").all();
+      const profiles = snapshot?.profiles??await db.prepare("SELECT * FROM participant_profiles").all();
       const participantById=new Map(data.participants.map(p=>[p.id,p]));
       const profileById=new Map(profiles.map(p=>[p.participant_id,JSON.parse(p.details).basic||{}]));
       for (const p of data.participants) existing.add(p.id);
@@ -169,6 +170,11 @@ export function mountSppb(app, { control, workspaces, access }) {
             cfs: basic.cfs ?? r.cfs ?? base.cfs,
             centres: [],
           };
+          for(const field of ['age','cfs','gender','race','riskRaw','livingRaw']){
+            const value=[basic[field],r[field],base[field]].find(v=>v!=null&&v!=='');
+            if(person[field]==null||person[field]==='')person[field]=value;
+            else if(value!=null&&String(person[field])!==String(value))person.profileConflicts=[...new Set([...(person.profileConflicts||[]),field])];
+          }
           person.centres.push(id);
           people.set(r.id, person);
         }
@@ -216,7 +222,7 @@ export function mountSppb(app, { control, workspaces, access }) {
     const q = filterInput(req),
       ctx = await context(req),
       config = await configuration(control),
-      records = await allRecords(control);
+      records = await allRecords(control,new Set(ctx.people.keys()));
     const visible = [...ctx.people.values()].filter(
       (p) =>
         (!q.search ||
@@ -408,6 +414,7 @@ export function mountSppb(app, { control, workspaces, access }) {
       }));
     res.json({
       summary: r.summary,
+      analysis:sppbParticipationAnalysis(r.filtered,r.ctx.states,r.q.asOf),
       recordedScores: r.recordedScores,
       rows,
       total: r.filtered.length,
@@ -990,6 +997,9 @@ export function mountSppb(app, { control, workspaces, access }) {
     const r = await report(req);
     if (!["xlsx", "pdf"].includes(req.query.format))
       throw fail(400, "Choose Excel or print / PDF export.");
+    const analysis=sppbParticipationAnalysis(r.filtered,r.ctx.states,r.q.asOf);
+    const analysisHeaders=['Source definition','Comparison','Group','Clients','Median recorded total','Median prior sessions','History spans window'];
+    const analysisRows=analysis.sourceGroups.flatMap(source=>Object.entries(source.cohorts).flatMap(([factor,groups])=>groups.map(g=>[source.sourceDefinition,factor,g.label,g.members,g.medianTotal??'Unavailable',g.medianSessions??'Unavailable',g.windowSpanned])));
     const rows = r.filtered.map((m) => [
       m.memberId,
       m.centres.map((id) => centreById(id).name).join("; "),
@@ -1047,6 +1057,9 @@ export function mountSppb(app, { control, workspaces, access }) {
       notes.addRow(["Assessment dates", r.q.from || "All", r.q.to || "All"]);
       notes.addRow(["Interpretation", r.note]);
       notes.addRow(["Scoring", PENDING]);
+      notes.addRow(['Linked analysis',analysis.note]);
+      notes.addRow(['Linked clients',analysis.scored,'Selected clients',analysis.population]);
+      const linked=workbook.addWorksheet('Scores and participation');linked.addRow(analysisHeaders);linked.addRows(analysisRows);linked.views=[{state:'frozen',ySplit:1}];linked.getRow(1).font={bold:true};linked.columns.forEach(c=>{c.width=26;});
       notes.getColumn(1).width = 24;
       notes.getColumn(2).width = 100;
       notes.getColumn(2).alignment = { wrapText: true };
@@ -1059,11 +1072,13 @@ export function mountSppb(app, { control, workspaces, access }) {
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         .send(Buffer.from(await workbook.xlsx.writeBuffer()));
-    } else
+    } else{
+      const linkedHtml=`<h2>Scores and programme participation</h2><p>${escape(analysis.note)}</p><p>${analysis.scored} linked numeric scores from ${analysis.population} selected clients.</p><table><thead><tr>${analysisHeaders.map(h=>`<th>${escape(h)}</th>`).join('')}</tr></thead><tbody>${analysisRows.map(row=>`<tr>${row.map(v=>`<td>${escape(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
       res
         .type("html")
         .send(
-          `<!doctype html><html lang="en"><meta charset="utf-8"><title>SPPB Assessments</title><style>body{font:14px system-ui;color:#17314b;padding:24px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left}thead{display:table-header-group}@media print{button{display:none}@page{size:landscape}}</style><h1>SPPB Assessments</h1><p>${escape(r.ctx.ids.map((id) => centreById(id).name).join(", "))} · Reporting date ${escape(r.q.asOf)} · ${escape(r.q.from || "All dates")} to ${escape(r.q.to || "All dates")}</p><p>${escape(r.note)}</p><p>${escape(PENDING)}</p><button onclick="window.print()">Print / Save as PDF</button><table><thead><tr>${headers.map((h) => `<th>${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v) => `<td>${escape(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></html>`,
-        );
+          `<!doctype html><html lang="en"><meta charset="utf-8"><title>SPPB Assessments</title><style>body{font:14px system-ui;color:#17314b;padding:24px}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left}thead{display:table-header-group}@media print{button{display:none}@page{size:landscape}}</style><h1>SPPB Assessments</h1><p>${escape(r.ctx.ids.map((id) => centreById(id).name).join(", "))} · Reporting date ${escape(r.q.asOf)} · ${escape(r.q.from || "All dates")} to ${escape(r.q.to || "All dates")}</p><p>${escape(r.note)}</p><p>${escape(PENDING)}</p><button onclick="window.print()">Print / Save as PDF</button><table><thead><tr>${headers.map((h) => `<th>${escape(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v) => `<td>${escape(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></html>`
+        .replace('</html>',linkedHtml+'</html>'));
+    }
   });
 }

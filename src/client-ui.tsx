@@ -794,38 +794,8 @@ export function ClientEngagement({
         </div>
       </section>
       <div className="client-tabs" aria-label="Client engagement sections">
-        {onLocations && (
-          <button onClick={onLocations}>
-            Location & Participation Insights
-          </button>
-        )}
-        {[
-          ["outreach", "Outreach priorities"],
-          ["priorities", "Follow-up priorities"],
-          ["quality", "Data completeness"],
-          ["analysis", "Client participation"],
-          ["explore", "Explore client participation gaps"],
-          ["followups", "Client follow-up list"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            aria-pressed={tab === key}
-            onClick={() => {
-              setTab(key);
-              if (key === "explore") setAdvanced(true);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        {user.role === "admin" && (
-          <button
-            aria-pressed={tool === "settings"}
-            onClick={() => setTool(tool === "settings" ? "" : "settings")}
-          >
-            <Layers3 size={16} /> Zones & rules
-          </button>
-        )}
+        <label className="workspace-view-control">Show<select aria-label="Client engagement view" value={tab} onChange={e=>{setTab(e.target.value);if(e.target.value==='explore')setAdvanced(true);}}>{[["outreach","Outreach priorities"],["priorities","Follow-up priorities"],["quality","Data completeness"],["analysis","Client participation"],["explore","Explore client participation gaps"],["followups","Client follow-up list"]].map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+        <details><summary>More client tools</summary>{onLocations&&<button onClick={onLocations}>Location &amp; Participation Insights</button>}{user.role==='admin'&&<button aria-pressed={tool==='settings'} onClick={()=>setTool(tool==='settings'?'':'settings')}><Layers3 size={16}/> Zones &amp; rules</button>}</details>
       </div>
       {tool === "import" && (
         <ClientRegistryImport

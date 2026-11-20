@@ -452,9 +452,7 @@ test("Client Engagement priority tab replaces analysis panels and uses only the 
     const before = requests.filter(
       (url) => url === "/api/clients/report",
     ).length;
-    fireEvent.click(
-      screen.getByRole("button", { name: "Follow-up priorities" }),
-    );
+    fireEvent.change(screen.getByLabelText('Client engagement view'),{target:{value:'priorities'}});
     await waitFor(() =>
       assert.ok(
         screen.getByRole("heading", { name: "Prioritised follow-up list" }),
@@ -465,12 +463,7 @@ test("Client Engagement priority tab replaces analysis panels and uses only the 
       requests.filter((url) => url === "/api/clients/report").length,
       before,
     );
-    assert.equal(
-      screen
-        .getByRole("button", { name: "Follow-up priorities" })
-        .getAttribute("aria-pressed"),
-      "true",
-    );
+    assert.equal(screen.getByLabelText('Client engagement view').value,'priorities');
   } finally {
     cleanup();
     globalThis.fetch = original;
@@ -710,11 +703,11 @@ test("administrator candidate review requires confirmation and uses the refreshe
       within(form).getByLabelText("Location verification status"),
       { target: { value: "Verified" } },
     );
-    assert.equal(
+    await waitFor(()=>assert.equal(
       within(form).getByRole("button", { name: "Save reviewed location" })
         .disabled,
       true,
-    );
+    ));
     fireEvent.click(
       within(form).getByRole("button", { name: "Find building candidates" }),
     );
@@ -2494,6 +2487,7 @@ test('SPPB UI keeps imported out-of-range scores pending and loads a member hist
   };
   try {
     render(React.createElement(SppbAssessments,{user:{username:'Planner',role:'planner'}}));
+    fireEvent.change(screen.getByLabelText('SPPB view'),{target:{value:'Latest assessments'}});
     await waitFor(()=>assert.ok(screen.getByRole('button',{name:'SPPB-TEST-001'})));
     assert.equal(requested.some(url=>url.includes('/members/')),false);
     assert.ok(screen.getByText('Recorded score analysis'));
@@ -2539,7 +2533,7 @@ test('SPPB import requires only preview and confirm, keeps settings optional and
     fireEvent.click(screen.getByRole('button',{name:'Confirm SPPB import'}));
     await waitFor(()=>assert.ok(confirmed));
     assert.deepEqual(confirmed,{id:'simple-import',confirmed:true});
-    await waitFor(()=>assert.equal(screen.getByRole('tab',{name:'Latest assessments'}).getAttribute('aria-selected'),'true'));
+    await waitFor(()=>assert.equal(screen.getByLabelText('SPPB view').value,'Overview'));
     assert.ok(screen.getByText(/Imported 2 new assessment records/));
   }finally{cleanup();globalThis.fetch=original;globalThis.FormData=originalFormData;}
 });
@@ -2655,9 +2649,7 @@ test("client follow-up keeps clinical classifications out of the default table a
     await waitFor(() =>
       assert.ok(screen.getAllByText("Registered clients").length > 0),
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Client follow-up list" }),
-    );
+    fireEvent.change(screen.getByLabelText('Client engagement view'),{target:{value:'followups'}});
     await waitFor(() =>
       assert.ok(screen.getByRole("button", { name: "Open follow-up" })),
     );
@@ -2891,4 +2883,30 @@ test('combined domain view defaults to five categories and one ranking, saves sc
  const original=globalThis.fetch,s=locationFixture();s.settings.staffAnalysisFull=true;for(const session of s.data.sessions)session.optional={eventTypes:['Learning','Social & Cognitive']};let saved,opened;const queries=[];
  globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/programme-domains/report?')){queries.push(url);return Response.json(programmeDomainReport(s,Object.fromEntries(new URL(url,'http://local').searchParams),'2026-11-05'));}if(url==='/api/programme-domains/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
  try{render(React.createElement(ProgrammeDomainAnalysis,{user:{role:'planner'},initial:{from:'2026-11-01',to:'2026-11-03'},onProgramme:id=>opened=id}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'What Types of Programmes Are We Offering?'})));assert.equal(document.querySelectorAll('.horizontal-ranking').length,1);assert.equal(screen.getByLabelText('Programme Domain').options.length,5);assert.equal(document.querySelector('details').open,false);assert.equal(screen.queryByText('AAP Domain ? Event Type')===null,true);fireEvent.change(screen.getByLabelText('Programme Domain'),{target:{value:'Cognitive'}});await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Which Cognitive Programmes Attract the Most Seniors?'})));fireEvent.change(screen.getByLabelText('Programme ranking'),{target:{value:'repeat'}});await waitFor(()=>assert.ok(queries.at(-1).includes('ranking=repeat')));fireEvent.click(screen.getByRole('button',{name:'Save domain view'}));await waitFor(()=>assert.equal(saved.selectedDomain,'Cognitive'));assert.equal(saved.from,'2026-11-01');const programme=document.querySelector('.domain-programme-ranking button');assert.ok(programme);fireEvent.click(programme);assert.ok(opened);assert.ok(screen.getByText(/Domain totals may overlap/));}finally{cleanup();globalThis.fetch=original;}
+});
+
+const {sppbParticipationAnalysis}=await import('../server/sppb-analysis.js');
+test('SPPB overview shows linked analysis with few actions and switches comparisons without extra requests',async()=>{
+ const {SppbAssessments,setCentreContext}=await tsImport('./fixtures/sppb-workspace.ts',import.meta.url);setCentreContext(null);
+ const original=globalThis.fetch,state=locationFixture();let calls=0;
+ const members=state.data.participants.slice(0,2).map((p,i)=>({id:p.id,centres:['glow_bukit_batok'],age:i?85:65,cfs:i?'5':'4',latestDate:'2026-11-03',latest:{date:'2026-11-03',sourceDefinition:'unverified',original:{total:i?16:6},standard:null},previous:null,delta:null}));
+ const analysis=sppbParticipationAnalysis(members,[{id:'glow_bukit_batok',data:state.data,settings:state.settings}],'2026-11-19');
+ globalThis.fetch=async()=>{calls++;return Response.json({summary:{eligible:2,assessed:2,coverage:100,repeated:0,latest:'2026-11-03',due:0,comparable:0,review:2},analysis,rows:[],recordedScores:[],total:0,monthly:[],intervalMonths:null});};
+ try{
+  const view=render(React.createElement(SppbAssessments,{user:{role:'admin'}}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'SPPB scores and programme participation'})));
+  assert.equal(screen.getByLabelText('SPPB view').value,'Overview');assert.equal(screen.queryByRole('tablist'),null);const visibleButtons=screen.getAllByRole('button').filter(button=>{for(let parent=button.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open&&!parent.querySelector(':scope > summary')?.contains(button))return false;return true;});assert.ok(visibleButtons.length<=2,visibleButtons.map(b=>b.textContent).join(' | '));assert.equal(screen.getByText('Filter assessments').closest('details').open,false);
+  fireEvent.change(screen.getByLabelText('Compare scores by'),{target:{value:'age'}});assert.ok(screen.getByText('80+ (n=1)'));assert.equal(calls,1);
+  fireEvent.change(screen.getByLabelText('Compare scores by'),{target:{value:'cfs'}});assert.ok(screen.getByText('5 (n=1)'));assert.equal(calls,1);
+  fireEvent.change(screen.getByLabelText('SPPB view'),{target:{value:'Assessment activity'}});assert.ok(screen.getByRole('heading',{name:'Assessment activity over time'}));assert.equal(calls,1);
+  fireEvent.change(screen.getByLabelText('SPPB view'),{target:{value:'Overview'}});assert.ok(screen.getByRole('heading',{name:'SPPB scores and programme participation'}));assert.equal(calls,1);
+  fireEvent.change(screen.getByLabelText('Compare scores by'),{target:{value:'cfs'}});
+  screen.getByText('Filter assessments').closest('details').open=true;screen.getByText('More filters').closest('details').open=true;
+  for(const value of ['1','4','5'])fireEvent.change(screen.getByLabelText('Recorded CFS'),{target:{value}});
+  assert.equal(calls,1);await waitFor(()=>assert.equal(calls,2));await waitFor(()=>assert.equal(document.querySelector('.sppb-page').getAttribute('aria-busy'),'false'));assert.equal(screen.getByLabelText('Compare scores by').value,'cfs');
+  globalThis.fetch=async()=>Response.json({summary:null,suppressed:true});
+  setCentreContext(CENTRES[2]);view.rerender(React.createElement(SppbAssessments,{user:{role:'admin'}}));assert.equal(screen.queryByRole('heading',{name:'SPPB scores and programme participation'})===null,true,'Previous-centre analysis must be cleared');
+  view.rerender(React.createElement(SppbAssessments,{user:{role:'viewer'}}));assert.equal(screen.queryByLabelText('Compare scores by')===null,true);assert.equal(screen.queryByText('Members with dated assessments')===null,true);
+
+
+ }finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
 });

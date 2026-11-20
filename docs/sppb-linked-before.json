@@ -1,0 +1,109 @@
+{
+  "generatedAt": "2026-11-19T07:39:17.085Z",
+  "fixture": {
+    "sourceRows": 2400,
+    "registry": 400,
+    "assessments": 666,
+    "centre": "glow_bukit_batok"
+  },
+  "environment": "Local loopback, SQLite in-memory, synthetic data; excludes browser render, initial API count, navigation, network and hosted latency.",
+  "api": [
+    {
+      "path": "/api/me",
+      "samples": 9,
+      "medianMs": 14.75,
+      "p95Ms": 16.49,
+      "bytes": 591
+    },
+    {
+      "path": "/api/dashboard?view=context&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 23.28,
+      "p95Ms": 28.73,
+      "bytes": 5152
+    },
+    {
+      "path": "/api/dashboard?view=overview&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 23.96,
+      "p95Ms": 42.99,
+      "bytes": 36296
+    },
+    {
+      "path": "/api/dashboard?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 34.44,
+      "p95Ms": 43.27,
+      "bytes": 113950
+    },
+    {
+      "path": "/api/reporting/briefing?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 32.13,
+      "p95Ms": 44.06,
+      "bytes": 2848
+    },
+    {
+      "path": "/api/programme-domains/report?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 24.18,
+      "p95Ms": 31.52,
+      "bytes": 21424
+    },
+    {
+      "path": "/api/participation-patterns?scope=clients&dimension=age&centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 30.68,
+      "p95Ms": 35.08,
+      "bytes": 20865
+    },
+    {
+      "path": "/api/sppb/overview?centre=glow_bukit_batok",
+      "samples": 9,
+      "medianMs": 15.48,
+      "p95Ms": 21.6,
+      "bytes": 14678
+    }
+  ],
+  "clientReuse": [
+    {
+      "path": "/api/dashboard?view=overview",
+      "mode": "uncached control",
+      "calls": 5,
+      "networkRequests": 5,
+      "warmMedianMs": 32.862
+    },
+    {
+      "path": "/api/dashboard?view=overview",
+      "mode": "15-second isolated reuse",
+      "calls": 5,
+      "networkRequests": 1,
+      "warmMedianMs": 0.286
+    },
+    {
+      "path": "/api/sppb/overview",
+      "mode": "uncached control",
+      "calls": 5,
+      "networkRequests": 5,
+      "warmMedianMs": 16.554
+    },
+    {
+      "path": "/api/sppb/overview",
+      "mode": "15-second isolated reuse",
+      "calls": 5,
+      "networkRequests": 5,
+      "warmMedianMs": 19.09
+    }
+  ],
+  "bundle": {
+    "entry": [
+      {
+        "name": "index-C0EkGgmC.js",
+        "bytes": 328638,
+        "gzipBytes": 98908
+      }
+    ],
+    "javascript": 858943,
+    "css": 165040
+  }
+}

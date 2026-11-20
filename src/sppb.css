@@ -62,7 +62,7 @@
 }
 .sppb-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.8rem;
 }
 .sppb-kpis article {
@@ -212,6 +212,14 @@
   width: 100%;
   min-height: 80px;
 }
+.sppb-view-control {display:flex;align-items:center;gap:.75rem;margin:1rem 0;font-weight:600;}
+.sppb-view-control select {max-width:100%;min-width:min(20rem,70vw);}
+.sppb-analysis-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-block:1rem;}
+.sppb-analysis-summary span {padding:1rem;background:#f3f7fb;border-radius:.6rem;}
+.sppb-analysis-summary strong {display:block;font-size:1.6rem;color:#173f50;}
+.sppb-linked-analysis details {margin-block:1rem;}
+.sppb-linked-analysis td,.sppb-linked-analysis th {white-space:normal;}
+@media(max-width:600px){.sppb-analysis-summary{grid-template-columns:1fr;}.sppb-view-control{align-items:stretch;flex-direction:column;}}
 @media (max-width: 1000px) {
   .sppb-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));

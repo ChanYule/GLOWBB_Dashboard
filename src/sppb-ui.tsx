@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { User } from "./types";
-import { api, centreUrl, currentCentre } from "./api";
+import { api, centreUrl, currentCentre, invalidateReadCache } from "./api";
 import { CENTRES } from "../shared/centres.js";
 import "./sppb.css";
 import { ChartCard } from "./chart-system";
+import {SppbLinkedAnalysis,type LinkedSppbAnalysis} from "./sppb-analysis";
 
 type Scores = { balance: number; gait: number; chair: number; total: number };
 type RecordRow = {
@@ -69,6 +70,7 @@ type Summary = {
   review: number;
 };
 type Report = {
+  analysis?:LinkedSppbAnalysis;
   recordedScores?: {
     sourceDefinition: string;
     total: number;
@@ -144,7 +146,7 @@ const pending = "Imported SPPB score, scoring validation pending";
 
 export function SppbAssessments({
   user,
-  initialSection = "Latest assessments",
+  initialSection = "Overview",
 }: {
   user: User & { canCompare?: boolean };
   initialSection?: string;
@@ -163,7 +165,8 @@ export function SppbAssessments({
     }),
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0),
-    [report, setReport] = useState<Report | null>(null),
+    [snapshot, setReport] = useState<Report | null>(null),
+    [loadedContext,setLoadedContext]=useState(''),
     [error, setError] = useState(""),
     [member, setMember] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
@@ -172,29 +175,35 @@ export function SppbAssessments({
   );
   if (scope === "all") query.set("centre", "all");
   const queryText = user.role === "viewer" ? "" : query.toString();
+  const accessContext=JSON.stringify([currentCentre()?.id||'',scope,user.username||'',user.role,Boolean(user.canCompare)]);
+  const report=loadedContext===accessContext?snapshot:null;
+  const showReport=section!=="Data quality & import";
+  useEffect(()=>{setMember(null);},[accessContext]);
+  useEffect(()=>{if(!user.canCompare)setScope('centre');},[user.canCompare]);
   useEffect(() => {
+    if(!showReport){setBusy(false);return;}
     const abort = new AbortController();
     setBusy(true);
     setError("");
-    api<Report>("/api/sppb/overview?" + queryText, { signal: abort.signal })
-      .then(setReport)
+    const timer=setTimeout(()=>api<Report>("/api/sppb/overview?" + queryText, { signal: abort.signal,reuseForMs:10000 })
+      .then(r=>{if(!abort.signal.aborted){setReport(r);setLoadedContext(accessContext);}})
       .catch((e) => {
-        if (!abort.signal.aborted) setError(e.message);
+        if (!abort.signal.aborted){setError(e.message);setReport(null);}
       })
       .finally(() => {
         if (!abort.signal.aborted) setBusy(false);
-      });
-    return () => abort.abort();
-  }, [queryText, revision]);
+      }),filters.search||filters.cfs?250:0);
+    return () => {clearTimeout(timer);abort.abort();};
+  }, [queryText, revision,showReport,filters.search,filters.cfs,accessContext]);
   const change = (key: keyof typeof filters, value: string) => {
     setFilters((p) => ({ ...p, [key]: value }));
     setPage(1);
   };
-  const refresh = () => setRevision((n) => n + 1);
+  const refresh = () => {invalidateReadCache();setRevision((n) => n + 1);};
   const summary = report?.summary;
   const [notice, setNotice] = useState("");
   return (
-    <div className="sppb-page">
+    <div className="sppb-page" aria-busy={busy}>
       <div className="sppb-intro">
         <div>
           <span className="eyebrow">PARTICIPANT NEEDS & ACCESSIBILITY</span>
@@ -209,7 +218,7 @@ export function SppbAssessments({
             ? "All authorised centres"
             : currentCentre()?.name || "Select a centre"}
         </span>
-        {user.role === "admin" && (
+        {user.role === "admin" && showReport && (
           <button
             className="button primary"
             onClick={() => setSection("Data quality & import")}
@@ -223,8 +232,8 @@ export function SppbAssessments({
           {notice}
         </p>
       )}
-      {user.role !== "viewer" && (
-        <section className="panel sppb-filters" aria-label="Assessment filters">
+      {user.role !== "viewer" && showReport && (
+        <details className="panel sppb-filter-disclosure"><summary>Filter assessments</summary><section className="sppb-filters" aria-label="Assessment filters">
           {user.canCompare && (
             <label>
               Centre population
@@ -332,15 +341,16 @@ export function SppbAssessments({
           >
             Reset filters
           </button>
-        </section>
+        </section></details>
       )}
-      {error && (
+      {showReport&&error && (
         <p className="error" role="alert">
           {error}
+          <button className="button" onClick={refresh}>Retry assessment analysis</button>
         </p>
       )}
-      {busy && <p role="status">Updating assessment summary…</p>}
-      {summary && (
+      {busy && <p role="status">Updating assessment summary… {report?'Showing previous results until the new selection is ready.':''}</p>}
+      {summary && showReport && !error && (
         <>
           <div className="sppb-kpis">
             {[
@@ -351,13 +361,11 @@ export function SppbAssessments({
                   : summary.coverage.toFixed(1) + "%",
                 "Verified client coverage",
               ],
-              [summary.repeated, "Members with repeated dates"],
-              [day(summary.latest), "Most recent assessment"],
-              [
+
+              ...(user.role==='viewer'?[]:[[
                 report?.intervalMonths == null ? "Not configured" : summary.due,
                 "Reassessment due / overdue",
-              ],
-              [summary.review, "Members with records to review"],
+              ],[summary.review, "Members with records to review"]]),
             ].map(([value, label]) => (
               <article className="panel" key={label}>
                 <span>{label}</span>
@@ -365,7 +373,7 @@ export function SppbAssessments({
               </article>
             ))}
           </div>
-          <div className="sppb-two">
+          {user.role!=='viewer'&&<details className="panel"><summary>Recorded scores and coverage details</summary><div className="sppb-two">
             <section className="panel">
               <h3>Assessment coverage</h3>
               <p>
@@ -448,10 +456,10 @@ export function SppbAssessments({
                 </details>
               )}
             </section>
-          </div>
+          </div></details>}
         </>
       )}
-      {report?.suppressed && (
+      {showReport&&report?.suppressed && (
         <section className="panel">
           <p>
             Assessment coverage is withheld because the selected population does
@@ -461,32 +469,31 @@ export function SppbAssessments({
       )}
       {user.role !== "viewer" && (
         <>
-          <div className="sppb-tabs" role="tablist" aria-label="SPPB sections">
-            {[
-              "Latest assessments",
-              "Reassessment follow-up",
-              "Assessment activity",
-              ...(user.role === "admin" ? ["Data quality & import"] : []),
-            ].map((s) => (
-              <button
-                role="tab"
-                aria-selected={section === s}
-                className="button"
-                key={s}
-                onClick={() => setSection(s)}
-              >
-                {s === "Data quality & import" ? "Import data" : s}
-              </button>
-            ))}
-          </div>
+          <label className="sppb-view-control">Show<select aria-label="SPPB view" value={section} onChange={e=>setSection(e.target.value)}>{["Overview","Latest assessments","Reassessment follow-up","Assessment activity",...(user.role==='admin'?["Data quality & import"]:[])].map(s=><option key={s} value={s}>{s==='Data quality & import'?'Import and data review':s}</option>)}</select></label>
+          {showReport&&report&&!busy&&!error&&(<details><summary>Report options</summary><button className="button" onClick={refresh}>Refresh assessment results</button><a
+                  className="button"
+                  href={centreUrl("/api/sppb/export?format=xlsx&" + queryText)}
+                >
+                  Excel export
+                </a>
+                <a
+                  className="button"
+                  target="_blank"
+                  rel="noreferrer"
+                  href={centreUrl("/api/sppb/export?format=pdf&" + queryText)}
+                >
+                  Print / PDF
+                </a></details>)}
           {section === "Data quality & import" ? (
             <SppbAdministration
               onSaved={refresh}
               onImported={(message) => {
                 setNotice(message);
-                setSection("Latest assessments");
+                setSection("Overview");
               }}
             />
+          ) : section === "Overview" ? (
+            !error&&report?.analysis?<SppbLinkedAnalysis analysis={report.analysis}/>:null
           ) : section === "Assessment activity" ? (
             <section className="panel">
               <h3>Assessment activity over time</h3>
@@ -545,20 +552,7 @@ export function SppbAssessments({
                     ))}
                   </select>
                 </label>
-                <a
-                  className="button"
-                  href={centreUrl("/api/sppb/export?format=xlsx&" + queryText)}
-                >
-                  Excel export
-                </a>
-                <a
-                  className="button"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={centreUrl("/api/sppb/export?format=pdf&" + queryText)}
-                >
-                  Print / PDF
-                </a>
+
               </div>
               {section === "Reassessment follow-up" && (
                 <p>
@@ -667,7 +661,7 @@ export function SppbAssessments({
                 </table>
               </div>
               {!report?.rows.length && <p>No members match this selection.</p>}
-              <div className="sppb-toolbar">
+              {(report?.total||0)>25&&<div className="sppb-toolbar">
                 <button
                   className="button"
                   disabled={page === 1}
@@ -687,13 +681,13 @@ export function SppbAssessments({
                 >
                   Next members
                 </button>
-              </div>
+              </div>}
             </section>
           )}
         </>
       )}
       <p className="muted">{report?.note}</p>
-      {member && (
+      {user.role!=='viewer'&&report&&member && (
         <SppbMemberDialog
           id={member}
           allCentres={scope === "all"}

@@ -153,7 +153,7 @@ export function api<T>(url:string,options:RequestInit & {reuseForMs?:number}={})
   const {reuseForMs=0,...init}=options;
   if((init.method||'GET')!=='GET')invalidateReadCache();
   const scoped=centreUrl(url),generation=centreGeneration,epoch=readEpoch;
-  const allowed=(init.method||'GET')==='GET'&&reuseForMs>0&&!init.headers&&!init.body&&/^\/api\/(dashboard|reporting\/briefing|programme-domains\/report)(?:\?|$)/.test(scoped);
+  const allowed=(init.method||'GET')==='GET'&&reuseForMs>0&&!init.headers&&!init.body&&/^\/api\/(dashboard|reporting\/briefing|programme-domains\/report|sppb\/overview)(?:\?|$)/.test(scoped);
   const key=generation+':'+scoped,prior=allowed?recentReads.get(key):null;
   if(init.signal?.aborted)return requestApi<T>(url,init);
   if(prior&&prior.expires>Date.now())return Promise.resolve(structuredClone(prior.value) as T);
