@@ -427,7 +427,6 @@ export function OutreachPriorities({
             {[
               ["Eligible clients in audience", report.summary.matchedClients],
               ["Follow-up candidates", report.summary.followup],
-              ["Previously observed, now inactive", report.summary.inactive],
               [
                 "Candidates with recorded support indicators",
                 report.summary.supportFlagged,

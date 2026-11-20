@@ -2401,6 +2401,21 @@ test("client engagement denies viewers without requesting client data and saves 
     globalThis.fetch = original;
   }
 });
+test('client summary removes recency cards from legacy drafts, saved views and customisation',async()=>{
+ const original=globalThis.fetch,legacy={id:'legacy',name:'Legacy client view',filters:{...filters,asOf:'2026-11-19'},kpis:['registered','attending','active','inactive'],charts:[],display:{}};
+ globalThis.fetch=async url=>String(url)==='/api/clients/preferences'?Response.json({draft:legacy,views:[legacy],sharedTemplates:[{...legacy,id:'shared'}]}):Response.json(clientFixtureReport());
+ try{
+  render(React.createElement(ClientEngagement,{user:{username:'planner',role:'planner'},initialFilters:filters,onChanged:()=>{}}));
+  await waitFor(()=>assert.equal(document.querySelectorAll('.client-kpis article').length,2));
+  const cards=()=>[...document.querySelectorAll('.client-kpis article > span')].map(e=>e.textContent);
+  assert.deepEqual(cards(),['Registered clients','Clients who attended']);
+  fireEvent.click(screen.getByRole('button',{name:'Customise client view'}));
+  assert.equal(screen.queryByRole('checkbox',{name:'Active clients'})===null,true);assert.equal(screen.queryByRole('checkbox',{name:'Previously observed, now inactive'})===null,true);
+  fireEvent.change(screen.getByLabelText('Saved client views'),{target:{value:'legacy'}});assert.deepEqual(cards(),['Registered clients','Clients who attended']);
+  fireEvent.change(screen.getByLabelText('Shared administrator client templates'),{target:{value:'shared'}});assert.deepEqual(cards(),['Registered clients','Clients who attended']);
+ }finally{cleanup();globalThis.fetch=original;}
+});
+
 test("client registry UI reviews conflicts and requires staff review before confirmation", async () => {
   const original = globalThis.fetch,
     originalFormData = globalThis.FormData;

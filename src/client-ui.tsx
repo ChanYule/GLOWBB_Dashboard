@@ -144,8 +144,6 @@ const cardLabels: Record<string, string> = {
   attending: "Clients who attended",
   noAttendance: "No recorded attendance",
   rate: "Client participation rate",
-  active: "Active clients",
-  inactive: "Previously observed, now inactive",
   maleRate: "Male client participation",
   minorityRate: "Minority client participation",
   livingAloneNoAttendance: "Living alone, no recorded attendance",
@@ -178,9 +176,8 @@ const defaultCards = [
   "attending",
   "noAttendance",
   "rate",
-  "active",
-  "inactive",
 ];
+const visibleClientCards=(view:ClientView):ClientView=>({...view,kpis:view.kpis.filter(key=>Object.hasOwn(cardLabels,key))});
 const outcomes = [
   "Contact attempted",
   "Contact successful",
@@ -659,8 +656,8 @@ export function ClientEngagement({
     api<ClientPreferences>("/api/clients/preferences")
       .then((p) => {
         if (live) {
-          setPrefs({ ...p, views: p.views || [] });
-          if (p.draft) setView(p.draft);
+          setPrefs({ ...p, views: (p.views || []).map(visibleClientCards),sharedTemplates:p.sharedTemplates?.map(visibleClientCards),draft:p.draft?visibleClientCards(p.draft):undefined });
+          if (p.draft) setView(visibleClientCards(p.draft));
           setReady(true);
         }
       })
@@ -1372,7 +1369,7 @@ export function ClientEngagement({
                     </section>
                   )}
                   <div className="client-kpis">
-                    {view.kpis.map((key) => (
+                    {view.kpis.filter(key=>Object.hasOwn(cardLabels,key)).map((key) => (
                       <article className="client-kpi" key={key}>
                         <span>{cardLabels[key]}</span>
                         <strong>
@@ -1388,9 +1385,7 @@ export function ClientEngagement({
                               ? "In the selected attendance period"
                               : key === "otherAttenders"
                                 ? "Recorded participants outside this registry"
-                                : key === "active" || key === "inactive"
-                                  ? `Last known attendance as of ${q.asOf}`
-                                  : "Distinct people · all ages"}
+                                : "Distinct people · all ages"}
                         </small>
                       </article>
                     ))}
