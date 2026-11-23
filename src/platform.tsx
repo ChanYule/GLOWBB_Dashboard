@@ -14,19 +14,17 @@ import {
   ChartNoAxesCombined,
   ChevronDown,
   ChevronLeft,
-  ClipboardList,
-  Database,
   Download,
   HeartHandshake,
   LayoutDashboard,
   Menu,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Users,
   X,
 } from "lucide-react";
 import { App } from "./main";
+import {STAFF_PAGES,staffPage} from "../shared/staff-workspace.js";
 import type { Filters, User } from "./types";
 import { api, setCentreContext, setReportingMode } from "./api";
 import type { Centre } from "../shared/centres.js";
@@ -47,41 +45,13 @@ type Staff = User & {
   preferredCentre: string | null;
   canCompare: boolean;
 };
-const mainPages = [
-  ["Overview", "Overview", LayoutDashboard],
-  ["Programme Performance", "Programme Analysis", BarChart3],
-  [
-    "Participation Patterns & Insights",
-    "Participation Insights",
-    ChartNoAxesCombined,
-  ],
-  ["Client Engagement", "Client Engagement", Users],
-  ["Planning & Recommendations", "Planning", ClipboardList],
-] as const;
-const analysisPages = [
-  ["SPPB Assessments", "SPPB Assessments", Activity],
-  ["Participant Needs & Accessibility", "Participant Needs", HeartHandshake],
-  ["Custom Analysis", "Custom Analysis", SlidersHorizontal],
-] as const;
-const advancedPages = [
-  ["Audience & Outreach", "Audience & Outreach", Users],
-  ["Operations & Screening", "Operations & Screening", Activity],
-  ["Social Risk Analysis", "Social Risk Analysis", ShieldCheck],
-  ["Who Are We Serving?", "Who Are We Serving?", Users],
-  ["Gaps and Participation Barriers", "Gaps and Barriers", HeartHandshake],
-  ["Programme Alignment", "Programme Alignment", BarChart3],
-  ["Programme Planning and Actions", "Detailed action tracker", ClipboardList],
-  [
-    "Data Quality and Administration",
-    "Data Quality and Administration",
-    ShieldCheck,
-  ],
-] as const;
+const pageIcons:Record<string,typeof Users>={Overview:LayoutDashboard,'Programme Performance':BarChart3,'Participation Patterns & Insights':ChartNoAxesCombined,'Client Engagement':Users,'Participant Needs & Accessibility':HeartHandshake,'SPPB Assessments':Activity};
 export function PlatformApp() {
   const [staff, setStaff] = useState<Staff | null>(null),
     [centre, setCentre] = useState<Centre | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState("Overview"),
+    [adminSection,setAdminSection]=useState("data"),
     [mode, setMode] = useState<"official" | "exploratory">("official"),
     [revision, setRevision] = useState(0),
     [menu, setMenu] = useState(false),
@@ -142,7 +112,11 @@ export function PlatformApp() {
     return () => document.removeEventListener("keydown", close);
   }, [menu]);
   const navigate = (id: string) => {
-    setPage(id);
+    const resolved=staffPage(id,staff?.role);
+    if(id.startsWith('__')||resolved==='Data management'){
+      setAdminSection(id==='__centres'?'centres':id==='__config'||id==='__sync'?'configuration':resolved==='Data management'?'data':adminSection);
+      setPage('__admin');
+    }else setPage(resolved);
     setMenu(false);
     document.scrollingElement?.scrollTo?.({ top: 0, behavior: "instant" });
   };
@@ -187,6 +161,13 @@ export function PlatformApp() {
       </main>
     );
   const administrative = page.startsWith("__");
+  const adminChoices:{id:string;label:string}[]=[];
+  if(staff.role==='admin'&&centre)adminChoices.push({id:'data',label:'Import and manage data'});
+  if(staff.role!=='viewer'&&centre)adminChoices.push({id:'configuration',label:'Reporting configuration'});
+  if(staff.role==='admin'||staff.canCompare)adminChoices.push({id:'centres',label:staff.role==='admin'?'Centre access and administration':'Centre comparison'});
+  const activeAdmin=adminChoices.find(item=>item.id===adminSection)||adminChoices[0];
+  const renderWorkspace=(selectedPage:string)=>centre?<div key={centre.id+'-'+mode+'-'+revision} className="centre-workspace"><div className="selected-centre-name sr-only">{centre.name}</div><App embedded initialUser={staff} page={selectedPage} onPage={navigate} command={command} initialDates={dates.current} onDates={rememberDates} onAuthChanged={load}/></div>:<section className="panel"><h1>No centre access assigned</h1><p>An administrator must assign centre access before attendance or client information can be loaded.</p></section>;
+
   return (
     <div
       className={
@@ -238,69 +219,9 @@ export function PlatformApp() {
           <span>Collapse sidebar</span>
         </button>
         <nav aria-label="Main navigation">
-          <p className="shell-nav-label">Workspace</p>
-          {mainPages
-            .filter(
-              ([id]) =>
-                staff.role !== "viewer" ||
-                ![
-                  "Client Engagement",
-                  "Participation Patterns & Insights",
-                ].includes(id),
-            )
-            .map(navItem)}
-          <p className="shell-nav-label">Analysis</p>
-          {analysisPages
-            .filter(
-              ([id]) => staff.role !== "viewer" || id === "Custom Analysis",
-            )
-            .map(navItem)}
-          <button
-            className="shell-nav-item"
-            aria-label="Reports"
-            title="Reports"
-            onClick={() => openModal("export")}
-          >
-            <Download size={19} />
-            <span>Reports</span>
-          </button>
-          <details
-            className="shell-advanced"
-            open={advancedPages.some(([id]) => id === page) || undefined}
-          >
-            <summary title="Additional analysis">
-              <BarChart3 size={19} />
-              <span>Additional analysis</span>
-              <ChevronDown size={14} />
-            </summary>
-            {advancedPages
-              .filter(
-                ([id]) =>
-                  staff.role !== "viewer" ||
-                  ["Audience & Outreach", "Operations & Screening"].includes(
-                    id,
-                  ),
-              )
-              .map(navItem)}
-          </details>
-          <p className="shell-nav-label">Administration</p>
-          {(staff.role === "admin" || staff.canCompare) &&
-            navItem(["__centres", "Centre Administration", Building2])}
-          {staff.role !== "viewer" &&
-            navItem(["__config", "Dashboard Configuration", SlidersHorizontal])}
-          {staff.role === "admin" &&
-            navItem(["Data management", "Data Management", Database])}
-          {staff.role !== "viewer" &&
-            navItem(["__sync", "CaritaHub Sync", Activity])}
-          <button
-            className="shell-nav-item"
-            title="Settings"
-            aria-label="Settings"
-            onClick={() => openModal("dashboard-settings")}
-          >
-            <Settings size={19} />
-            <span>Settings</span>
-          </button>
+          <p className="shell-nav-label">Staff analysis</p>
+          {STAFF_PAGES.filter(item=>!item.staffOnly||staff.role!=='viewer').map(item=>navItem([item.id,item.label,pageIcons[item.id]]))}
+          {adminChoices.length>0&&<><p className="shell-nav-label">Manage workspace</p>{navItem(['__admin','Data & settings',Settings])}</>}
         </nav>
         <div className="shell-sidebar-footer">
           <ShieldCheck size={15} />
@@ -442,63 +363,12 @@ export function PlatformApp() {
               : "Exploratory analysis"}
             <span>Change mode in the account menu</span>
           </div>
-          {page === "__centres" ? (
-            <Suspense
-              fallback={
-                <div className="page-skeleton" role="status">
-                  Loading centre administration…
-                </div>
-              }
-            >
-              <CentreTools staff={staff} onChanged={load} />
+          {administrative?<>
+            <section className="panel staff-admin-heading"><h1>Data &amp; settings</h1><p>Manage source data, reporting definitions and centre access.</p>{activeAdmin&&<label>Manage<select aria-label="Administration workspace" value={activeAdmin.id} onChange={e=>setAdminSection(e.target.value)}>{adminChoices.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}</section>
+            <Suspense fallback={<div className="page-skeleton" role="status">Loading workspace tools...</div>}>
+              {activeAdmin?.id==='centres'?<CentreTools staff={staff} onChanged={load}/>:activeAdmin?.id==='configuration'&&centre?<ConfigurationCentre key={centre.id} centre={centre} centres={staff.centres} user={staff} initialTab="activities" onChanged={()=>{setReportingMode(mode);setRevision(n=>n+1);}} onReturn={()=>navigate('Overview')}/>:activeAdmin?.id==='data'?renderWorkspace('Data management'):<p>No workspace tools are available for your access.</p>}
             </Suspense>
-          ) : administrative && centre ? (
-            <Suspense
-              fallback={
-                <div className="page-skeleton" role="status">
-                  Loading configuration…
-                </div>
-              }
-            >
-              <ConfigurationCentre
-                key={centre.id + "-" + page}
-                centre={centre}
-                centres={staff.centres}
-                user={staff}
-                initialTab={page === "__sync" ? "sync" : "activities"}
-                onChanged={() => {
-                  setReportingMode(mode);
-                  setRevision((n) => n + 1);
-                }}
-                onReturn={() => navigate("Overview")}
-              />
-            </Suspense>
-          ) : centre ? (
-            <div
-              key={centre.id + "-" + mode + "-" + revision}
-              className="centre-workspace"
-            >
-              <div className="selected-centre-name sr-only">{centre.name}</div>
-              <App
-                embedded
-                initialUser={staff}
-                page={page}
-                onPage={setPage}
-                command={command}
-                initialDates={dates.current}
-                onDates={rememberDates}
-                onAuthChanged={load}
-              />
-            </div>
-          ) : (
-            <section className="panel">
-              <h1>No centre access assigned</h1>
-              <p>
-                An administrator must assign centre access before attendance or
-                client information can be loaded.
-              </p>
-            </section>
-          )}
+          </>:renderWorkspace(page)}
         </div>
       </div>
     </div>

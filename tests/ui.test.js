@@ -137,6 +137,24 @@ test('global centre selector shows authorised options, resets child views, prese
  try{render(React.createElement(PlatformApp));await waitFor(()=>assert.ok(screen.getByLabelText('Selected centre')));assert.equal(screen.getByLabelText('Selected centre').options.length,2);fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));assert.ok(document.querySelector('.dashboard-shell.sidebar-collapsed'));fireEvent.click(screen.getByRole('button',{name:'Expand navigation'}));assert.equal(document.querySelector('.dashboard-shell.sidebar-collapsed'),null);await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('from=2026-05-04'))));fireEvent.change(screen.getByLabelText('Selected centre'),{target:{value:'glow_nanyang'}});assert.equal(document.querySelector('.selected-centre-name').textContent,'GLOW Nanyang');await waitFor(()=>assert.ok(screen.getByText('No programme attendance data has been imported for this centre.')));release(Response.json({...empty,programmes:[{name:'STALE OLD CENTRE'}]}));await waitFor(()=>assert.ok(calls.some(u=>u.includes('/api/dashboard?')&&u.includes('centre=glow_nanyang')&&u.includes('from=2026-05-04')&&!u.includes('old-programme'))));assert.equal(document.body.textContent.includes('STALE OLD CENTRE'),false);assert.equal(document.title,'GLOW Nanyang | Programme & Outreach Dashboard');}finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
 });
 
+test('platform keeps six staff analyses, groups administration and limits viewer navigation',async()=>{
+ const original=globalThis.fetch;let role='admin';const calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));return Response.json(String(url)==='/api/me'?{username:'staff',role,centres:[],canCompare:false}:{rows:[]});};
+ try{
+  render(React.createElement(PlatformApp));
+  await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Data & settings'})));
+  const nav=document.querySelector('.shell-sidebar nav');
+  assert.deepEqual([...nav.querySelectorAll('button')].map(b=>b.textContent.trim()),['Overview','Programme Analysis','Participation Insights','Client Engagement','Participant Needs','SPPB Assessments','Data & settings']);
+  fireEvent.click(screen.getByRole('button',{name:'Data & settings'}));
+  await waitFor(()=>assert.ok(screen.getByLabelText('Administration workspace')));
+  assert.deepEqual([...screen.getByLabelText('Administration workspace').options].map(o=>o.value),['centres']);
+  await waitFor(()=>assert.ok(document.querySelector('.centre-overview-grid')));assert.ok(calls.includes('/api/centres/status'));
+  cleanup();role='viewer';render(React.createElement(PlatformApp));
+  await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Programme Analysis'})));
+  assert.deepEqual([...document.querySelector('.shell-sidebar nav').querySelectorAll('button')].map(b=>b.textContent.trim()),['Overview','Programme Analysis']);
+ }finally{cleanup();globalThis.fetch=original;}
+});
+
 test('centre administration tab switches never render the previous response shape or stale comparison scope',async()=>{
  const original=globalThis.fetch;let release;
  globalThis.fetch=async url=>String(url).includes('/compare')?new Promise(r=>{release=r;}):Response.json({rows:CENTRES.map(c=>({...c,participants:0,sessions:0,attendance:0,lastImport:null,registryComplete:false})),programmes:[],attendance:0,note:'Reviewed source',users:[],grants:[],preferences:[]});
@@ -1417,56 +1435,23 @@ test("global filters expand, submit exact filter changes and reset", () => {
   fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   assert.equal(next.race, "");
 });
-test("authenticated administrator sees imports, settings, planning and sign out", async () => {
+test("administrator gets six core analyses and grouped data tools", async () => {
   const original = globalThis.fetch;
-  const empty = {
-    ...dashboard(),
-    coverage: { from: null, to: null },
-    summary: { ...dashboard().summary, attendance: 0 },
-  };
-  globalThis.fetch = async (url) =>
-    new Response(
-      JSON.stringify(
-        String(url) === "/api/me"
-          ? { username: "administrator", role: "admin" }
-          : empty,
-      ),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
+  const empty = {...dashboard(),coverage:{from:null,to:null},summary:{...dashboard().summary,attendance:0}};
+  globalThis.fetch=async url=>new Response(JSON.stringify(String(url)==="/api/me"?{username:"administrator",role:"admin"}:empty),{status:200,headers:{"content-type":"application/json"}});
   try {
     render(React.createElement(App));
-    await waitFor(() =>
-      assert.ok(screen.getByText("Make every connection count.")),
-    );
-    assert.ok(screen.getByRole("button", { name: "Import attendance" }));
-    const nav = document.querySelector("nav");
-    assert.deepEqual(
-      [...nav.querySelectorAll(":scope > button")].map((b) =>
-        b.textContent.trim(),
-      ),
-      ["Main Dashboard", "Programme Analysis", "Planning"],
-    );
-    fireEvent.click(screen.getByText("Staff Tools"));
-    assert.ok(screen.getByRole("button", { name: "Data management" }));
-    assert.equal(
-      screen.getByText("Custom Analysis").closest("details").open,
-      false,
-    );
-    assert.equal(screen.queryByRole("button", { name: "Sign in" }), null);
-    assert.ok(screen.getByRole("button", { name: "Sign out" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Planning", exact: true }),
-    );
-    await waitFor(() =>
-      assert.ok(screen.getByText("Outreach targets (optional)")),
-    );
-    fireEvent.click(screen.getByText("Outreach targets (optional)"));
-    assert.ok(screen.getByRole("button", { name: "Set target" }));
-    fireEvent.click(screen.getByRole("button", { name: "Set target" }));
-    assert.ok(screen.getByRole("dialog", { name: "Set an outreach target" }));
-  } finally {
-    globalThis.fetch = original;
-  }
+    await waitFor(()=>assert.ok(screen.getByText("Make every connection count.")));
+    assert.ok(screen.getByRole("button",{name:"Import attendance"}));
+    const nav=document.querySelector("nav");
+    assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent.trim()),["Overview","Programme Analysis","Participation Insights","Client Engagement","Participant Needs","SPPB Assessments"]);
+    assert.equal(screen.queryByText("Custom Analysis")===null,true);
+    assert.equal(screen.queryByRole("button",{name:"Planning",exact:true})===null,true);
+    fireEvent.click(screen.getByText("Data & settings"));
+    assert.ok(screen.getByRole("button",{name:"Import and manage data"}));
+    assert.ok(screen.getByRole("button",{name:"Download reports"}));
+    assert.ok(screen.getByRole("button",{name:"Sign out"}));
+  } finally {cleanup();globalThis.fetch=original;}
 });
 
 test("application displays a useful hosting error and retry instead of a raw JSON parser exception", async () => {
@@ -1695,62 +1680,11 @@ test("operational report intervals refetch the shared filtered dataset and viewe
   }
 });
 
-test("the integrated operations tab remains reachable when attendance is empty", async () => {
-  const original = globalThis.fetch;
-  const empty = {
-    participants: [],
-    programmes: [],
-    sessions: [],
-    attendance: [],
-  };
-  const core = {
-    ...analytics(empty, defaults, {}, "2026-10-26"),
-    settings: defaults,
-    targets: [],
-    decisions: [],
-  };
-  const report = {
-    ...operationsReport(
-      empty,
-      defaults,
-      {},
-      [],
-      { inactivityDays: null },
-      "month",
-      "2026-10-26",
-    ),
-    targets: [],
-  };
-  globalThis.fetch = async (url) =>
-    Response.json(
-      String(url) === "/api/me"
-        ? { username: "Local workspace", role: "admin" }
-        : String(url).startsWith("/api/operations?")
-          ? report
-          : core,
-    );
-  try {
-    render(React.createElement(App));
-    await waitFor(() =>
-      assert.ok(screen.getByText("Make every connection count.")),
-    );
-    fireEvent.click(screen.getByText("Staff Tools"));
-    fireEvent.click(screen.getByText("Advanced analysis"));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Operations & Screening" }),
-    );
-    await waitFor(() =>
-      assert.ok(
-        screen.getByRole("button", {
-          name: "Health Screening Overview",
-          exact: true,
-        }),
-      ),
-    );
-    assert.equal(screen.queryByText("Make every connection count."), null);
-  } finally {
-    globalThis.fetch = original;
-  }
+test("retired operations navigation returns to Overview without loading specialist data", async () => {
+ const original=globalThis.fetch,calls=[];
+ const core={...dashboard(),coverage:{from:null,to:null},summary:{...dashboard().summary,attendance:0}};
+ globalThis.fetch=async url=>{calls.push(String(url));return Response.json(String(url)==='/api/me'?{username:'Local workspace',role:'admin'}:core);};
+ try{render(React.createElement(App,{page:'Operations & Screening'}));await waitFor(()=>assert.ok(screen.getByText('Make every connection count.')));assert.equal(calls.some(u=>u.startsWith('/api/operations')),false);assert.equal(screen.queryByRole('button',{name:'Operations & Screening'})===null,true);}finally{cleanup();globalThis.fetch=original;}
 });
 
 test("screening participation switches between daily and monthly unique people without IB/OB columns", () => {
@@ -1912,7 +1846,7 @@ const catalogue = {
   needStates: needsDomain.needStates,
   actionStates: needsDomain.actionStates,
 };
-test("the needs dashboard restricts viewer access and makes the three analysis levels available without attendance", async () => {
+test("the needs dashboard restricts viewer access and keeps one needs entry without attendance", async () => {
   const original = globalThis.fetch;
   let calls = 0;
   globalThis.fetch = async () => {
@@ -1944,16 +1878,9 @@ test("the needs dashboard restricts viewer access and makes the three analysis l
     await waitFor(() =>
       assert.ok(screen.getByText("Make every connection count.")),
     );
-    fireEvent.click(screen.getByText("Staff Tools"));
-    fireEvent.click(screen.getByText("Advanced analysis"));
-    for (const label of [
-      "Who Are We Serving?",
-      "Gaps and Participation Barriers",
-      "Detailed action tracker",
-      "Programme Alignment",
-      "Data Quality and Administration",
-    ])
-      assert.ok(screen.getByRole("button", { name: label }));
+    assert.ok(screen.getByRole("button",{name:"Participant Needs",exact:true}));
+    for(const label of ["Who Are We Serving?","Gaps and Participation Barriers","Detailed action tracker","Programme Alignment","Data Quality and Administration"])
+      assert.equal(screen.queryByRole("button",{name:label})===null,true);
   } finally {
     cleanup();
     globalThis.fetch = original;
@@ -2897,7 +2824,7 @@ const {programmeDomainReport}=await import('../server/event-report.js');
 test('combined domain view defaults to five categories and one ranking, saves scoped preferences and opens programme detail',async()=>{
  const original=globalThis.fetch,s=locationFixture();s.settings.staffAnalysisFull=true;for(const session of s.data.sessions)session.optional={eventTypes:['Learning','Social & Cognitive']};let saved,opened;const queries=[];
  globalThis.fetch=async(input,init)=>{const url=String(input);if(url==='/api/preferences')return Response.json({});if(url.startsWith('/api/programme-domains/report?')){queries.push(url);return Response.json(programmeDomainReport(s,Object.fromEntries(new URL(url,'http://local').searchParams),'2026-11-05'));}if(url==='/api/programme-domains/preferences'){saved=JSON.parse(init.body);return Response.json({ok:true});}throw Error('Unexpected request '+url);};
- try{render(React.createElement(ProgrammeDomainAnalysis,{user:{role:'planner'},initial:{from:'2026-11-01',to:'2026-11-03'},onProgramme:id=>opened=id}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'What Types of Programmes Are We Offering?'})));assert.equal(document.querySelectorAll('.horizontal-ranking').length,1);assert.equal(screen.getByLabelText('Programme Domain').options.length,5);assert.equal(document.querySelector('details').open,false);assert.equal(screen.queryByText('AAP Domain ? Event Type')===null,true);fireEvent.change(screen.getByLabelText('Programme Domain'),{target:{value:'Cognitive'}});await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Which Cognitive Programmes Attract the Most Seniors?'})));fireEvent.change(screen.getByLabelText('Programme ranking'),{target:{value:'repeat'}});await waitFor(()=>assert.ok(queries.at(-1).includes('ranking=repeat')));fireEvent.click(screen.getByRole('button',{name:'Save domain view'}));await waitFor(()=>assert.equal(saved.selectedDomain,'Cognitive'));assert.equal(saved.from,'2026-11-01');const programme=document.querySelector('.domain-programme-ranking button');assert.ok(programme);fireEvent.click(programme);assert.ok(opened);assert.ok(screen.getByText(/Domain totals may overlap/));}finally{cleanup();globalThis.fetch=original;}
+ try{render(React.createElement(ProgrammeDomainAnalysis,{user:{role:'planner'},initial:{from:'2026-11-01',to:'2026-11-03'},onProgramme:id=>opened=id}));await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'What Types of Programmes Are We Offering?'})));assert.equal(document.querySelectorAll('.horizontal-ranking').length,1);assert.equal(screen.getByLabelText('Programme Domain').options.length,5);assert.equal(document.querySelector('details').open,false);assert.equal(screen.queryByText('AAP Domain ? Event Type')===null,true);fireEvent.change(screen.getByLabelText('Programme Domain'),{target:{value:'Cognitive'}});await waitFor(()=>assert.ok(screen.getByRole('heading',{name:'Which Cognitive Programmes Attract the Most Seniors?'})));fireEvent.change(screen.getByLabelText('Programme ranking'),{target:{value:'repeat'}});await waitFor(()=>assert.ok(queries.at(-1).includes('ranking=repeat')));fireEvent.click(screen.getByText('Report options'));fireEvent.click(screen.getByRole('button',{name:'Save domain view'}));await waitFor(()=>assert.equal(saved.selectedDomain,'Cognitive'));assert.equal(saved.from,'2026-11-01');const programme=document.querySelector('.domain-programme-ranking button');assert.ok(programme);fireEvent.click(programme);assert.ok(opened);assert.ok(screen.getByText(/Domain totals may overlap/));}finally{cleanup();globalThis.fetch=original;}
 });
 
 const {sppbParticipationAnalysis}=await import('../server/sppb-analysis.js');

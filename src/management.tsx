@@ -313,16 +313,16 @@ export function ManagementHome({
       />
       {value?.programmeMix&&<details className="panel"><summary>Programme Domains</summary><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore Programme Domains</button></details>}
       <section className="panel simple-next-step">
-        <h2>Plan the next step</h2>
+        <h2>Where should staff focus next?</h2>
         <p>
-          Review past programmes, choose what to run again or improve, and
-          record an owner and review date.
+          Review programme reach, participation gaps and reported needs before
+          choosing the next outreach or follow-up action.
         </p>
         <button
           className="button primary"
-          onClick={() => navigate("Planning & Recommendations")}
+          onClick={() => navigate("Client Engagement")}
         >
-          Open Planning
+          Review client engagement
         </button>
         <Findings data={data} briefing={value} navigate={navigate} />
       </section>

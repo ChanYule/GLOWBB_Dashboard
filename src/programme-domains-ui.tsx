@@ -7,11 +7,6 @@ import { populations } from "../shared/participation-compat.js";
 import { ProgrammeClassificationTable } from "./programme-classification-table";
 import { ReportBars } from "./management";
 import "./patterns.css";
-const RawAudit = lazy(() =>
-  import("./event-types-ui").then((m) => ({
-    default: m.RawClassificationAudit,
-  })),
-);
 const ProgrammeDialog = lazy(() =>
   import("./main").then((m) => ({ default: m.ProgrammeDialog })),
 );
@@ -73,7 +68,6 @@ export function ProgrammeDomainAnalysis({
       "programmes" | "sessions" | "unique" | "attendance"
     >("sessions"),
     [loading, setLoading] = useState(false),
-    [audit, setAudit] = useState(false),
     [print, setPrint] = useState<Report | null>(null),
     [detail, setDetail] = useState<{
       programme: Programme;
@@ -107,7 +101,7 @@ export function ProgrammeDomainAnalysis({
           }));
         else if (p.eventTypes)
           setMessage(
-            "Your previous Event Type view is available under Raw source audit. This view uses the five combined Programme Domains.",
+            "This view uses the five combined Programme Domains. Choose a domain and reporting period to continue.",
           );
       })
       .catch(() => {});
@@ -327,8 +321,7 @@ export function ProgrammeDomainAnalysis({
       <p className="note">
         {fmt(r.unclassified.sessions)} sessions have no recognised domain. They
         remain in overall totals and are excluded from the five-domain charts.
-        Review their original labels in the source audit or administrator
-        configuration.
+        Review original session labels in programme details or Data & settings.
       </p>
       {printing ? (
         <ProgrammeClassificationTable rows={r.programmeClassifications} print />
@@ -445,7 +438,7 @@ export function ProgrammeDomainAnalysis({
           </label>
         )}
       </div>
-      <div className="work-actions">
+      <details><summary>Report options</summary><div className="work-actions">
         <button className="button" onClick={() => void save()}>
           Save domain view
         </button>
@@ -456,29 +449,11 @@ export function ProgrammeDomainAnalysis({
         >
           Present / export domain report
         </button>
-      </div>
+      </div></details>
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
       {loading && <p role="status">Updating domain analysis…</p>}
       {report && !loading && !error && body(report)}
-      <details onToggle={(e) => setAudit(e.currentTarget.open)}>
-        <summary>Raw source audit — AAP Domain and Event Type</summary>
-        <p>
-          Original source labels are shown separately for audit. This is not the
-          combined Programme Domain analysis.
-        </p>
-        {audit && (
-          <Suspense fallback={<p>Loading source audit…</p>}>
-            <RawAudit
-              user={user}
-              revision={revision}
-              initial={initial}
-              onProgramme={(id) => void openProgramme(id)}
-              patterns={patterns}
-            />
-          </Suspense>
-        )}
-      </details>
       {print && (
         <Suspense fallback={null}>
           <PresentationFrame

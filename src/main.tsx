@@ -1,6 +1,7 @@
 import {Button,Select,Note,Modal} from "./ui-primitives";
 
 import {MAX_IMPORT_MB,MAX_IMPORT_ROWS} from '../shared/upload-limits.js';
+import {STAFF_PAGES,staffPage} from "../shared/staff-workspace.js";
 import {centreById} from '../shared/centres.js';
 import {CentreImportReview} from './centre-import-review';
 import {centreUrl} from "./api";
@@ -138,7 +139,8 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
   } | null>(null);
   const [planSearch, setPlanSearch] = useState("");
   const [patternsInitial, setPatternsInitial] = useState("");
-  const [sppbSection, setSppbSection] = useState("Latest assessments");
+  const [sppbSection, setSppbSection] = useState("Overview");
+  const [programmeDetails,setProgrammeDetails]=useState(false);
   const [localTab, setLocalTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>({...emptyFilters,...initialDates}),
     [data, setData] = useState<Dashboard | null>(null),
@@ -149,8 +151,9 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     [revision, setRevision] = useState(0),
     [toast, setToast] = useState(""),
     [navigationOpen, setNavigationOpen] = useState(false);
-  const tab=page??localTab;
-  const setTab=(next:string)=>{if(onPage)onPage(next);else setLocalTab(next);};
+  const tab=staffPage(page??localTab,user?.role);
+  const setTab=(next:string)=>{const selected=staffPage(next,user?.role);if(onPage)onPage(selected);else setLocalTab(selected);};
+  useEffect(()=>{if(tab!=='SPPB Assessments')setSppbSection('Overview');if(tab!=='Programme Performance')setProgrammeDetails(false);},[tab]);
   useEffect(()=>{if(command)setModal(command.modal);},[command]);
   const contextOnly = [
     "SPPB Assessments",
@@ -231,47 +234,9 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     setRevision((n) => n + 1);
     setToast(message);
   };
-  const primaryTabs = [
-    { name: "Overview", label: "Main Dashboard", icon: LayoutDashboard },
-    {
-      name: "Programme Performance",
-      label: "Programme Analysis",
-      icon: BarChart3,
-    },
-    {
-      name: "Planning & Recommendations",
-      label: "Planning",
-      icon: ClipboardList,
-    },
-  ];
-  const staffTabs = [
-    { name: "Participation Patterns & Insights", icon: ChartNoAxesCombined },
-    {
-      name: "Client Engagement",
-      label: "Client Engagement & Outreach",
-      icon: Users,
-    },
-    { name: "Participant Needs & Accessibility", icon: HeartHandshake },
-    { name: "SPPB Assessments", icon: Activity },
-    ...(user?.role === "admin"
-      ? [{ name: "Data management", icon: Database }]
-      : []),
-  ];
-  const advancedTabs = [
-    {
-      name: "Programme Planning and Actions",
-      label: "Detailed action tracker",
-      icon: ClipboardList,
-    },
-    { name: "Who Are We Serving?", icon: Users },
-    { name: "Gaps and Participation Barriers", icon: HeartHandshake },
-    { name: "Audience & Outreach", icon: Users },
-    { name: "Operations & Screening", icon: Activity },
-    { name: "Social Risk Analysis", icon: ShieldCheck },
-    { name: "Custom Analysis", icon: ChartNoAxesCombined },
-    { name: "Programme Alignment", icon: BarChart3 },
-    { name: "Data Quality and Administration", icon: ShieldCheck },
-  ];
+  const pageIcons:Record<string,typeof Users>={Overview:LayoutDashboard,'Programme Performance':BarChart3,'Participation Patterns & Insights':ChartNoAxesCombined,'Client Engagement':Users,'Participant Needs & Accessibility':HeartHandshake,'SPPB Assessments':Activity};
+  const primaryTabs=STAFF_PAGES.filter(item=>!item.staffOnly||user?.role!=='viewer').map(item=>({name:item.id,label:item.label,icon:pageIcons[item.id]}));
+  const staffTabs=user?.role==='admin'?[{name:'Data management',label:'Import and manage data',icon:Database}]:[];
   const navItem = (t: { name: string; label?: string; icon: typeof Users }) => (
     <button
       key={t.name}
@@ -280,7 +245,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
       onClick={() => {
         setTab(t.name);
         setPatternsInitial("");
-        setSppbSection("Latest assessments");
+        setSppbSection("Overview");
         setPlanSearch("");
         setNavigationOpen(false);
       }}
@@ -373,25 +338,17 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             <details
               className="nav-tools"
               open={
-                [...staffTabs, ...advancedTabs].some((t) => t.name === tab) ||
+                staffTabs.some((t) => t.name === tab) ||
                 undefined
               }
             >
               <summary>
                 <Users size={19} />
-                Staff Tools
+                Data &amp; settings
                 <ChevronRight size={16} />
               </summary>
               {staffTabs.map(navItem)}
-              <button
-                className="nav-item"
-                onClick={() => {
-                  setModal("dashboard-settings");
-                  setNavigationOpen(false);
-                }}
-              >
-                Dashboard Settings
-              </button>
+
               <button
                 className="nav-item"
                 onClick={() => {
@@ -401,13 +358,6 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
               >
                 Download reports
               </button>
-              <details
-                className="nav-advanced"
-                open={advancedTabs.some((t) => t.name === tab) || undefined}
-              >
-                <summary>Advanced analysis</summary>
-                {advancedTabs.map(navItem)}
-              </details>
             </details>
           </nav>
           <div className="sidebar-bottom">
@@ -498,7 +448,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                 </p>
               </div>
               <div className="heading-actions">
-                {tab!=='Participation Patterns & Insights'&&<Button
+                {!['Participation Patterns & Insights','SPPB Assessments','Client Engagement'].includes(tab)&&<Button
                   disabled={loading}
                   onClick={() =>
                     refresh("Dashboard refreshed from saved records.")
@@ -507,7 +457,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                   <RefreshCw size={16} />
                   Refresh
                 </Button>}
-                {![
+                {!embedded&&![
                   "Overview",
                   "Data management",
                   "SPPB Assessments",
@@ -778,7 +728,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                       }}
                     />
                   ) : tab === "Programme Performance" ? (
-                    <><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><Programmes data={data} onProgramme={setProgramme} user={user} filters={filters} /></>
+                    user.role==='viewer'?<Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/>:<><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><details className="panel" onToggle={e=>setProgrammeDetails(e.currentTarget.open)}><summary>Browse all programmes and detailed comparisons</summary>{programmeDetails&&<Suspense fallback={<p>Loading programme details...</p>}><Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/></Suspense>}</details></>
                   ) : tab === "Audience & Outreach" ? (
                     <Audience
                       data={data}
@@ -851,17 +801,16 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             <section className="panel">
               <h2>Personal preferences</h2>
               <p>
-                Save your selected cards, charts and filters in Custom Analysis.
-                Client views are saved separately in Client Engagement &
-                Outreach.
+                Use the filters in each analysis page. Saved client views are
+                available in Client Engagement.
               </p>
               <Button
                 onClick={() => {
                   setModal("");
-                  setTab("Custom Analysis");
+                  setTab("Client Engagement");
                 }}
               >
-                Open personal dashboard settings
+                Open client view settings
               </Button>
             </section>
             {user.role === "admin" && (
@@ -967,15 +916,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             }
             data={data}
             onClose={() => setProgramme(null)}
-            onPlan={
-              user.role === "viewer"
-                ? undefined
-                : () => {
-                    setPlanSearch(programme.name);
-                    setProgramme(null);
-                    setTab("Planning & Recommendations");
-                  }
-            }
+
           />
         )}
       </div>
