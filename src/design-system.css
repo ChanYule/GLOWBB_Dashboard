@@ -532,7 +532,7 @@ summary {
 }
 .participation-table-scroll table {
   width: 100%;
-  min-width: 950px;
+  min-width: 720px;
   border-collapse: separate;
   border-spacing: 0;
   font-variant-numeric: tabular-nums;
@@ -545,8 +545,19 @@ summary {
   white-space: nowrap;
   font-size: 13px;
 }
+.participation-table-scroll th:first-child,
+.participation-table-scroll td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.participation-table-scroll thead th:first-child {
+  z-index: 2;
+}
 .participation-table-scroll td {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .participation-table-scroll th,
 .participation-table-scroll td {

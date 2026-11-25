@@ -32,6 +32,7 @@ import { api, setCentreContext, setReportingMode } from "./api";
 import type { Centre } from "../shared/centres.js";
 import "./platform.css";
 import "./professional-ui.css";
+import "./visual-refresh.css";
 const PerformanceDiagnostics=lazy(()=>import('./performance-diagnostics').then(m=>({default:m.PerformanceDiagnostics})));
 import './experience.css';
 const CentreTools = lazy(() =>

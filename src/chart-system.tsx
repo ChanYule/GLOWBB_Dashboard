@@ -467,25 +467,25 @@ export function CompactTrend({
               ". Missing observations remain gaps. Exact values are available below."
             }
           >
-            {[0, 0.5, 1].map((v) => (
-              <g key={v}>
+            {[0, Math.ceil(maximum / 2), maximum].map((tick) => (
+              <g key={tick}>
                 <line
                   x1={left}
                   x2={right}
-                  y1={y(maximum * v)}
-                  y2={y(maximum * v)}
+                  y1={y(tick)}
+                  y2={y(tick)}
                   className="chart-gridline"
                 />
                 <text
                   x={left - 8}
-                  y={y(maximum * v) + 4}
+                  y={y(tick) + 4}
                   textAnchor="end"
                   className="chart-axis-label"
                 >
                   {new Intl.NumberFormat("en-SG", {
                     notation: maximum > 9999 ? "compact" : "standard",
-                    maximumFractionDigits: 1,
-                  }).format(maximum * v)}
+                    maximumFractionDigits: 0,
+                  }).format(tick)}
                 </text>
               </g>
             ))}

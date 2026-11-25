@@ -169,7 +169,7 @@ export function api<T>(url:string,options:RequestInit & {reuseForMs?:number}={})
   return requestApi<T>(url,init).then(value=>{
     if(cacheable&&epoch===readEpoch&&generation===centreGeneration&&!init.signal?.aborted){
       if(recentReads.size>=12)recentReads.delete(recentReads.keys().next().value!);
-      recentReads.set(key,{expires:Date.now()+Math.min(reuseForMs,15000),value:structuredClone(value)});
+      recentReads.set(key,{expires:Date.now()+Math.min(reuseForMs,60000),value:structuredClone(value)});
     }
     return value;
   });

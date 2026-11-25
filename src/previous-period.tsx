@@ -95,7 +95,7 @@ export function PreviousPeriod({
   const fmt = new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 });
   return (
     <details className="panel">
-      <summary>Compare reporting periods</summary>
+      <summary>Compare reporting periods <small>Last 6 months vs available history</small></summary>
       <label>
         Comparison{" "}
         <select value={mode} onChange={(e) => setMode(e.target.value)}>

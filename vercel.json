@@ -7,7 +7,7 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60,
-      "includeFiles": "{server/supabase-ca.crt,supabase/migrations/002_operations.sql,supabase/migrations/005_locations.sql}"
+      "includeFiles": "{server/supabase-ca.crt,supabase/migrations/002_operations.sql,supabase/migrations/005_locations.sql,supabase/migrations/006_multi_centre.sql,supabase/migrations/007_sppb_assessments.sql,supabase/migrations/008_analytics_egress.sql}"
     }
   }
 }

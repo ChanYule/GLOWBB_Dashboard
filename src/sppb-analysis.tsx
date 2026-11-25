@@ -87,7 +87,8 @@ export function SppbLinkedAnalysis({
         <>
           <div className="sppb-analysis-summary">
             <span>
-              Latest recorded median <strong>{fmt(group.medianTotal)}</strong>
+              Latest recorded median (unvalidated imported totals){" "}
+              <strong>{fmt(group.medianTotal)}</strong>
             </span>
             <span>
               Clients in this source group <strong>{fmt(group.members)}</strong>

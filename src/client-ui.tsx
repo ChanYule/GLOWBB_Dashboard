@@ -589,6 +589,7 @@ export function ClientOverview({
 export function ClientEngagement({
   user,
   initialFilters,
+  coverageFrom,
   coverageTo,
   dataRevision = 0,
   onImportAttendance,
@@ -597,6 +598,7 @@ export function ClientEngagement({
 }: {
   user: User;
   initialFilters: Filters;
+  coverageFrom?: string | null;
   coverageTo?: string | null;
   dataRevision?: number;
   onImportAttendance?: () => void;
@@ -605,9 +607,9 @@ export function ClientEngagement({
 }) {
   const initial = {
     from:
-      coverageTo && (initialFilters.from || "") > coverageTo
-        ? ""
-        : initialFilters.from || "",
+      coverageTo && (initialFilters.from || coverageFrom || "") > coverageTo
+        ? coverageFrom || ""
+        : initialFilters.from || coverageFrom || "",
     to:
       coverageTo && (!initialFilters.to || initialFilters.to > coverageTo)
         ? coverageTo
@@ -640,7 +642,12 @@ export function ClientEngagement({
         ...v,
         filters: {
           ...v.filters,
-          from: v.filters.from > coverageTo ? "" : v.filters.from,
+          from:
+            !v.filters.from && coverageFrom
+              ? coverageFrom
+              : v.filters.from > coverageTo
+                ? coverageFrom || ""
+                : v.filters.from,
           to:
             !v.filters.to || v.filters.to > coverageTo
               ? coverageTo
@@ -649,7 +656,7 @@ export function ClientEngagement({
         },
       }));
     previousCoverage.current = coverageTo;
-  }, [coverageTo, prefs.draft]);
+  }, [coverageFrom, coverageTo, prefs.draft]);
   useEffect(() => {
     if (user.role === "viewer") return;
     let live = true;

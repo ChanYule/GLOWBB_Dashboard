@@ -56,9 +56,24 @@ export function DisplaySettings() {
   const values = useDisplayOption("values", "number");
   const size = useDisplayOption("size", "standard");
   return (
-    <details className="display-settings">
+    <details
+      className="display-settings"
+      onKeyDown={(e) => {
+        if (e.key === "Escape")
+          e.currentTarget.removeAttribute("open");
+      }}
+    >
       <summary>Display</summary>
       <div className="display-settings-menu">
+        <button
+          type="button"
+          className="text-button"
+          onClick={(e) => {
+            e.currentTarget.closest("details")?.removeAttribute("open");
+          }}
+        >
+          Close
+        </button>
         <label>
           Theme{" "}
           <select

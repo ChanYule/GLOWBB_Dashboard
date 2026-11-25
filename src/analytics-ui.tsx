@@ -334,22 +334,22 @@ export function TrendChart({
             <stop offset="100%" stopColor={color} stopOpacity=".01" />
           </linearGradient>
         </defs>
-        {[0, 0.5, 1].map((v) => (
-          <g key={v}>
+        {[0, Math.ceil(max / 2), max].map((tick) => (
+          <g key={tick}>
             <line
               x1={left}
               x2={w - 18}
-              y1={y(max * v)}
-              y2={y(max * v)}
+              y1={y(tick)}
+              y2={y(tick)}
               stroke="#e7eaf2"
             />
             <text
               x={left - 9}
-              y={y(max * v) + 4}
+              y={y(tick) + 4}
               textAnchor="end"
               className="axis"
             >
-              {new Intl.NumberFormat("en-SG",{notation:max>9999?"compact":"standard",maximumFractionDigits:1}).format(max*v)}
+              {new Intl.NumberFormat("en-SG",{notation:max>9999?"compact":"standard",maximumFractionDigits:0}).format(tick)}
             </text>
           </g>
         ))}

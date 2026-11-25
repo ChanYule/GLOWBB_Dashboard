@@ -458,10 +458,11 @@ export function DataManagement({
                 {data.backups.length === 0 ? (
                   <div className="data-empty">
                     <ShieldCheck size={32} />
-                    <h3>No recovery copies needed yet</h3>
+                    <h3>No backup yet</h3>
                     <p>
-                      A backup is saved automatically before deleting or
-                      restoring data.
+                      No backup has been created yet. The first backup is
+                      created before deleting or restoring data, not on
+                      import.
                     </p>
                   </div>
                 ) : (

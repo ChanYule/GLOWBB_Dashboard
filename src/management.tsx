@@ -119,7 +119,7 @@ export function Cards({
     [
       "Attendance entries",
       data.coverage.from ? data.summary.attendance : null,
-      "Recorded participation entries · all ages",
+      `Recorded participation entries · all ages · ${fmt(data.summary.seniorAttendance)} by seniors aged ${data.settings.seniorAge}+`,
     ],
   ] as const;
   return (
@@ -311,7 +311,7 @@ export function ManagementHome({
         revision={revision}
         available={!!data.coverage.from}
       />
-      {value?.programmeMix&&<details className="panel"><summary>Programme Domains</summary><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore Programme Domains</button></details>}
+      {value?.programmeMix&&<details className="panel" open><summary>Programme Domains <small>{value.programmeMix.types.slice(0, 3).map(t=>`${t.label} ${fmt(t.sessions)} sessions`).join(" · ")}</small></summary><ReportBars rows={value.programmeMix.types.map(t=>({label:t.label,value:t.sessions,detail:`${fmt(t.unique)} unique seniors · ${fmt(t.repeat)} same-programme repeat`}))}/><p className="note">{value.programmeMix.note}</p><button className="button" onClick={()=>navigate('Programme Performance')}>Explore Programme Domains</button></details>}
       <section className="panel simple-next-step">
         <h2>Where should staff focus next?</h2>
         <p>

@@ -105,6 +105,10 @@ export function ResidentialDistribution({
       ) : (
         <p>
           No residential groups meet the reporting threshold for this period.
+          A group is shown only when at least 5 people share one consistent
+          recorded address. Addresses come only from the residential
+          block/street columns in the attendance workbook — if those columns
+          were not supplied, no groups can be shown.
         </p>
       )}
     </>

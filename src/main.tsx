@@ -484,7 +484,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                     "Client Engagement",
                     "Participation Patterns & Insights",
                   ].includes(tab) && (
-                    <Button primary onClick={() => setModal("import")}>
+                    <Button onClick={() => setModal("import")}>
                       <Upload size={17} />
                       Import attendance
                     </Button>
@@ -563,6 +563,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                   ) : tab === "Client Engagement" ? (
                     <ClientEngagement
                       user={user}
+                      coverageFrom={data.coverage.from}
                       coverageTo={data.coverage.to}
                       onLocations={() => {
                         setPatternsInitial("distance");
@@ -904,7 +905,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                   <span>
                     <strong>Print-friendly planning summary</strong>
                     <small>
-                      Trends, findings and recommendations. Print ? Save as PDF.
+                      Trends, findings and recommendations. Print → Save as PDF.
                     </small>
                   </span>
                   <ArrowRight size={18} />

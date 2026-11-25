@@ -895,8 +895,10 @@ export function ParticipationPatterns({
                   </p>
                   <p>
                     <strong>
-                      {fmt(selected?.firstObserved)} /{" "}
-                      {fmt(selected?.returning)}
+                      {fmt(selected?.firstObserved)}
+                      {selected?.returning
+                        ? ` / ${fmt(selected?.returning)}`
+                        : " · 0 recorded before"}
                     </strong>{" "}
                     first observed / recorded before this period
                   </p>

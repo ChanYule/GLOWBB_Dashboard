@@ -1,0 +1,306 @@
+/* Visual refresh — 25 Nov 2026.
+   Purely presentational: no data, labels, copy or behaviour changes.
+   Loaded last in platform.tsx so it overrides earlier sheets.
+   All colours use light-dark() so the existing light/dark theme still works. */
+
+:root {
+  --radius: 16px;
+  --shadow-sm: 0 1px 2px rgb(20 38 61 / 0.05), 0 2px 8px rgb(20 38 61 / 0.04);
+  --shadow-md: 0 1px 3px rgb(20 38 61 / 0.06), 0 10px 28px rgb(20 38 61 / 0.08);
+  --accent: #0e7c72;
+  --accent-soft: light-dark(#e6f4f1, #14302e);
+  --accent-ink: light-dark(#0b5e56, #5eead4);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: light-dark(#f2f5f8, #0f1c2e);
+}
+
+/* ---- Panels: softer, rounder, a little lift ---- */
+.dashboard-shell .panel,
+.app .panel {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+}
+.dashboard-shell .panel h2:first-child,
+.dashboard-shell .panel h3:first-child {
+  margin-top: 0;
+}
+.dashboard-shell .panel + .panel {
+  margin-top: 4px;
+}
+
+/* ---- Page heading: show the eyebrow, tighten the title ---- */
+.dashboard-shell .page-heading .eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin-bottom: 6px;
+}
+.dashboard-shell .page-heading h1 {
+  letter-spacing: -0.7px;
+}
+.dashboard-shell .page-heading .muted {
+  color: var(--muted);
+}
+
+/* ---- KPI cards: accent bar, clearer label, hover lift ---- */
+.dashboard-shell .management-kpi,
+.dashboard-shell .metric-card,
+.dashboard-shell .client-kpi,
+.dashboard-shell .patterns-kpis > article,
+.dashboard-shell .needs-kpi {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.dashboard-shell .management-kpi::before,
+.dashboard-shell .metric-card::before,
+.dashboard-shell .client-kpi::before,
+.dashboard-shell .patterns-kpis > article::before,
+.dashboard-shell .needs-kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), #2dd4bf);
+}
+.dashboard-shell .management-kpi:nth-child(2)::before,
+.dashboard-shell .client-kpi:nth-child(2)::before {
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+.dashboard-shell .management-kpi:nth-child(3)::before,
+.dashboard-shell .client-kpi:nth-child(3)::before {
+  background: linear-gradient(90deg, #6d5ae6, #a78bfa);
+}
+.dashboard-shell .management-kpi:nth-child(4)::before,
+.dashboard-shell .client-kpi:nth-child(4)::before {
+  background: linear-gradient(90deg, #b45309, #f59e0b);
+}
+.dashboard-shell .management-kpi:hover,
+.dashboard-shell .metric-card:hover,
+.dashboard-shell .client-kpi:hover,
+.dashboard-shell .patterns-kpis > article:hover,
+.dashboard-shell .needs-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.dashboard-shell .management-kpi > span,
+.dashboard-shell .client-kpi > span,
+.dashboard-shell .needs-kpi > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dashboard-shell .management-kpi > strong,
+.dashboard-shell .client-kpi > strong,
+.dashboard-shell .needs-kpi > strong {
+  font-size: 34px;
+}
+
+/* ---- Sidebar: gradient, clearer active state, fly-out labels when collapsed ---- */
+.shell-sidebar {
+  background: linear-gradient(180deg, #0e1e33 0%, #14263d 55%, #12233a 100%);
+}
+.shell-nav-item {
+  position: relative;
+  border-radius: 10px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.shell-nav-item.active {
+  background: rgb(15 118 110 / 0.35);
+  box-shadow: inset 3px 0 #2dd4bf;
+}
+.sidebar-collapsed .shell-nav-item:hover > span,
+.sidebar-collapsed .shell-nav-item:focus-visible > span {
+  display: block;
+  position: absolute;
+  left: 76px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #14263d;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  z-index: 60;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sidebar-collapsed .shell-nav-item:hover > span {
+  pointer-events: none;
+}
+
+/* ---- Top bar: a little more air and separation ---- */
+.shell-topbar.platform-header {
+  box-shadow: 0 1px 0 var(--line), 0 4px 16px rgb(20 38 61 / 0.04);
+}
+
+/* ---- Buttons: primary gets a gradient + lift, secondary a teal hover ---- */
+.dashboard-shell .button.primary {
+  background: linear-gradient(135deg, #0f766e, #0d9488);
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgb(13 148 136 / 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.dashboard-shell .button.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0f766e, #0d9488);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgb(13 148 136 / 0.34);
+}
+.dashboard-shell .button.primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+.dashboard-shell .button:hover:not(:disabled) {
+  border-color: #7cc4bd;
+}
+.dashboard-shell :focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+/* ---- Filters: read as one control bar, not a pile of boxes ---- */
+.dashboard-shell .filters {
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+}
+.dashboard-shell .filters .field > span,
+.dashboard-shell .filters label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- Tables: small caps header, calm hover, rounded container ---- */
+.app table th,
+.dashboard-shell table th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.app tbody tr:hover,
+.dashboard-shell tbody tr:hover {
+  background: light-dark(#eef7f5, #1a2f47);
+}
+.participation-table-scroll,
+.work-table {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Ranking bars: rounder track, gradient fill ---- */
+.ranking-track {
+  height: 10px;
+  border-radius: 999px;
+}
+.ranking-track > i {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f766e, #2dd4bf);
+}
+
+/* ---- Insight / focus cards: tinted, with a clear left edge ---- */
+.dashboard-shell .management-findings > article,
+.dashboard-shell .insight-card {
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--primary);
+}
+.dashboard-shell .management-findings > article h3,
+.dashboard-shell .insight-card h3 {
+  color: var(--ink);
+}
+
+/* ---- Collapsible sections: clearer affordance ---- */
+.dashboard-shell details.panel > summary,
+.dashboard-shell details > summary {
+  cursor: pointer;
+  border-radius: 8px;
+}
+.dashboard-shell details.panel > summary:hover {
+  color: var(--accent-ink);
+}
+.dashboard-shell details[open] > summary {
+  color: var(--accent-ink);
+}
+
+/* ---- Empty states: centred, with a tinted icon well ---- */
+.data-empty {
+  text-align: center;
+  padding: 32px 20px;
+}
+.data-empty svg {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: 50%;
+  padding: 10px;
+}
+.data-empty h3 {
+  margin-top: 12px;
+}
+.data-empty p {
+  max-width: 460px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Loading: shimmer instead of a flat block ---- */
+.page-skeleton {
+  background: linear-gradient(
+    110deg,
+    light-dark(#fff, #192638) 30%,
+    light-dark(#f1f5f9, #223247) 45%,
+    light-dark(#fff, #192638) 60%
+  );
+  background-size: 200% 100%;
+  animation: visual-refresh-shimmer 1.6s linear infinite;
+}
+@keyframes visual-refresh-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-skeleton {
+    animation: none;
+  }
+  .dashboard-shell .management-kpi:hover,
+  .dashboard-shell .button.primary:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ---- Mobile: one KPI per row on very small screens, tighter panels ---- */
+@media (max-width: 480px) {
+  .dashboard-shell .management-kpis,
+  .dashboard-shell .metric-grid,
+  .dashboard-shell .client-kpis,
+  .dashboard-shell .patterns-kpis,
+  .dashboard-shell .needs-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard-shell .panel {
+    padding: 18px;
+  }
+  .dashboard-shell .page-heading h1 {
+    font-size: 24px;
+  }
+}

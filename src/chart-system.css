@@ -112,12 +112,14 @@
 }
 .ranking-row-heading > span,
 .ranking-label {
+  flex: 1;
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: left;
 }
 .ranking-row-heading strong {
+  flex-shrink: 0;
   font-weight: 650;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

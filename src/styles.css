@@ -827,6 +827,8 @@ select {
 }
 .data-footnote p {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .empty {
   padding: 50px;

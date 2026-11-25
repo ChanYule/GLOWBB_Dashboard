@@ -520,7 +520,7 @@ export function Programmes({
           </Button>
         </div>
         <details onToggle={(e) => setCompareOpen(e.currentTarget.open)}>
-          <summary>Compare Programmes ? select 2?4</summary>
+          <summary>Compare programmes — select 2–4</summary>
           {compareOpen && (
             <Suspense
               fallback={<p role="status">Loading programme comparison?</p>}

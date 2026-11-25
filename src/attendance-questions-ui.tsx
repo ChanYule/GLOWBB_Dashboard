@@ -23,9 +23,14 @@ function Question({
   } | null>(null);
   const [retry, setRetry] = useState(0);
   const [pool, setPool] = useState(false);
+  const [slow, setSlow] = useState(false);
   const key = query + revision + retry;
   useEffect(() => {
     const controller = new AbortController();
+    setSlow(false);
+    const slowTimer = setTimeout(() => {
+      if (!controller.signal.aborted) setSlow(true);
+    }, 10000);
     api<Report>(
       `/api/participation-patterns?${query}&dimension=${item.dimension}`,
       { signal: controller.signal },
@@ -37,7 +42,10 @@ function Question({
         if (!controller.signal.aborted)
           setResult({ key, error: error.message });
       });
-    return () => controller.abort();
+    return () => {
+      clearTimeout(slowTimer);
+      controller.abort();
+    };
   }, [query, item.dimension, key]);
   const current = result?.key === key ? result : null;
   const answer = current?.report
@@ -47,6 +55,18 @@ function Question({
     <article className="attendance-question">
       <h3>{item.question}</h3>
       {!current && <p role="status">Checking recorded data…</p>}
+      {!current && slow && (
+        <p>
+          Still checking after 10 seconds — this usually means the report
+          is queued behind other requests.{" "}
+          <button
+            className="text-button"
+            onClick={() => setRetry((n) => n + 1)}
+          >
+            Retry answer
+          </button>
+        </p>
+      )}
       {current?.error && (
         <div role="alert">
           <p>Answer unavailable. {current.error}</p>
