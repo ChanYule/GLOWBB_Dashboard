@@ -1,4 +1,7 @@
+import {mountResidentialOutreach} from './residential-outreach.js';
 import {sourceClassification} from './programme-domains.js';
+import {sqlDashboard} from './sql-dashboard.js';
+import {workspaceAnalyticsCache} from './analytics-cache.js';
 import {mountConfiguration,saveLegacyDefinitionVersion} from './configuration.js';
 import {reportingStorage} from './reporting-policy.js';
 import { mountReporting } from "./reporting.js";
@@ -52,11 +55,14 @@ export function createApp(
     authRequired = process.env.DASHBOARD_AUTH === "1",
     locationService,
     resolveUser,
+    analyticsOptimizations = process.env.ANALYTICS_OPTIMIZATIONS !== '0',
   } = {},
 ) {
   const app = express(),
     previews = db.previews || sqlitePreviews(db);
   const storage = reportingStorage(db.storage || { readData, getSettings, audit });
+  const aggregateCache=workspaceAnalyticsCache(db,{enabled:analyticsOptimizations});
+  app.analyticsDiagnostics=aggregateCache.diagnostics;
   app.disable("x-powered-by");
   app.use((req,_res,next)=>{req.url=withoutRoutingQuery(req.url);next();});
   app.use(express.json({ limit: "64kb" }));
@@ -101,6 +107,11 @@ export function createApp(
     res.json({ ready: true, schemaVersion: version });
   });
   mountIdentity(app, db, { required: authRequired, production, resolveUser });
+  app.get('/api/analytics/diagnostics',async(req,res)=>{
+    if(req.user.role!=='admin')throw error(403,'Administrator access is required.');
+    const {analyticsRevision}=await import('./analytics-revisions.js');
+    res.json({cache:aggregateCache.diagnostics(),database:db.databaseDiagnostics?.()||null,revision:await analyticsRevision(db),lastImportAt:(await db.prepare('SELECT MAX(created) AS stamp FROM imports').get()).stamp||null,lastSyncAt:null,syncStatus:'CaritaHub is not connected; no sync runs.',note:'Process-local counters and estimated JSON database result bytes. This is not the Supabase billing meter. No polling is used.'});
+  });
   mountConfiguration(app,{db,storage:db.storage||{readData,getSettings,audit}});
   mountDataManagement(app, { db });
   app.get("/api/me", (req, res) => res.json(req.user));
@@ -124,11 +135,12 @@ export function createApp(
     }
     return d;
   };
-  async function dashboard(req) {
-    const data = await readEffectiveData(db, storage),
-      settings = await storage.getSettings(db),
-      f = filters(req),
-      report =
+  async function dashboard(req,connection=db) {
+    if(connection===db&&db.dialect==='postgres'&&analyticsOptimizations)return db.transaction(tx=>dashboard(req,tx),{readOnly:true});
+    const settings = await storage.getSettings(connection),f = filters(req);
+    let data;
+    let report=analyticsOptimizations?await sqlDashboard(connection,settings,f):null;
+    if(!report){data=await readEffectiveData(connection,storage);report =
         f.view === "context"
           ? analyticsContext(data, settings, f)
           : analytics(
@@ -137,18 +149,22 @@ export function createApp(
               f.view === "overview" ? { ...f, interval: "month" } : f,
               undefined,
               f.view === "overview" ? "overview" : false,
-            );
+            );}
     const scopes = new Map();
     const targets = (
-      f.view === "context"
+      f.view === "context"||f.includeTargets==='0'
         ? []
-        : await db.prepare("SELECT * FROM targets").all()
-    ).map((t) => {
+        : await connection.prepare("SELECT * FROM targets").all()
+    );
+    const reviewedTargets=[];
+    for(const t of targets){
       const key = JSON.stringify([t.start, t.end, t.programme_id || ""]);
-      if (!scopes.has(key))
+      if (!scopes.has(key)){
+        const fast=analyticsOptimizations?await sqlDashboard(connection,settings,{from:t.start,to:t.end,programme:t.programme_id||'',view:'context'},undefined,true):null;
+        if(!fast&&!data)data=await readEffectiveData(connection,storage);
         scopes.set(
           key,
-          analytics(
+          fast||analytics(
             data,
             settings,
             {
@@ -159,7 +175,7 @@ export function createApp(
             undefined,
             "compare",
           ),
-        );
+        );}
       const scoped = scopes.get(key);
       const value = scoped.summary[t.metric];
       const remaining = Math.max(
@@ -168,23 +184,23 @@ export function createApp(
           (Date.parse(t.end + "T23:59:59+08:00") - Date.now()) / 86400000,
         ),
       );
-      return {
+      reviewedTargets.push({
         ...t,
         current: value,
         previousCurrent: scoped.previous?.[t.metric] ?? null,
         progress: (value / t.value) * 100,
         gap: Math.max(0, t.value - value),
         daysRemaining: remaining,
-      };
-    });
+      });
+    }
     return {
       ...report,
-      metadata: await analysisMetadata(db,settings),
+      metadata: await analysisMetadata(connection,settings),
       settings,
-      targets,
+      targets:reviewedTargets,
       decisions: (["overview", "context"].includes(f.view)
         ? []
-        : await db
+        : await connection
             .prepare(
               "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
             )
@@ -205,9 +221,10 @@ export function createApp(
     next();
   });
   mountAnalysis(app, { db, storage, filters });
-  mountReporting(app, { db, storage, filters });
-  mountPatterns(app, { db, storage });
-  mountEventTypes(app, { db, storage });
+  mountReporting(app, { db, storage, filters,aggregateCache });
+  mountResidentialOutreach(app, {db,storage,filters,aggregateCache});
+  mountPatterns(app, { db, storage,aggregateCache });
+  mountEventTypes(app, { db, storage,aggregateCache });
   mountLocations(app, { db, storage, oneMap: locationService });
   app.get("/api/dashboard", async (req, res) => {
     if (req.query.risk)
@@ -216,7 +233,7 @@ export function createApp(
         "Social risk is available in the protected aggregate view only. Combined risk queries are restricted to prevent disclosure.",
       );
     // Redaction must never mutate nested saved settings or shared defaults.
-    const report = structuredClone(await dashboard(req));
+    const report = structuredClone(await aggregateCache.run(req,'dashboard',()=>dashboard(req)));
     const stripRisk = (value) => {
       if (!value || typeof value !== "object") return;
       for (const key of Object.keys(value)) {
@@ -229,9 +246,9 @@ export function createApp(
     res.json(report);
   });
   const upload = importFileUpload();
-  mountNeeds(app, { db, storage, previews, upload, filters });
+  mountNeeds(app, { db, storage, previews, upload, filters,aggregateCache });
   mountOperations(app, { db, storage, previews, upload, filters });
-  mountClients(app, { db, storage, previews, upload });
+  mountClients(app, { db, storage, previews, upload,aggregateCache });
   app.post("/api/import/preview", upload, async (req, res) => {
     if (!req.file) throw error(400, "Select an attendance file.");
     let parsed;

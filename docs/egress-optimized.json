@@ -1,0 +1,257 @@
+{
+  "label": "optimized",
+  "scope": "Synthetic in-process PGlite PostgreSQL and HTTP API. Estimated JSON database result bytes exclude PostgreSQL/TLS protocol overhead; no hosted or browser timing claims. One-time migration setup is measured separately.",
+  "fixture": {
+    "people": 1200,
+    "sessions": 1800,
+    "attendance": 36000
+  },
+  "setupMs": 113.70460000000003,
+  "index": {
+    "before": {
+      "executionMs": 4.938,
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "index": null,
+          "rows": 29
+        }
+      ]
+    },
+    "after": {
+      "executionMs": 0.201,
+      "nodes": [
+        {
+          "node": "Bitmap Heap Scan",
+          "index": null,
+          "rows": 29
+        },
+        {
+          "node": "Bitmap Index Scan",
+          "index": "attendance_participant_session",
+          "rows": 29
+        }
+      ]
+    },
+    "bytes": 1146880
+  },
+  "measurements": [
+    {
+      "view": "context",
+      "visit": "cold",
+      "apiMs": 741.1657000000005,
+      "apiBytes": 3137,
+      "databaseQueries": 9,
+      "databaseRows": 25,
+      "databaseEstimatedBytes": 4530,
+      "databaseMs": 671.9219000000003,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 250000,
+        "system": 16000
+      },
+      "heapBytes": 31841440,
+      "cache": "miss",
+      "resultFingerprint": "23f2902f87e162a973f8c7530d641a6f1c48b904e162708d07921da528d52e46"
+    },
+    {
+      "view": "context",
+      "visit": "repeat",
+      "apiMs": 7.23200000000088,
+      "apiBytes": 3137,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 1.4387000000006083,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 0,
+        "system": 0
+      },
+      "heapBytes": 32785600,
+      "cache": "hit",
+      "resultFingerprint": "23f2902f87e162a973f8c7530d641a6f1c48b904e162708d07921da528d52e46"
+    },
+    {
+      "view": "context",
+      "visit": "filtered",
+      "apiMs": 330.7604000000001,
+      "apiBytes": 3125,
+      "databaseQueries": 9,
+      "databaseRows": 25,
+      "databaseEstimatedBytes": 4520,
+      "databaseMs": 320.1203000000014,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 172000,
+        "system": 0
+      },
+      "heapBytes": 31233680,
+      "cache": "miss",
+      "resultFingerprint": "565c18bf9e42c97bc945cb1761f1bb6bf2483f2a4ed40bd892ba43d5be9d4f33"
+    },
+    {
+      "view": "context",
+      "visit": "filtered-repeat",
+      "apiMs": 7.3542999999999665,
+      "apiBytes": 3125,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 2.651199999999335,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 0,
+        "system": 0
+      },
+      "heapBytes": 32037096,
+      "cache": "hit",
+      "resultFingerprint": "565c18bf9e42c97bc945cb1761f1bb6bf2483f2a4ed40bd892ba43d5be9d4f33"
+    },
+    {
+      "view": "overview",
+      "visit": "cold",
+      "apiMs": 1860.1643999999997,
+      "apiBytes": 40166,
+      "databaseQueries": 10,
+      "databaseRows": 25,
+      "databaseEstimatedBytes": 23943,
+      "databaseMs": 1839.2606000000005,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 719000,
+        "system": 15000
+      },
+      "heapBytes": 32921976,
+      "cache": "miss",
+      "resultFingerprint": "208e42562688ecb6944906696e2b9cf7e9cc6137f1e7cd31db3dbc9ed5d0899d"
+    },
+    {
+      "view": "overview",
+      "visit": "repeat",
+      "apiMs": 12.148200000001452,
+      "apiBytes": 40166,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 1.5468000000000757,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 15000,
+        "system": 0
+      },
+      "heapBytes": 36104944,
+      "cache": "hit",
+      "resultFingerprint": "208e42562688ecb6944906696e2b9cf7e9cc6137f1e7cd31db3dbc9ed5d0899d"
+    },
+    {
+      "view": "overview",
+      "visit": "filtered",
+      "apiMs": 494.6233000000011,
+      "apiBytes": 30076,
+      "databaseQueries": 10,
+      "databaseRows": 25,
+      "databaseEstimatedBytes": 17474,
+      "databaseMs": 481.50850000000173,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 188000,
+        "system": 16000
+      },
+      "heapBytes": 33063976,
+      "cache": "miss",
+      "resultFingerprint": "a00d7672e8964759a611f0b039d4ee04e7ae19447ab02d822e217118b36c8893"
+    },
+    {
+      "view": "overview",
+      "visit": "filtered-repeat",
+      "apiMs": 13.217599999999948,
+      "apiBytes": 30076,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 5.865899999997055,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 16000,
+        "system": 0
+      },
+      "heapBytes": 31950976,
+      "cache": "hit",
+      "resultFingerprint": "a00d7672e8964759a611f0b039d4ee04e7ae19447ab02d822e217118b36c8893"
+    },
+    {
+      "view": "full",
+      "visit": "cold",
+      "apiMs": 1309.2777000000006,
+      "apiBytes": 781477,
+      "databaseQueries": 11,
+      "databaseRows": 21,
+      "databaseEstimatedBytes": 2624432,
+      "databaseMs": 184.73229999999785,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 563000,
+        "system": 16000
+      },
+      "heapBytes": 35155984,
+      "cache": "miss",
+      "resultFingerprint": "199a19f4d747674d0ce99e616efc7c426f375e8b1608e1214ca55da8ed2e5a03"
+    },
+    {
+      "view": "full",
+      "visit": "repeat",
+      "apiMs": 68.4369999999999,
+      "apiBytes": 781477,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 2.62579999999798,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 0,
+        "system": 0
+      },
+      "heapBytes": 65924104,
+      "cache": "hit",
+      "resultFingerprint": "199a19f4d747674d0ce99e616efc7c426f375e8b1608e1214ca55da8ed2e5a03"
+    },
+    {
+      "view": "full",
+      "visit": "filtered",
+      "apiMs": 335.9961999999996,
+      "apiBytes": 241500,
+      "databaseQueries": 11,
+      "databaseRows": 21,
+      "databaseEstimatedBytes": 2624432,
+      "databaseMs": 169.3150000000005,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 140000,
+        "system": 0
+      },
+      "heapBytes": 80036168,
+      "cache": "miss",
+      "resultFingerprint": "5a7797cbcaf34566490141b72e326c7812dfb363fcaf9dbea679ebf6e7a35445"
+    },
+    {
+      "view": "full",
+      "visit": "filtered-repeat",
+      "apiMs": 31.093699999999444,
+      "apiBytes": 241500,
+      "databaseQueries": 2,
+      "databaseRows": 8,
+      "databaseEstimatedBytes": 305,
+      "databaseMs": 2.386499999998705,
+      "snapshotQueries": 0,
+      "cpuMicros": {
+        "user": 0,
+        "system": 0
+      },
+      "heapBytes": 46373904,
+      "cache": "hit",
+      "resultFingerprint": "5a7797cbcaf34566490141b72e326c7812dfb363fcaf9dbea679ebf6e7a35445"
+    }
+  ],
+  "parity": "All 12 normalized response fingerprints match the controlled legacy run."
+}

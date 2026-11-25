@@ -39,10 +39,11 @@ const EventTypeInsights = lazy(() =>
 const LocationBlocks = lazy(() =>
   import("./location-ui").then((m) => ({ default: m.LocationBlocks })),
 );
-const ActionEditor = lazy(() =>
-  import("./needs-ui").then((m) => ({ default: m.ActionEditor })),
-);
-type ActionDraft = ReturnType<typeof import("./needs-ui").blankAction>;
+type PlanningForm = typeof import("./needs-ui");
+type OpenPlanningDraft = {
+  value: ReturnType<PlanningForm["blankAction"]>;
+  Editor: PlanningForm["ActionEditor"];
+};
 const PresentationFrame = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationFrame })),
 );
@@ -314,7 +315,7 @@ export function ParticipationPatterns({
   const [adminOpen, setAdminOpen] = useState(false),
     [retry, setRetry] = useState(0),
     [locationRevision, setLocationRevision] = useState(0),
-    [actionDraft, setActionDraft] = useState<ActionDraft | null>(null);
+    [actionDraft, setActionDraft] = useState<OpenPlanningDraft | null>(null);
   const [report, setReport] = useState<Report | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -1019,7 +1020,7 @@ export function ParticipationPatterns({
                   <button
                     className="button"
                     onClick={async () => {
-                      const { blankAction } = await import("./needs-ui");
+                      const { blankAction, ActionEditor } = await import("./needs-ui");
                       const draft = blankAction("outreach", {
                         id: "location-finding",
                         category: "Targeted Outreach",
@@ -1041,7 +1042,7 @@ export function ParticipationPatterns({
                         ? `${report.location.transport.reported} sourced transport concerns in this group; verify individual requirements through existing records.`
                         : "Reported barriers are unavailable or withheld. Seek appropriate voluntary feedback.";
                       draft.evidenceSource = `Protected location analysis: ${report.period.from} to ${report.period.to}`;
-                      setActionDraft(draft);
+                      setActionDraft({value:draft,Editor:ActionEditor});
                     }}
                   >
                     Record proposed location follow-up
@@ -1301,9 +1302,8 @@ export function ParticipationPatterns({
         </Suspense>
       )}
       {actionDraft && (
-        <Suspense fallback={<p>Loading existing planning form...</p>}>
-          <ActionEditor
-            value={actionDraft}
+        <actionDraft.Editor
+            value={actionDraft.value}
             onClose={() => setActionDraft(null)}
             onSaved={() => {
               setActionDraft(null);
@@ -1312,7 +1312,6 @@ export function ParticipationPatterns({
               );
             }}
           />
-        </Suspense>
       )}
     </div>
   );

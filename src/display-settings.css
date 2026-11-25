@@ -1,0 +1,156 @@
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+:root:root {
+  --surface: light-dark(#fff, #192638);
+  --bg: light-dark(#f6f8fb, #111b2a);
+  --ink: light-dark(#14263d, #edf3fc);
+  --muted: light-dark(#526378, #bac8db);
+  --line: light-dark(#dce3ec, #3b4e65);
+  --border: var(--line);
+}
+.display-settings {
+  position: relative;
+}
+.display-settings summary {
+  cursor: pointer;
+  padding: 0.5rem;
+}
+.display-settings-menu {
+  position: absolute;
+  right: 0;
+  z-index: 15;
+  min-width: 13rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.7rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.display-settings-menu label {
+  display: grid;
+  gap: 0.25rem;
+}
+.seen-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.domain-comparison-chart {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.chart-mode {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.ranking-row-heading {
+  font-size: 1rem;
+}
+.ranking-track {
+  min-height: 0.8rem;
+}
+[data-chart-size="large"] .ranking-row-heading,
+.seen-presentation .ranking-row-heading {
+  font-size: 1.16rem;
+}
+[data-chart-size="extra-large"] .ranking-row-heading {
+  font-size: 1.35rem;
+}
+[data-chart-size="large"] .ranking-track,
+.seen-presentation .ranking-track {
+  min-height: 1.1rem;
+}
+[data-chart-size="extra-large"] .ranking-track {
+  min-height: 1.4rem;
+}
+.seen-presentation .report-slide {
+  font-size: 1.16rem;
+}
+.seen-meeting-controls {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1rem 0;
+}
+.seen-meeting-controls label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .seen-chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  :root:root {
+    color-scheme: light;
+  }
+  .display-settings,
+  .seen-meeting-controls,
+  .chart-mode {
+    display: none !important;
+  }
+}
+
+:root:root {
+  --chart-reach: light-dark(#2563eb, #7faeff);
+  --chart-attendance: light-dark(#0f766e, #5edbc5);
+  --chart-demographic: light-dark(#6d5ae6, #bcacff);
+}
+.chart-denominator { color: var(--muted); font-size: .9rem; }
+.presentation:fullscreen { width:100%; height:100%; overflow:auto; }
+.seen-presentation > .report-slide { padding: clamp(1rem, 2vw, 1.75rem); }
+.seen-presentation > .seen-meeting-controls { padding-inline: 1rem; }
+.seen-presentation .domain-comparison-chart > h2 { margin: 0 0 .5rem; }
+.seen-presentation .domain-comparison-chart > button { margin: 0 0 .5rem; }
+.ranking-track.unavailable {
+  background: repeating-linear-gradient(135deg, var(--surface) 0 4px, var(--line) 4px 6px);
+}
+@media (min-width: 900px) {
+  .seen-presentation .seen-chart-grid .ranking-rows { gap: .5rem; margin-top: .6rem; }
+  .seen-presentation .seen-chart-grid .ranking-row:not(.ranking-extra) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .65fr);
+    align-items: center;
+    gap: .75rem;
+  }
+  .seen-presentation .seen-chart-grid .ranking-row-heading { margin-bottom: 0; }
+}
+
+.chart-actions { display:flex; justify-content:flex-end; gap:.8rem; margin:.3rem 0; }
+.expanded-dashboard-chart { width:92vw; max-width:none; max-height:92dvh; padding:clamp(1rem,3vw,2.5rem); overflow:auto; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:16px; }
+.expanded-dashboard-chart::backdrop { background:rgb(0 0 0 / .7); }
+.expanded-dashboard-chart .ranking-row-heading { font-size:clamp(1rem,2.3vw,1.45rem); }
+.expanded-dashboard-chart .ranking-track { min-height:1.15rem; }
+.meeting-layouts[open] { display:block; }
+.meeting-layouts label { margin:.6rem 0; flex-wrap:wrap; }
+.meeting-layouts li { margin:.45rem 0; }
+[data-chart-size="large"] :is(.chart-header h3,.metric-tile-label,.work-table,.chart-footnote) { font-size:1.08rem; }
+[data-chart-size="extra-large"] :is(.chart-header h3,.metric-tile-label,.work-table,.chart-footnote) { font-size:1.22rem; }
+[data-chart-size="large"] .metric-tile > strong { font-size:clamp(1.8rem,4vw,2.75rem); }
+[data-chart-size="extra-large"] .metric-tile > strong { font-size:clamp(2rem,4.8vw,3.4rem); }
+@media print { .chart-actions, .expanded-dashboard-chart { display:none !important; } }
+
+.chart-actions .text-button, .expanded-dashboard-chart .ranking-label { color:var(--chart-reach); }
+.seen-presentation > .meeting-layouts { margin:.35rem 1rem .6rem; padding:.5rem .8rem; }
+.seen-presentation > .meeting-layouts:not([open]) { min-height:unset; }
+.seen-presentation .domain-comparison-chart .chart-denominator { margin:.45rem 0 .65rem; }
+.seen-presentation .domain-comparison-chart .chart-actions { margin:.2rem 0; }

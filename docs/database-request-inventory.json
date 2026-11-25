@@ -1,0 +1,1311 @@
+{
+  "scope": "Static source inventory of literal Express routes and SQL prefixes; dynamic queries are described in EGRESS-OPTIMISATION.md. No credentials, records or database connections are read. Frequency/rows/bytes require runtime measurements; this inventory does not guess production traffic.",
+  "modules": [
+    {
+      "file": "server/analysis-metadata.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT 'import' AS kind, MAX(created) AS stamp FROM imports UNION ALL SELECT 'profile' AS kind, MAX(updated) AS stamp FROM participant_profiles UNION ALL SELECT 'action' AS kind, MAX(updated) AS stamp FROM needs_actions UNION ALL SELECT 'feedback' AS kind, MAX(created) AS stamp FROM participant_feed"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/analysis-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/analysis/export",
+          "line": 79
+        },
+        {
+          "method": "GET",
+          "path": "/api/analysis/view/:id/export",
+          "line": 97
+        },
+        {
+          "method": "GET",
+          "path": "/api/preferences",
+          "line": 157
+        },
+        {
+          "method": "PUT",
+          "path": "/api/preferences",
+          "line": 167
+        },
+        {
+          "method": "GET",
+          "path": "/api/risk-configuration",
+          "line": 200
+        },
+        {
+          "method": "PUT",
+          "path": "/api/risk-configuration",
+          "line": 223
+        },
+        {
+          "method": "GET",
+          "path": "/api/social-risk",
+          "line": 304
+        },
+        {
+          "method": "GET",
+          "path": "/api/backups/:id",
+          "line": 321
+        },
+        {
+          "method": "GET",
+          "path": "/api/backups",
+          "line": 332
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+        "SELECT DISTINCT raw FROM risk_observations",
+        "SELECT payload FROM attendance_backups WHERE id=?",
+        "SELECT id,created FROM attendance_backups ORDER BY created DESC"
+      ],
+      "fullStateReadReferences": 4
+    },
+    {
+      "file": "server/analytics-revisions.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT pg_advisory_xact_lock(714228)",
+        "SELECT MAX(version) AS version FROM schema_version",
+        "SELECT \"glowbb\".install_analytics_revisions($1)",
+        "SELECT kind,revision FROM analytics_revisions ORDER BY kind"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/app.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/ready",
+          "line": 99
+        },
+        {
+          "method": "GET",
+          "path": "/api/analytics/diagnostics",
+          "line": 109
+        },
+        {
+          "method": "GET",
+          "path": "/api/me",
+          "line": 116
+        },
+        {
+          "method": "GET",
+          "path": "/api/dashboard",
+          "line": 227
+        },
+        {
+          "method": "POST",
+          "path": "/api/import/preview",
+          "line": 250
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/import/preview/:id",
+          "line": 449
+        },
+        {
+          "method": "POST",
+          "path": "/api/import/confirm",
+          "line": 453
+        },
+        {
+          "method": "GET",
+          "path": "/api/quality",
+          "line": 461
+        },
+        {
+          "method": "GET",
+          "path": "/api/settings/outreach-rules",
+          "line": 475
+        },
+        {
+          "method": "PUT",
+          "path": "/api/settings",
+          "line": 478
+        },
+        {
+          "method": "POST",
+          "path": "/api/targets",
+          "line": 540
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/targets/:id",
+          "line": 571
+        },
+        {
+          "method": "PUT",
+          "path": "/api/decisions/:id",
+          "line": 576
+        },
+        {
+          "method": "GET",
+          "path": "/api/export/:format",
+          "line": 636
+        }
+      ],
+      "literalSqlPrefixes": [
+        "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
+        "SELECT MAX(version) AS version FROM schema_version",
+        "SELECT count(*) AS count FROM attendance",
+        "SELECT MAX(created) AS stamp FROM imports",
+        "SELECT * FROM targets",
+        "SELECT programme_id AS id,status,notes,updated FROM decisions UNION ALL SELECT 'target-' || target_id AS id,status,notes,updated FROM opportunity_decisions",
+        "SELECT participant_id,details FROM participant_profiles",
+        "SELECT id,created,summary FROM imports ORDER BY id DESC LIMIT 100",
+        "SELECT created,action FROM audit ORDER BY id DESC LIMIT 50",
+        "SELECT id FROM programmes WHERE id=?",
+        "INSERT INTO targets(metric,value,start,end,programme_id) VALUES(?,?,?,?,?)",
+        "DELETE FROM targets WHERE id=?",
+        "SELECT id FROM targets WHERE id=?",
+        "SELECT id FROM programmes WHERE id=?"
+      ],
+      "fullStateReadReferences": 3
+    },
+    {
+      "file": "server/centre-imports.js",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/import/preview",
+          "line": 311
+        },
+        {
+          "method": "POST",
+          "path": "/api/centres/import/review",
+          "line": 347
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/import/issues",
+          "line": 382
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/import/rows",
+          "line": 394
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/import/preview/:id",
+          "line": 452
+        },
+        {
+          "method": "POST",
+          "path": "/api/import/confirm",
+          "line": 470
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "UPDATE import_previews SET payload=? WHERE id=? AND user_id=?",
+        "DELETE FROM import_previews WHERE expires<?",
+        "SELECT count(*) AS n FROM import_previews WHERE id NOT LIKE 'upload-%'",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT summary FROM imports WHERE summary LIKE ?",
+        "SELECT summary FROM imports WHERE summary LIKE ?",
+        "UPDATE import_previews SET expires=? WHERE id=? AND user_id=?"
+      ],
+      "fullStateReadReferences": 1
+    },
+    {
+      "file": "server/centre-migration.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/centres/migration",
+          "line": 34
+        },
+        {
+          "method": "POST",
+          "path": "/api/centres/migration/preview",
+          "line": 74
+        },
+        {
+          "method": "POST",
+          "path": "/api/centres/migration/confirm",
+          "line": 145
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/migration/backups",
+          "line": 446
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/migration/backups/:id",
+          "line": 456
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT value FROM operational_settings WHERE id=1",
+        "SELECT * FROM legacy_allocations",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT programme_id FROM legacy_allocations WHERE status='Complete'",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT value FROM settings WHERE id=1",
+        "INSERT OR IGNORE INTO attendance_backups VALUES(?,?,?,?)",
+        "SELECT * FROM legacy_allocations WHERE programme_id=?",
+        "INSERT INTO legacy_allocations VALUES(?,?,?,?,?,?)",
+        "SELECT id,username,role FROM users",
+        "SELECT * FROM staff_preferences",
+        "SELECT details FROM audit WHERE action='centre.legacy.migrated' AND details=?",
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT * FROM ${name} WHERE ${key.map((k) => k + \"=?\").join(\" AND \")}",
+        "UPDATE location_store SET revision=?,value=? WHERE id=1",
+        "INSERT INTO ${name}(${columns.join(\",\")}) VALUES(${columns.map(() => \"?\").join(\",\")})",
+        "UPDATE settings SET value=? WHERE id=1",
+        "SELECT value FROM operational_settings WHERE id=1",
+        "UPDATE operational_settings SET value=? WHERE id=1",
+        "INSERT OR IGNORE INTO staff_preferences VALUES(?,?)",
+        "SELECT value FROM settings WHERE id=1",
+        "UPDATE settings SET value=? WHERE id=1",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "UPDATE legacy_allocations SET status=?,updated=? WHERE programme_id=? AND centre_id=?",
+        "SELECT id,created FROM attendance_backups ORDER BY created DESC",
+        "SELECT payload FROM attendance_backups WHERE id=?"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/centre-store.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT pg_advisory_xact_lock(714219)",
+        "INSERT OR IGNORE INTO centres VALUES(?,?,?,?,?,?)",
+        "SELECT value FROM platform_configuration WHERE id=1",
+        "SELECT id,role FROM users",
+        "INSERT OR IGNORE INTO centre_access VALUES(?,?)",
+        "INSERT OR IGNORE INTO platform_preferences(user_id,can_compare) VALUES(?,?)",
+        "INSERT OR IGNORE INTO platform_configuration VALUES(1,?)",
+        "INSERT INTO users(id,username,password,role) VALUES(?,?,'disabled',?) ON CONFLICT(id) DO UPDATE SET username=excluded.username,role=excluded.role",
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT pg_advisory_xact_lock($1)",
+        "SELECT schema_name FROM information_schema.schemata WHERE schema_name=$1",
+        "DELETE FROM centre_${id}.users WHERE username='__local_workspace__'",
+        "UPDATE centre_${id}.settings SET value=$1 WHERE id=1",
+        "UPDATE centre_${id}.location_store SET value=$1 WHERE id=1",
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT COUNT(*) AS n FROM attendance",
+        "UPDATE settings SET value=? WHERE id=1",
+        "UPDATE location_store SET value=? WHERE id=1"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/client-routes.js",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/client-registry/preview",
+          "line": 138
+        },
+        {
+          "method": "POST",
+          "path": "/api/client-registry/confirm",
+          "line": 179
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/report",
+          "line": 386
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/outreach",
+          "line": 397
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/priorities",
+          "line": 401
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/data-quality",
+          "line": 422
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/priorities/export",
+          "line": 434
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/followups",
+          "line": 441
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients/preferences",
+          "line": 519
+        },
+        {
+          "method": "PUT",
+          "path": "/api/clients/preferences",
+          "line": 529
+        },
+        {
+          "method": "PUT",
+          "path": "/api/clients/templates",
+          "line": 560
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients/imports",
+          "line": 583
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients/settings",
+          "line": 598
+        },
+        {
+          "method": "PUT",
+          "path": "/api/clients/settings",
+          "line": 622
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients/:id/source",
+          "line": 652
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/:id/membership",
+          "line": 675
+        },
+        {
+          "method": "POST",
+          "path": "/api/clients/:id/contact",
+          "line": 726
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients/export/:format",
+          "line": 885
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE expires < ?",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "UPDATE settings SET value=? WHERE id=1",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+        "UPDATE settings SET value=? WHERE id=1",
+        "SELECT created,user_id,details FROM audit WHERE action=? ORDER BY id DESC LIMIT 50",
+        "SELECT details FROM member_registry WHERE participant_id=? AND snapshot=?",
+        "UPDATE member_registry SET details=? WHERE participant_id=? AND snapshot=?",
+        "SELECT participant_id,date,details FROM participant_feedback WHERE id=?",
+        "SELECT details FROM member_registry WHERE participant_id=? AND snapshot=?",
+        "SELECT * FROM participant_profiles WHERE participant_id=?",
+        "INSERT INTO participant_feedback VALUES(?,?,?,?,?,?)",
+        "INSERT INTO participant_profiles VALUES(?,?,?,?,?) ON CONFLICT(participant_id) DO UPDATE SET revision=excluded.revision,details=excluded.details,updated=excluded.updated,user_id=excluded.user_id",
+        "INSERT INTO profile_history VALUES(?,?,?,?,?,?,?)"
+      ],
+      "fullStateReadReferences": 2
+    },
+    {
+      "file": "server/client-writes.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "INSERT OR IGNORE INTO participants VALUES(?,?)",
+        "UPDATE participants SET details=? WHERE id=?",
+        "INSERT OR IGNORE INTO member_registry VALUES(?,?,?)",
+        "INSERT INTO member_registry VALUES(?,?,?) ON CONFLICT(participant_id,snapshot) DO UPDATE SET details=excluded.details",
+        "INSERT OR IGNORE INTO profile_observations VALUES(?,?,?,?,?)"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/configuration.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/configuration",
+          "line": 462
+        },
+        {
+          "method": "GET",
+          "path": "/api/configuration/activities",
+          "line": 479
+        },
+        {
+          "method": "GET",
+          "path": "/api/configuration/history",
+          "line": 517
+        },
+        {
+          "method": "GET",
+          "path": "/api/configuration/requests",
+          "line": 525
+        },
+        {
+          "method": "POST",
+          "path": "/api/configuration/preview",
+          "line": 760
+        },
+        {
+          "method": "POST",
+          "path": "/api/configuration/confirm",
+          "line": 899
+        },
+        {
+          "method": "POST",
+          "path": "/api/configuration/requests/:id/reject",
+          "line": 916
+        },
+        {
+          "method": "PUT",
+          "path": "/api/configuration/personal",
+          "line": 967
+        },
+        {
+          "method": "POST",
+          "path": "/api/configuration/reports/preview",
+          "line": 1153
+        },
+        {
+          "method": "GET",
+          "path": "/api/configuration/reports/:id/export",
+          "line": 1313
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_feedback",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "SELECT value FROM settings WHERE id=1",
+        "UPDATE settings SET value=? WHERE id=1",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "SELECT (SELECT COALESCE(json_agg(p),'[]') FROM glowbb.programmes p) programmes,(SELECT COALESCE(json_agg(s),'[]') FROM glowbb.sessions s) sessions",
+        "SELECT s.programme_id,COUNT(*)::int attendance,COUNT(DISTINCT a.participant_id)::int \"unique\" FROM glowbb.attendance a JOIN glowbb.sessions s ON s.id=a.session_id WHERE s.programme_id=ANY($1::text[]) AND ($2::text='' OR s.date>=$2) AND s.date<=$3 GROUP BY s.programme_id",
+        "SELECT id,created,user_id,action,details FROM audit WHERE ",
+        "SELECT COUNT(*) AS total FROM audit WHERE ",
+        "SELECT id,created,user_id,action,details FROM audit WHERE action IN ('configuration.requested','configuration.request.reviewed') ORDER BY id DESC",
+        "SELECT details FROM audit WHERE action='configuration.approved' ORDER BY id DESC",
+        "SELECT * FROM audit WHERE id=? AND action='configuration.requested'",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT details FROM audit WHERE action='configuration.approved'",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT details FROM audit WHERE action='configuration.request.reviewed'",
+        "UPDATE settings SET value=? WHERE id=1",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "SELECT id FROM audit WHERE id=? AND action='configuration.requested'",
+        "SELECT details FROM audit WHERE action='configuration.request.reviewed'",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)"
+      ],
+      "fullStateReadReferences": 9
+    },
+    {
+      "file": "server/data-management.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/data-management",
+          "line": 301
+        },
+        {
+          "method": "POST",
+          "path": "/api/data-management/preview",
+          "line": 345
+        },
+        {
+          "method": "POST",
+          "path": "/api/data-management/confirm",
+          "line": 399
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/data-management/backups/:id",
+          "line": 506
+        }
+      ],
+      "literalSqlPrefixes": [
+        "LOCK TABLE ${(writeTables || [...names, \"settings\", \"import_previews\", \"attendance_backups\", \"staff_preferences\"]).join(\",\")} IN SHARE ROW EXCLUSIVE MODE",
+        "SELECT ${names.map((name) => ",
+        "SELECT * FROM ${name}",
+        "SELECT value FROM settings WHERE id=1",
+        "INSERT INTO attendance_backups VALUES(?,?,?,?)",
+        "SELECT value FROM settings WHERE id=1",
+        "UPDATE settings SET value=? WHERE id=1",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "SELECT payload FROM attendance_backups WHERE id=?",
+        "SELECT * FROM location_store",
+        "SELECT id,created,payload FROM attendance_backups ORDER BY created DESC",
+        "DELETE FROM import_previews WHERE expires < ?",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "DELETE FROM ${name}",
+        "SELECT revision,value FROM location_store WHERE id=1",
+        "UPDATE location_store SET value=?,revision=revision+1 WHERE id=1",
+        "INSERT INTO ${name}(${columns.join(\",\")}) VALUES ${chunk.map(() => ",
+        "DELETE FROM ${table} WHERE id IN (${chunk.map(() => \"?\").join(\",\")})",
+        "DELETE FROM import_previews",
+        "SELECT id FROM attendance_backups WHERE id=?",
+        "DELETE FROM attendance_backups WHERE id=?"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/db.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "INSERT OR IGNORE INTO settings VALUES(1,?)",
+        "SELECT * FROM participants",
+        "SELECT * FROM programmes",
+        "SELECT * FROM sessions",
+        "SELECT * FROM attendance",
+        "SELECT value FROM settings WHERE id=1",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "INSERT INTO attendance_backups VALUES(?,?,?,?)",
+        "SELECT * FROM attendance",
+        "DELETE FROM attendance",
+        "UPDATE participants SET details=? WHERE id=?",
+        "INSERT INTO imports(created,user_id,summary) VALUES(?,?,?)",
+        "INSERT OR IGNORE INTO participants VALUES(?,?)",
+        "INSERT OR IGNORE INTO programmes(id,name,domain) VALUES(?,?,?)",
+        "INSERT OR IGNORE INTO sessions(id,programme_id,date,start,end,optional) VALUES(?,?,?,?,?,?)",
+        "INSERT OR IGNORE INTO attendance VALUES(?,?,?,?,?)",
+        "UPDATE sessions SET optional=? WHERE id=?",
+        "UPDATE participants SET details=? WHERE id=?",
+        "SELECT id FROM participants WHERE id=?",
+        "INSERT OR IGNORE INTO risk_observations VALUES(?,?,?,?)",
+        "SELECT id FROM participants WHERE id=?",
+        "INSERT OR IGNORE INTO profile_observations VALUES(?,?,?,?,?)"
+      ],
+      "fullStateReadReferences": 2
+    },
+    {
+      "file": "server/event-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/event-types/report",
+          "line": 44
+        },
+        {
+          "method": "GET",
+          "path": "/api/programme-domains/report",
+          "line": 48
+        },
+        {
+          "method": "GET",
+          "path": "/api/programme-domains/export",
+          "line": 49
+        },
+        {
+          "method": "PUT",
+          "path": "/api/event-types/preferences",
+          "line": 54
+        },
+        {
+          "method": "PUT",
+          "path": "/api/programme-domains/preferences",
+          "line": 78
+        },
+        {
+          "method": "GET",
+          "path": "/api/event-types/export",
+          "line": 102
+        },
+        {
+          "method": "GET",
+          "path": "/api/event-types/mappings",
+          "line": 122
+        },
+        {
+          "method": "POST",
+          "path": "/api/event-types/mappings/preview",
+          "line": 131
+        },
+        {
+          "method": "POST",
+          "path": "/api/event-types/mappings/confirm",
+          "line": 182
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "UPDATE settings SET value=? WHERE id=1",
+        "DELETE FROM import_previews WHERE id=?"
+      ],
+      "fullStateReadReferences": 5
+    },
+    {
+      "file": "server/identity.js",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/login",
+          "line": 8
+        },
+        {
+          "method": "POST",
+          "path": "/api/logout",
+          "line": 83
+        },
+        {
+          "method": "GET",
+          "path": "/api/users",
+          "line": 93
+        },
+        {
+          "method": "POST",
+          "path": "/api/users",
+          "line": 102
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM users WHERE username=?",
+        "DELETE FROM logins WHERE expires < ?",
+        "INSERT INTO logins VALUES(?,?,?)",
+        "SELECT users.id,users.username,users.role FROM users JOIN logins ON logins.user_id=users.id WHERE logins.token=? AND logins.expires>?",
+        "SELECT id,username,role FROM users WHERE username=?",
+        "DELETE FROM logins WHERE token=?",
+        "SELECT id,username,role FROM users WHERE username<>? ORDER BY username",
+        "INSERT INTO users(username,password,role) VALUES(?,?,?) ON CONFLICT(username) DO UPDATE SET password=excluded.password,role=excluded.role",
+        "DELETE FROM logins WHERE user_id=(SELECT id FROM users WHERE username=?)"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/index.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/{*path}",
+          "line": 11
+        }
+      ],
+      "literalSqlPrefixes": [],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/large-uploads.js",
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/centres/uploads",
+          "line": 64
+        },
+        {
+          "method": "PUT",
+          "path": "/api/centres/uploads/:id/chunks/:index",
+          "line": 118
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/centres/uploads/:id",
+          "line": 184
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "DELETE FROM import_previews WHERE expires<?",
+        "SELECT COUNT(*) n FROM import_previews WHERE user_id=? AND id LIKE 'upload-%' AND id NOT LIKE '%-chunk-%'",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT id FROM import_previews WHERE id=? AND user_id=? AND expires>?",
+        "INSERT OR IGNORE INTO import_previews VALUES(?,?,?,?)",
+        "SELECT payload FROM import_previews WHERE id=? AND user_id=?",
+        "DELETE FROM import_previews WHERE user_id=? AND (id=? OR id LIKE ?)",
+        "SELECT id,payload FROM import_previews WHERE user_id=? AND id LIKE ?"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/location-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/locations",
+          "line": 77
+        },
+        {
+          "method": "PUT",
+          "path": "/api/locations/settings",
+          "line": 88
+        },
+        {
+          "method": "PUT",
+          "path": "/api/locations/buildings/:id",
+          "line": 118
+        },
+        {
+          "method": "PUT",
+          "path": "/api/locations/venues/:id",
+          "line": 149
+        },
+        {
+          "method": "POST",
+          "path": "/api/locations/search",
+          "line": 179
+        },
+        {
+          "method": "GET",
+          "path": "/api/locations/clients",
+          "line": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/locations/bind",
+          "line": 228
+        },
+        {
+          "method": "POST",
+          "path": "/api/locations/refresh",
+          "line": 274
+        }
+      ],
+      "literalSqlPrefixes": [
+        "UPDATE location_store SET value=?,revision=revision+1 WHERE id=1 AND revision=?",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback"
+      ],
+      "fullStateReadReferences": 3
+    },
+    {
+      "file": "server/location-store.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT version FROM schema_version WHERE version=5",
+        "SELECT pg_advisory_xact_lock(714205)",
+        "SELECT revision,value FROM location_store WHERE id=1"
+      ],
+      "fullStateReadReferences": 0
+    },
+    {
+      "file": "server/needs-domain.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT * FROM participant_profiles"
+      ],
+      "fullStateReadReferences": 3
+    },
+    {
+      "file": "server/needs-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/needs/catalogue",
+          "line": 326
+        },
+        {
+          "method": "GET",
+          "path": "/api/needs/overview",
+          "line": 336
+        },
+        {
+          "method": "POST",
+          "path": "/api/participants/lookup",
+          "line": 340
+        },
+        {
+          "method": "POST",
+          "path": "/api/participants",
+          "line": 355
+        },
+        {
+          "method": "GET",
+          "path": "/api/participants/:id",
+          "line": 386
+        },
+        {
+          "method": "PUT",
+          "path": "/api/participants/:id/profile",
+          "line": 425
+        },
+        {
+          "method": "POST",
+          "path": "/api/participants/:id/feedback",
+          "line": 493
+        },
+        {
+          "method": "GET",
+          "path": "/api/needs/actions",
+          "line": 581
+        },
+        {
+          "method": "PUT",
+          "path": "/api/needs/actions/:id",
+          "line": 597
+        },
+        {
+          "method": "PUT",
+          "path": "/api/programmes/:id/profile",
+          "line": 760
+        },
+        {
+          "method": "POST",
+          "path": "/api/programme-offerings",
+          "line": 838
+        },
+        {
+          "method": "GET",
+          "path": "/api/needs/programmes",
+          "line": 870
+        },
+        {
+          "method": "GET",
+          "path": "/api/needs/settings",
+          "line": 882
+        },
+        {
+          "method": "PUT",
+          "path": "/api/needs/settings",
+          "line": 902
+        },
+        {
+          "method": "POST",
+          "path": "/api/registry/preview",
+          "line": 976
+        },
+        {
+          "method": "POST",
+          "path": "/api/registry/confirm",
+          "line": 1062
+        },
+        {
+          "method": "GET",
+          "path": "/api/needs/export/:format",
+          "line": 1165
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback ORDER BY date,created",
+        "SELECT * FROM member_registry",
+        "SELECT id FROM participants WHERE id=?",
+        "INSERT OR IGNORE INTO participants VALUES(?,?)",
+        "SELECT source,effective_date,created FROM profile_history WHERE participant_id=? ORDER BY created DESC LIMIT 1",
+        "SELECT id FROM participants WHERE id=?",
+        "INSERT OR IGNORE INTO participant_profiles VALUES(?,?,?,?,?)",
+        "SELECT * FROM participant_profiles WHERE participant_id=?",
+        "UPDATE participant_profiles SET details=?,revision=?,updated=?,user_id=? WHERE participant_id=? AND revision=?",
+        "INSERT INTO profile_history VALUES(?,?,?,?,?,?,?)",
+        "SELECT id FROM participants WHERE id=?",
+        "SELECT participant_id,details FROM participant_feedback WHERE id=?",
+        "INSERT OR IGNORE INTO participant_feedback VALUES(?,?,?,?,?,?)",
+        "SELECT participant_id,details FROM participant_feedback WHERE id=?",
+        "SELECT * FROM needs_actions ORDER BY updated DESC",
+        "SELECT revision,kind FROM needs_actions WHERE id=?",
+        "INSERT OR IGNORE INTO needs_actions VALUES(?,?,?,?,?,?,?)",
+        "UPDATE needs_actions SET details=?,revision=?,updated=?,user_id=? WHERE id=? AND revision=?",
+        "SELECT optional FROM programmes WHERE id=?",
+        "UPDATE programmes SET optional=? WHERE id=? AND optional=?",
+        "INSERT OR IGNORE INTO programmes(id,name,domain,optional) VALUES(?,?,?,?)",
+        "SELECT id,name,domain,optional FROM programmes",
+        "SELECT (SELECT COALESCE(json_agg(v ORDER BY v),'[]') FROM (SELECT DISTINCT details::jsonb->>'cfs' v FROM glowbb.participants WHERE COALESCE(details::jsonb->>'cfs','')<>'') a) cfs,(SELECT COALESCE(json_agg(v ORDER BY v),'[]') FROM (SELECT DISTINCT details::jsonb->>'livingRaw' v FROM glowbb.participan",
+        "SELECT pg_advisory_xact_lock(714205)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "INSERT OR IGNORE INTO participants VALUES(?,?)",
+        "SELECT details FROM participants WHERE id=?",
+        "UPDATE participants SET details=? WHERE id=?",
+        "INSERT OR IGNORE INTO member_registry VALUES(?,?,?)",
+        "UPDATE settings SET value=? WHERE id=1",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT id,kind,details FROM needs_actions"
+      ],
+      "fullStateReadReferences": 4
+    },
+    {
+      "file": "server/operations-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/operations",
+          "line": 142
+        },
+        {
+          "method": "PUT",
+          "path": "/api/operations/settings",
+          "line": 143
+        },
+        {
+          "method": "POST",
+          "path": "/api/operations/targets",
+          "line": 162
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/operations/targets/:id",
+          "line": 188
+        },
+        {
+          "method": "POST",
+          "path": "/api/operations/assessments/preview",
+          "line": 196
+        },
+        {
+          "method": "POST",
+          "path": "/api/operations/assessments/confirm",
+          "line": 330
+        },
+        {
+          "method": "POST",
+          "path": "/api/operations/assessments",
+          "line": 336
+        },
+        {
+          "method": "GET",
+          "path": "/api/operations/export",
+          "line": 353
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT version FROM schema_version WHERE version=2",
+        "SELECT * FROM assessment_monthly ORDER BY id",
+        "SELECT value FROM operational_settings WHERE id=1",
+        "SELECT * FROM operational_targets ORDER BY month,metric",
+        "UPDATE operational_settings SET value=? WHERE id=1",
+        "INSERT INTO operational_targets(id,month,metric,value) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+        "DELETE FROM operational_targets WHERE id=?",
+        "SELECT pg_advisory_xact_lock(714206)",
+        "SELECT * FROM assessment_monthly ORDER BY id",
+        "INSERT INTO glowbb.assessment_monthly(${columns}) SELECT ${columns} FROM jsonb_to_recordset($1::jsonb) AS x(fingerprint text,month text,type text,total integer,reported_as_of text,complete integer,created text,user_id integer) ON CONFLICT(fingerprint) DO NOTHING",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT * FROM assessment_monthly ORDER BY id",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=? FOR UPDATE"
+      ],
+      "fullStateReadReferences": 1
+    },
+    {
+      "file": "server/pattern-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/participation-patterns",
+          "line": 58
+        },
+        {
+          "method": "PUT",
+          "path": "/api/participation-patterns/preferences",
+          "line": 63
+        },
+        {
+          "method": "GET",
+          "path": "/api/participation-patterns/export",
+          "line": 89
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "SELECT participant_id,details,effective_date,created,id FROM profile_history WHERE effective_date IS NOT NULL AND effective_date<=?",
+        "SELECT value FROM staff_preferences WHERE user_id=?",
+        "INSERT INTO staff_preferences VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET value=excluded.value"
+      ],
+      "fullStateReadReferences": 2
+    },
+    {
+      "file": "server/platform.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/ready",
+          "line": 75
+        },
+        {
+          "method": "GET",
+          "path": "/api/me",
+          "line": 116
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/status",
+          "line": 119
+        },
+        {
+          "method": "PUT",
+          "path": "/api/centres/preference",
+          "line": 136
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/access",
+          "line": 147
+        },
+        {
+          "method": "PUT",
+          "path": "/api/centres/access",
+          "line": 169
+        },
+        {
+          "method": "PUT",
+          "path": "/api/centres/identity-policy",
+          "line": 207
+        },
+        {
+          "method": "GET",
+          "path": "/api/centres/compare",
+          "line": 248
+        },
+        {
+          "method": "POST",
+          "path": "/api/centres/configuration/preview",
+          "line": 443
+        },
+        {
+          "method": "POST",
+          "path": "/api/centres/configuration/confirm",
+          "line": 451
+        }
+      ],
+      "literalSqlPrefixes": [
+        "INSERT OR IGNORE INTO users(username,password,role) VALUES(?,?,'admin')",
+        "SELECT id FROM users WHERE username=?",
+        "INSERT OR IGNORE INTO centre_access VALUES(?,?)",
+        "INSERT INTO platform_preferences(user_id,can_compare) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET can_compare=1",
+        "SELECT id,username,role FROM users WHERE username=?",
+        "SELECT c.* FROM centres c JOIN centre_access a ON a.centre_id=c.id WHERE a.user_id=? AND c.status='Active'",
+        "SELECT * FROM platform_preferences WHERE user_id=?",
+        "SELECT COUNT(*) AS n FROM participants",
+        "SELECT COUNT(*) AS n FROM sessions",
+        "SELECT COUNT(*) AS n FROM attendance",
+        "SELECT MAX(created) AS created FROM imports",
+        "INSERT INTO platform_preferences(user_id,preferred_centre) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET preferred_centre=excluded.preferred_centre",
+        "SELECT id,username,role FROM users WHERE username<>'__local_workspace__'",
+        "SELECT * FROM centre_access",
+        "SELECT user_id,can_compare FROM platform_preferences",
+        "SELECT value FROM platform_configuration WHERE id=1",
+        "SELECT id FROM users WHERE id=?",
+        "DELETE FROM centre_access WHERE user_id=?",
+        "INSERT INTO centre_access VALUES(?,?)",
+        "INSERT INTO platform_preferences(user_id,can_compare) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET can_compare=excluded.can_compare",
+        "UPDATE platform_configuration SET value=? WHERE id=1",
+        "SELECT value FROM platform_configuration WHERE id=1",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?"
+      ],
+      "fullStateReadReferences": 2
+    },
+    {
+      "file": "server/postgres.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "COMMIT",
+        "ROLLBACK",
+        "SELECT pg_advisory_xact_lock(714203)",
+        "DELETE FROM import_previews WHERE expires < ?",
+        "SELECT count(*)::integer AS n FROM import_previews",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT pg_advisory_xact_lock(714204)",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=? FOR UPDATE",
+        "UPDATE imports SET summary=? WHERE id=(SELECT MAX(id) FROM imports)",
+        "DELETE FROM import_previews WHERE id=?",
+        "UPDATE import_previews SET payload=?,expires=? WHERE id=? AND user_id=?",
+        "DELETE FROM import_previews WHERE id=?",
+        "SELECT ${coreSnapshot}",
+        "SELECT ${coreSnapshot}, (SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.participant_profiles p) AS profiles, (SELECT COALESCE(json_agg(f ORDER BY f.date,f.created),'[]'::json) FROM glowbb.participant_feedback f) AS feedback, (SELECT COALESCE(json_agg(r),'[]'::json) FROM glowbb.member_registry r",
+        "SELECT value FROM settings WHERE id=1",
+        "SELECT (SELECT COALESCE(json_agg(CASE WHEN $2::boolean THEN jsonb_build_object('id',p.id,'details',COALESCE((SELECT jsonb_object_agg(k,v) FROM jsonb_each(p.details::jsonb) e(k,v) WHERE k IN ('memberId','age','cfs','gender','race','riskRaw','livingRaw')),'{}'::jsonb)::text) ELSE to_jsonb(p) END),'[]'",
+        "WITH own AS (SELECT id,participant_id,session_id FROM glowbb.attendance WHERE participant_id=$1), own_sessions AS (SELECT s.* FROM glowbb.sessions s WHERE EXISTS(SELECT 1 FROM own a WHERE a.session_id=s.id)) SELECT (SELECT COALESCE(json_agg(a),'[]') FROM own a) attendance, (SELECT COALESCE(json_agg(",
+        "WITH bounds AS (SELECT * FROM jsonb_to_recordset($1::jsonb) w(id text,lo text,hi text)), own AS (SELECT DISTINCT a.participant_id,a.session_id FROM glowbb.attendance a JOIN glowbb.sessions s ON s.id=a.session_id JOIN bounds b ON b.id=a.participant_id AND s.date>=b.lo AND s.date<=b.hi), own_sessions ",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "INSERT INTO attendance_backups VALUES(?,?,?,?)",
+        "SELECT * FROM attendance",
+        "DELETE FROM attendance",
+        "INSERT INTO imports(created,user_id,summary) VALUES(?,?,?)",
+        "INSERT INTO glowbb.${table} (${columns}) SELECT ${columns} FROM jsonb_to_recordset($1::jsonb) AS x(${types}) ON CONFLICT DO NOTHING",
+        "UPDATE glowbb.sessions AS s SET optional=x.optional FROM jsonb_to_recordset($1::jsonb) AS x(id text,optional text) WHERE s.id=x.id",
+        "UPDATE glowbb.participants AS p SET details=x.details FROM jsonb_to_recordset($1::jsonb) AS x(id text,details text) WHERE p.id=x.id",
+        "INSERT INTO glowbb.risk_observations SELECT x.* FROM jsonb_to_recordset($1::jsonb) AS x(id text,participant_id text,raw text,imported text) JOIN glowbb.participants p ON p.id=x.participant_id ON CONFLICT DO NOTHING",
+        "INSERT INTO glowbb.profile_observations SELECT x.* FROM jsonb_to_recordset($1::jsonb) AS x(id text,participant_id text,field text,raw text,recorded text) JOIN glowbb.participants p ON p.id=x.participant_id ON CONFLICT DO NOTHING"
+      ],
+      "fullStateReadReferences": 5
+    },
+    {
+      "file": "server/previews.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "DELETE FROM import_previews WHERE expires < ?",
+        "SELECT count(*) AS n FROM import_previews",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "UPDATE imports SET summary=? WHERE id=(SELECT MAX(id) FROM imports)",
+        "UPDATE import_previews SET payload=?,expires=? WHERE id=? AND user_id=?"
+      ],
+      "fullStateReadReferences": 3
+    },
+    {
+      "file": "server/reporting.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/reporting/participation",
+          "line": 13
+        },
+        {
+          "method": "GET",
+          "path": "/api/reporting/briefing",
+          "line": 45
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM participant_feedback",
+        "SELECT details FROM needs_actions",
+        "SELECT status FROM decisions UNION ALL SELECT status FROM opportunity_decisions"
+      ],
+      "fullStateReadReferences": 3
+    },
+    {
+      "file": "server/sppb-routes.js",
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/sppb/overview",
+          "line": 390
+        },
+        {
+          "method": "GET",
+          "path": "/api/sppb/members/:id",
+          "line": 455
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/import/preview",
+          "line": 545
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/import/confirm",
+          "line": 632
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/sppb/import/preview/:id",
+          "line": 703
+        },
+        {
+          "method": "GET",
+          "path": "/api/sppb/review",
+          "line": 721
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/reprocess",
+          "line": 762
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/configuration",
+          "line": 796
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/records/:id/review",
+          "line": 875
+        },
+        {
+          "method": "POST",
+          "path": "/api/sppb/members/:id/followup",
+          "line": 972
+        },
+        {
+          "method": "GET",
+          "path": "/api/sppb/export",
+          "line": 1028
+        }
+      ],
+      "literalSqlPrefixes": [
+        "SELECT pg_advisory_xact_lock(714227)",
+        "INSERT OR IGNORE INTO sppb_configuration VALUES(1,1,?)",
+        "INSERT INTO audit(created,user_id,action,details) VALUES(?,?,?,?)",
+        "SELECT * FROM sppb_configuration WHERE id=1",
+        "SELECT * FROM sppb_records",
+        "SELECT id,member_key,${compact?\"(details::jsonb-'raw'-'sourceRow')::text\":'details'} AS details FROM glowbb.sppb_records WHERE member_key=ANY($1::text[])",
+        "SELECT * FROM sppb_records WHERE member_key IN (SELECT value FROM json_each(?))",
+        "SELECT id FROM participants",
+        "SELECT * FROM member_registry",
+        "SELECT * FROM participant_profiles",
+        "SELECT * FROM sppb_records WHERE member_key=?",
+        "DELETE FROM import_previews WHERE expires < ?",
+        "INSERT INTO import_previews VALUES(?,?,?,?)",
+        "SELECT * FROM sppb_batches WHERE id=? AND user_id=?",
+        "SELECT * FROM sppb_batches WHERE id=? AND user_id=?",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "INSERT INTO glowbb.sppb_records (id,member_key,details) SELECT id,member_key,details FROM jsonb_to_recordset($1::jsonb) AS x(id text,member_key text,details text) ON CONFLICT(id) DO NOTHING RETURNING id",
+        "INSERT OR IGNORE INTO sppb_records VALUES(?,?,?)",
+        "INSERT INTO sppb_batches VALUES(?,?,?,?)",
+        "DELETE FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT * FROM import_previews WHERE id=? AND user_id=?",
+        "DELETE FROM import_previews WHERE id=? AND user_id=?",
+        "SELECT * FROM sppb_batches",
+        "SELECT COUNT(*) FILTER(WHERE ${predicate} AND NOT COALESCE((details::jsonb->>'linkedExisting')::boolean,false))::int linked,COUNT(*) FILTER(WHERE NOT ${predicate})::int unmatched,COUNT(*) FILTER(WHERE (details::jsonb->'linkedExisting') IS DISTINCT FROM to_jsonb(${predicate}))::int changed FROM glowb",
+        "UPDATE glowbb.sppb_records SET details=jsonb_set(details::jsonb,'{linkedExisting}',to_jsonb(${predicate}),true)::text WHERE (details::jsonb->'linkedExisting') IS DISTINCT FROM to_jsonb(${predicate})",
+        "SELECT * FROM sppb_records",
+        "UPDATE sppb_records SET details=? WHERE id=?",
+        "SELECT * FROM sppb_configuration WHERE id=1",
+        "UPDATE sppb_configuration SET revision=?,details=? WHERE id=1",
+        "SELECT * FROM sppb_records WHERE id=?",
+        "SELECT * FROM sppb_configuration WHERE id=1",
+        "SELECT * FROM sppb_records WHERE id=?",
+        "UPDATE sppb_records SET details=? WHERE id=?",
+        "SELECT * FROM sppb_configuration WHERE id=1",
+        "UPDATE sppb_configuration SET revision=?,details=? WHERE id=1"
+      ],
+      "fullStateReadReferences": 2
+    },
+    {
+      "file": "server/sql-dashboard.js",
+      "routes": [],
+      "literalSqlPrefixes": [
+        "SELECT DISTINCT ${classification} AS value,(${classification})::text AS key FROM glowbb.sessions s JOIN glowbb.programmes p ON p.id=s.programme_id",
+        "WITH input AS (SELECT $1::jsonb q,$2::jsonb cfg), classes AS (SELECT * FROM jsonb_to_recordset($3::jsonb) AS c(key text,domains jsonb,bits integer)), persons AS (SELECT p.id,row_number() OVER () person_key,p.details::jsonb||COALESCE((SELECT jsonb_object_agg(b.key,b.value) FROM jsonb_each(COALESCE(pr"
+      ],
+      "fullStateReadReferences": 0
+    }
+  ]
+}

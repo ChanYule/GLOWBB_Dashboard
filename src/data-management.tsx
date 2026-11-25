@@ -47,6 +47,7 @@ type Inventory = {
     remaining: number;
   }[];
   backups: Backup[];
+  hasMoreBackups?: boolean;
 };
 type Scope = "import" | "date-range" | "all-attendance" | "reset";
 type Review = {
@@ -145,6 +146,7 @@ export function DataManagement({
 }) {
   const [data, setData] = useState<Inventory | null>(null),
     [revision, setRevision] = useState(0),
+    [backupPage, setBackupPage] = useState(1),
     [tab, setTab] = useState<"imports" | "backups">("imports"),
     [deleting, setDeleting] = useState(false),
     [scope, setScope] = useState<Scope>("import"),
@@ -164,7 +166,7 @@ export function DataManagement({
   const deleteRef = useRef<HTMLElement>(null);
   useEffect(() => {
     let live = true;
-    api<Inventory>("/api/data-management")
+    api<Inventory>(backupPage === 1 ? "/api/data-management" : "/api/data-management?backupPage=" + backupPage)
       .then((next) => {
         if (live) {
           setData(next);
@@ -177,7 +179,7 @@ export function DataManagement({
     return () => {
       live = false;
     };
-  }, [revision, version]);
+  }, [revision, version, backupPage]);
   const changed = (message: string) => {
     setRevision((r) => r + 1);
     onChanged(message);
@@ -448,6 +450,11 @@ export function DataManagement({
                   Accounts, dashboard preferences and reporting definitions stay
                   in place.
                 </p>
+                {(backupPage > 1 || data.hasMoreBackups) && <div className="work-actions">
+                  <button className="button" disabled={backupPage === 1} onClick={() => setBackupPage(p => p - 1)}>Previous backups</button>
+                  <span>Page {backupPage}</span>
+                  <button className="button" disabled={!data.hasMoreBackups} onClick={() => setBackupPage(p => p + 1)}>Next backups</button>
+                </div>}
                 {data.backups.length === 0 ? (
                   <div className="data-empty">
                     <ShieldCheck size={32} />

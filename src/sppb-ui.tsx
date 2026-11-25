@@ -174,6 +174,7 @@ export function SppbAssessments({
     Object.entries({ ...filters, page: String(page) }).filter(([, v]) => v),
   );
   if (scope === "all") query.set("centre", "all");
+  if(["Overview","Assessment activity"].includes(section))query.set("summaryOnly","1");
   const queryText = user.role === "viewer" ? "" : query.toString();
   const accessContext=JSON.stringify([currentCentre()?.id||'',scope,user.username||'',user.role,Boolean(user.canCompare)]);
   const report=loadedContext===accessContext?snapshot:null;
@@ -188,7 +189,7 @@ export function SppbAssessments({
     const timer=setTimeout(()=>api<Report>("/api/sppb/overview?" + queryText, { signal: abort.signal,reuseForMs:10000 })
       .then(r=>{if(!abort.signal.aborted){setReport(r);setLoadedContext(accessContext);}})
       .catch((e) => {
-        if (!abort.signal.aborted){setError(e.message);setReport(null);}
+        if (!abort.signal.aborted){setError(e.message);}
       })
       .finally(() => {
         if (!abort.signal.aborted) setBusy(false);
@@ -346,6 +347,7 @@ export function SppbAssessments({
       {showReport&&error && (
         <p className="error" role="alert">
           {error}
+          {report&&<span> Showing the last successfully loaded selection; it may be out of date.</span>}
           <button className="button" onClick={refresh}>Retry assessment analysis</button>
         </p>
       )}

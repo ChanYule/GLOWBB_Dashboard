@@ -15,6 +15,8 @@ import {activityDomains} from '../shared/activity-domains.js';
 import {ImportProgress} from "./import-progress";
 import {api,currentCentre,invalidateReadCache} from "./api";
 import {reportingFilters} from "./view-config";
+const ResidentialOutreach=lazy(()=>import('./residential-outreach').then(m=>({default:m.ResidentialOutreach})));
+const ResidentialDistribution=lazy(()=>import("./residential-outreach").then(m=>({default:m.ResidentialDistribution})));
 const ManagementHome=lazy(()=>import('./management').then(m=>({default:m.ManagementHome})));
 import {useEffect,useRef,useState,lazy,Suspense} from "react";
 import type {FormEvent} from "react";
@@ -57,6 +59,8 @@ const RiskSettings = lazy(() =>
 const Login = lazy(() =>
   import("./workspace").then((m) => ({ default: m.Login })),
 );
+const PreviousPeriod = lazy(() => import("./previous-period").then(m=>({default:m.PreviousPeriod})));
+const SeenPresentation = lazy(() => import("./seen-presentation").then(m => ({default:m.SeenPresentation})));
 const PresentationView = lazy(() =>
   import("./presentation").then((m) => ({ default: m.PresentationView })),
 );
@@ -141,6 +145,8 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
   const [patternsInitial, setPatternsInitial] = useState("");
   const [sppbSection, setSppbSection] = useState("Overview");
   const [programmeDetails,setProgrammeDetails]=useState(false);
+  const [residentialOpen,setResidentialOpen]=useState(false);
+  const [residentialDistributionOpen,setResidentialDistributionOpen]=useState(false);
   const [localTab, setLocalTab] = useState("Overview"),
     [filters, setFilters] = useState<Filters>({...emptyFilters,...initialDates}),
     [data, setData] = useState<Dashboard | null>(null),
@@ -153,7 +159,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     [navigationOpen, setNavigationOpen] = useState(false);
   const tab=staffPage(page??localTab,user?.role);
   const setTab=(next:string)=>{const selected=staffPage(next,user?.role);if(onPage)onPage(selected);else setLocalTab(selected);};
-  useEffect(()=>{if(tab!=='SPPB Assessments')setSppbSection('Overview');if(tab!=='Programme Performance')setProgrammeDetails(false);},[tab]);
+  useEffect(()=>{if(tab!=='SPPB Assessments')setSppbSection('Overview');if(tab!=='Programme Performance')setProgrammeDetails(false);if(tab!=='Overview'){setResidentialOpen(false);setResidentialDistributionOpen(false);}},[tab]);
   useEffect(()=>{if(command)setModal(command.modal);},[command]);
   const contextOnly = [
     "SPPB Assessments",
@@ -170,7 +176,9 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
   useEffect(()=>{onDates?.({from:filters.from,to:filters.to,interval:filters.interval});},[filters.from,filters.to,filters.interval,onDates]);
   const reportView = contextOnly
     ? "context"
-    : tab === "Overview"
+    : tab === "Programme Performance"&&!programmeDetails&&user?.role!=='viewer'
+      ? "context"
+      : tab === "Overview"
       ? "overview"
       : "full";
   useEffect(() => {
@@ -181,7 +189,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
     const timer = setTimeout(() => {
       api<Dashboard>(
         "/api/dashboard?" +
-          new URLSearchParams({ ...filters, view: reportView }),
+          new URLSearchParams({ ...filters, view: reportView,includeTargets:"0" }),
         { signal: controller.signal, reuseForMs:15000 },
       )
         .then((d) => {
@@ -511,6 +519,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
             {error && (
               <div className="error" role="alert">
                 {error}
+                {data&&<p>Showing the last successfully loaded results. They may be out of date.</p>}
                 <Button onClick={() => setRevision((n) => n + 1)}>
                   Try again
                 </Button>
@@ -709,7 +718,7 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                       onRisk={() => setTab("Social Risk Analysis")}
                     />
                   ) : tab === "Overview" ? (
-                    <ManagementHome
+                    <><ManagementHome
                       updating={loading}
                       data={data}
                       filters={filters}
@@ -727,8 +736,17 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
                         setModal("presentation");
                       }}
                     />
+                    <Suspense fallback={null}><PreviousPeriod data={data} filters={filters} revision={revision}/></Suspense>
+                    {currentCentre() && user.role !== "viewer" && <details className="panel" onToggle={event=>setResidentialDistributionOpen(event.currentTarget.open)}>
+                      <summary>Residential participation</summary>
+                      {residentialDistributionOpen && <Suspense fallback={<p>Loading residential participation...</p>}><ResidentialDistribution from={filters.from} to={filters.to} revision={revision}/></Suspense>}
+                    </details>}
+                    {currentCentre()?.id === "glow_nanyang" && user.role !== "viewer" && <details className="panel" onToggle={event=>setResidentialOpen(event.currentTarget.open)}>
+                      <summary>Targeted Residential Outreach</summary>
+                      {residentialOpen && <Suspense fallback={<p>Loading residential outreach?</p>}><ResidentialOutreach from={filters.from} to={filters.to} revision={revision}/></Suspense>}
+                    </details>}</>
                   ) : tab === "Programme Performance" ? (
-                    user.role==='viewer'?<Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/>:<><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))} onProgramme={id=>{const p=data.programmes.find(p=>p.id===id);if(p)setProgramme(p);}}/></Suspense><details className="panel" onToggle={e=>setProgrammeDetails(e.currentTarget.open)}><summary>Browse all programmes and detailed comparisons</summary>{programmeDetails&&<Suspense fallback={<p>Loading programme details...</p>}><Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/></Suspense>}</details></>
+                    user.role==='viewer'?<Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/>:<><Suspense fallback={<p>Loading programme classifications…</p>}><EventTypeInsights user={user} revision={revision} initial={Object.fromEntries(Object.entries(filters).filter(([k])=>['from','to','domain','programme','gender','race','ageBand','cfs','client','boundary'].includes(k)))}/></Suspense><details className="panel" onToggle={e=>setProgrammeDetails(e.currentTarget.open)}><summary>Browse all programmes and detailed comparisons</summary>{programmeDetails&&<Suspense fallback={<p>Loading programme details...</p>}><Programmes data={data} onProgramme={setProgramme} user={user} filters={filters}/></Suspense>}</details></>
                   ) : tab === "Audience & Outreach" ? (
                     <Audience
                       data={data}
@@ -898,6 +916,9 @@ function App({initialDates,onDates,onAuthChanged,initialUser,embedded=false,page
               protection rules.
             </Note>
           </Modal>
+        )}
+        {modal === "seen-presentation" && currentCentre()?.id === "seen_nanyang" && user?.role !== "viewer" && (
+          <Suspense fallback={<p role="status">Loading meeting presentation...</p>}><SeenPresentation filters={filters} close={()=>setModal("")}/></Suspense>
         )}
         {modal === "presentation" && presentationSnapshot && (
           <PresentationView

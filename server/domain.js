@@ -25,6 +25,8 @@ export const HEADERS = [
 ];
 export const RISK_HEADER = "Name/Social Risk Factor(s)";
 export const OPTIONAL_PROFILE_HEADERS = {
+  residentialBlockRaw: "Name/Block / Building No.",
+  residentialStreetRaw: "Name/Street Name",
   livingRaw: "Name/Current Living Arrangement",
   maritalRaw: "Name/Marital Status",
   preferredLanguage: "Name/Preferred Language",
@@ -177,8 +179,16 @@ export function parseRows(matrix) {
         client,
         boundary,
       };
+      const residentialObservation = participant.residentialBlockRaw || participant.residentialStreetRaw
+        ? JSON.stringify({
+          block: participant.residentialBlockRaw ?? null,
+          street: participant.residentialStreetRaw ?? null,
+          sessionReferenceDate: session.date,
+          source: "Attendance workbook",
+        }) : null;
       rows.push({
         row,
+        ...(residentialObservation ? { residentialObservation } : {}),
         participant,
         programme: { id: programmeId, name, domain },
         session: { id: sessionId, programmeId, ...session,
@@ -311,7 +321,7 @@ export function inspectImport(parsed, existing, mode = parsed.mode || "add") {
       "client",
       "boundary",
       "riskRaw",
-      ...Object.keys(OPTIONAL_PROFILE_HEADERS),
+      ...Object.keys(OPTIONAL_PROFILE_HEADERS).filter(key => !key.startsWith("residential")),
     ];
     const empty = (v) =>
       v === null ||

@@ -1,0 +1,251 @@
+{
+  "label": "baseline",
+  "scope": "Synthetic in-process PGlite PostgreSQL and HTTP API. Estimated JSON database result bytes exclude PostgreSQL/TLS protocol overhead; no hosted or browser timing claims. One-time migration setup is measured separately.",
+  "fixture": {
+    "people": 1200,
+    "sessions": 1800,
+    "attendance": 36000
+  },
+  "setupMs": 0.0014000000010128133,
+  "index": {
+    "before": {
+      "executionMs": 6.093,
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "index": null,
+          "rows": 29
+        }
+      ]
+    },
+    "after": {
+      "executionMs": 3.527,
+      "nodes": [
+        {
+          "node": "Seq Scan",
+          "index": null,
+          "rows": 29
+        }
+      ]
+    },
+    "bytes": 0
+  },
+  "measurements": [
+    {
+      "view": "context",
+      "visit": "cold",
+      "apiMs": 251.04349999999977,
+      "apiBytes": 3137,
+      "databaseQueries": 7,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329794,
+      "databaseMs": 117.77430000000459,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 109000,
+        "system": 16000
+      },
+      "heapBytes": 54858416,
+      "cache": null,
+      "resultFingerprint": "23f2902f87e162a973f8c7530d641a6f1c48b904e162708d07921da528d52e46"
+    },
+    {
+      "view": "context",
+      "visit": "repeat",
+      "apiMs": 201.3842999999979,
+      "apiBytes": 3137,
+      "databaseQueries": 7,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329794,
+      "databaseMs": 102.56940000000031,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 47000,
+        "system": 16000
+      },
+      "heapBytes": 39173792,
+      "cache": null,
+      "resultFingerprint": "23f2902f87e162a973f8c7530d641a6f1c48b904e162708d07921da528d52e46"
+    },
+    {
+      "view": "context",
+      "visit": "filtered",
+      "apiMs": 160.3208999999988,
+      "apiBytes": 3125,
+      "databaseQueries": 7,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329794,
+      "databaseMs": 114.26519999999437,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 31000,
+        "system": 0
+      },
+      "heapBytes": 80156568,
+      "cache": null,
+      "resultFingerprint": "565c18bf9e42c97bc945cb1761f1bb6bf2483f2a4ed40bd892ba43d5be9d4f33"
+    },
+    {
+      "view": "context",
+      "visit": "filtered-repeat",
+      "apiMs": 167.12679999999818,
+      "apiBytes": 3125,
+      "databaseQueries": 7,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329794,
+      "databaseMs": 101.34389999999985,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 47000,
+        "system": 0
+      },
+      "heapBytes": 61549432,
+      "cache": null,
+      "resultFingerprint": "565c18bf9e42c97bc945cb1761f1bb6bf2483f2a4ed40bd892ba43d5be9d4f33"
+    },
+    {
+      "view": "overview",
+      "visit": "cold",
+      "apiMs": 260.1535999999978,
+      "apiBytes": 40166,
+      "databaseQueries": 8,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329796,
+      "databaseMs": 104.56140000001324,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 94000,
+        "system": 0
+      },
+      "heapBytes": 71184080,
+      "cache": null,
+      "resultFingerprint": "208e42562688ecb6944906696e2b9cf7e9cc6137f1e7cd31db3dbc9ed5d0899d"
+    },
+    {
+      "view": "overview",
+      "visit": "repeat",
+      "apiMs": 265.4458000000013,
+      "apiBytes": 40166,
+      "databaseQueries": 8,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329796,
+      "databaseMs": 100.7071999999971,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 109000,
+        "system": 15000
+      },
+      "heapBytes": 95797960,
+      "cache": null,
+      "resultFingerprint": "208e42562688ecb6944906696e2b9cf7e9cc6137f1e7cd31db3dbc9ed5d0899d"
+    },
+    {
+      "view": "overview",
+      "visit": "filtered",
+      "apiMs": 165.2531999999992,
+      "apiBytes": 30076,
+      "databaseQueries": 8,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329796,
+      "databaseMs": 101.05430000000342,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 63000,
+        "system": 0
+      },
+      "heapBytes": 104220608,
+      "cache": null,
+      "resultFingerprint": "a00d7672e8964759a611f0b039d4ee04e7ae19447ab02d822e217118b36c8893"
+    },
+    {
+      "view": "overview",
+      "visit": "filtered-repeat",
+      "apiMs": 183.74459999999817,
+      "apiBytes": 30076,
+      "databaseQueries": 8,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329796,
+      "databaseMs": 103.78390000000218,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 47000,
+        "system": 0
+      },
+      "heapBytes": 86049296,
+      "cache": null,
+      "resultFingerprint": "a00d7672e8964759a611f0b039d4ee04e7ae19447ab02d822e217118b36c8893"
+    },
+    {
+      "view": "full",
+      "visit": "cold",
+      "apiMs": 484.8438000000024,
+      "apiBytes": 781477,
+      "databaseQueries": 9,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329798,
+      "databaseMs": 107.13809999999648,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 140000,
+        "system": 0
+      },
+      "heapBytes": 34518744,
+      "cache": null,
+      "resultFingerprint": "199a19f4d747674d0ce99e616efc7c426f375e8b1608e1214ca55da8ed2e5a03"
+    },
+    {
+      "view": "full",
+      "visit": "repeat",
+      "apiMs": 488.46169999999984,
+      "apiBytes": 781477,
+      "databaseQueries": 9,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329798,
+      "databaseMs": 102.36520000000019,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 328000,
+        "system": 0
+      },
+      "heapBytes": 37216472,
+      "cache": null,
+      "resultFingerprint": "199a19f4d747674d0ce99e616efc7c426f375e8b1608e1214ca55da8ed2e5a03"
+    },
+    {
+      "view": "full",
+      "visit": "filtered",
+      "apiMs": 222.34030000000348,
+      "apiBytes": 241500,
+      "databaseQueries": 9,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329798,
+      "databaseMs": 121.24129999999423,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 109000,
+        "system": 0
+      },
+      "heapBytes": 124293128,
+      "cache": null,
+      "resultFingerprint": "5a7797cbcaf34566490141b72e326c7812dfb363fcaf9dbea679ebf6e7a35445"
+    },
+    {
+      "view": "full",
+      "visit": "filtered-repeat",
+      "apiMs": 227.1993999999977,
+      "apiBytes": 241500,
+      "databaseQueries": 9,
+      "databaseRows": 7,
+      "databaseEstimatedBytes": 4329798,
+      "databaseMs": 114.51629999999568,
+      "snapshotQueries": 1,
+      "cpuMicros": {
+        "user": 140000,
+        "system": 16000
+      },
+      "heapBytes": 119479576,
+      "cache": null,
+      "resultFingerprint": "5a7797cbcaf34566490141b72e326c7812dfb363fcaf9dbea679ebf6e7a35445"
+    }
+  ]
+}

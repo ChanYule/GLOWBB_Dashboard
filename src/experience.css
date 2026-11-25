@@ -89,7 +89,7 @@
   font-variant-numeric: tabular-nums;
 }
 .dashboard-shell th {
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   font-size: 13px;
   font-weight: 600;
 }
@@ -113,7 +113,7 @@
   font-size: 13px;
   padding: 8px 12px;
   border-left: 3px solid var(--teal);
-  background: #f0f7f7;
+  background: light-dark(#f0f7f7, #223247);
 }
 .experience-page-header {
   display: flex;
@@ -148,7 +148,7 @@
 }
 .experience-loading i {
   height: 12px;
-  background: #e7edf4;
+  background: light-dark(#e7edf4, #223247);
   border-radius: 4px;
 }
 .experience-loading i:nth-child(2) {
@@ -160,7 +160,7 @@
 .experience-error {
   padding: 18px;
   border: 1px solid #dca965;
-  background: #fffbf2;
+  background: light-dark(#fffbf2, #223247);
   border-radius: 12px;
 }
 .experience-error h2 {
@@ -170,7 +170,7 @@
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   min-width: 0;
 }
 .experience-insight h3 {
@@ -233,7 +233,7 @@
 }
 .centre-overview-grid article {
   padding: 18px;
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -249,7 +249,7 @@
   gap: 12px;
   flex-wrap: wrap;
   padding: 16px 24px;
-  background: white;
+  background: light-dark(white, #192638);
   border-bottom: 1px solid #e2e8f0;
 }
 .report-focus-controls label {

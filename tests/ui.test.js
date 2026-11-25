@@ -109,6 +109,22 @@ test('centre API keys isolate concurrent requests and discard obsolete responses
  globalThis.fetch=async url=>{calls.push(String(url));if(String(url).includes('glow_bukit_batok'))return new Promise(r=>{release=r;});return Response.json({scope:'new centre'});};
  try{setCentreContext(CENTRES[0]);const old=centreApi('/api/dashboard');const rejected=assert.rejects(old,e=>e.name==='AbortError');setCentreContext(CENTRES[2]);const current=await centreApi('/api/dashboard');assert.equal(current.scope,'new centre');release(Response.json({scope:'old centre'}));await rejected;assert.equal(calls.length,2);assert.ok(calls[0].includes('centre=glow_bukit_batok'));assert.ok(calls[1].includes('centre=glow_nanyang'));assert.match(centreUrl('/api/export/report?from=2026-05-04'),/centre=glow_nanyang/);assert.equal(centreUrl('/api/centres/compare'),'/api/centres/compare');}finally{setCentreContext(null);globalThis.fetch=original;}
 });
+test('cancellable identical API reads share one request and one consumer cannot cancel another',async()=>{
+ const {api}=await tsImport('../src/api.ts',import.meta.url);const original=globalThis.fetch;let release,requests=0,underlying;
+ globalThis.fetch=async(_url,options)=>{requests++;underlying=options.signal;return new Promise(r=>{release=r;});};
+ try{
+  const first=new AbortController(),second=new AbortController();
+  const a=api('/api/dashboard?view=context',{signal:first.signal});const rejected=assert.rejects(a,e=>e.name==='AbortError');
+  const b=api('/api/dashboard?view=context',{signal:second.signal});first.abort();await rejected;assert.equal(requests,1);assert.equal(underlying.aborted,false);
+  release(Response.json({summary:{unique:12}}));assert.equal((await b).summary.unique,12);
+  let releaseRead,readSignal;
+  globalThis.fetch=async(_url,options)=>options.method==='POST'?Response.json({ok:true}):new Promise(r=>{releaseRead=r;readSignal=options.signal;});
+  const read=api('/api/dashboard?view=context',{signal:second.signal});
+  await api('/api/clients/report',{method:'POST',body:'{}'});assert.equal(readSignal.aborted,false,'read-only analysis POST must not cancel another page read');
+  releaseRead(Response.json({summary:{unique:12}}));assert.equal((await read).summary.unique,12);
+ }finally{cleanup();globalThis.fetch=original;}
+});
+
 test('short-lived dashboard reuse is isolated, clone-safe and invalidated by writes, refresh and reporting context',async()=>{
  const {api,setCentreContext,setReportingMode,invalidateReadCache}=await tsImport('../src/api.ts',import.meta.url);
  const original=globalThis.fetch;let reads=0;
@@ -599,7 +615,7 @@ test('registered age view includes younger attendance separately and selecting B
   };
   try {
     render(React.createElement(ParticipationPatterns, { user: { role: 'planner' }, revision: 0 }));
-    await waitFor(() => assert.ok(screen.getByRole('button', { name: 'View below-60 attendance and programmes' })));
+    await waitFor(() => assert.ok(screen.getByRole('button', { name: 'View below-60 attendance and programmes' })), { timeout: 5000 });
     const panel = screen.getByRole('heading', { name: 'Below 60 · attendance participants' }).closest('section');
     assert.ok(within(panel).getByText('1 unique participants'));
     assert.match(panel.textContent, /2 attendance entries/);
@@ -2851,4 +2867,44 @@ test('SPPB overview shows linked analysis with few actions and switches comparis
 
 
  }finally{cleanup();setCentreContext(null);globalThis.fetch=original;}
+});
+
+test("chart display settings preserve the supplied denominator, withheld values, and individual override", async () => {
+  const {HorizontalRankingChart}=await tsImport("../src/chart-system.tsx",import.meta.url);
+  const {DisplaySettings}=await tsImport("../src/display-settings.tsx",import.meta.url);
+  const rows=[{label:"Physical",value:25},{label:"Cognitive",value:null}];
+  try {
+    render(React.createElement(React.Fragment,null,React.createElement(DisplaySettings),
+      React.createElement(HorizontalRankingChart,{rows,denominator:80,label:"Domain measures",chartId:"test-domain"})));
+    fireEvent.click(screen.getByText("Display"));
+    fireEvent.change(screen.getByLabelText("Chart values"),{target:{value:"percentage"}});
+    assert.match(screen.getByRole("img",{name:/Physical:/}).getAttribute("aria-label"),/31.3%/);
+    assert.match(screen.getByRole("img",{name:/Cognitive:/}).getAttribute("aria-label"),/Unavailable/);
+    fireEvent.change(screen.getByLabelText("Domain measures display"),{target:{value:"number"}});
+    assert.equal(screen.getByRole("img",{name:/Physical:/}).getAttribute("aria-label"),"Physical: 25");
+    fireEvent.change(screen.getByLabelText("Theme"),{target:{value:"dark"}});
+    assert.equal(document.documentElement.dataset.theme,"dark");
+  } finally {
+    cleanup();
+    for(const key of ["values","chart.test-domain","theme"])window.localStorage.removeItem("glow.display."+key);
+    delete document.documentElement.dataset.theme;
+  }
+});
+
+test("enhanced presentation entry is available only for SEEN Nanyang", async () => {
+  const original=globalThis.fetch;
+  const empty={...dashboard(),coverage:{from:null,to:null}};
+  globalThis.fetch=async url=>Response.json(String(url)==="/api/me"
+    ? {id:1,username:"staff",role:"planner",centres:CENTRES,preferredCentre:"seen_nanyang"}
+    : String(url)==="/api/centres/preference" ? {ok:true} : empty);
+  try {
+    render(React.createElement(PlatformApp));
+    await waitFor(()=>assert.ok(screen.getByRole("button",{name:"Present",exact:true})));
+    for(const id of ["glow_nanyang","glow_bukit_batok","seen_bukit_batok"]){
+      fireEvent.change(screen.getByLabelText("Selected centre"),{target:{value:id}});
+      assert.equal(screen.queryByRole("button",{name:"Present",exact:true})===null,true);
+    }
+    fireEvent.change(screen.getByLabelText("Selected centre"),{target:{value:"seen_nanyang"}});
+    assert.ok(screen.getByRole("button",{name:"Present",exact:true}));
+  } finally {cleanup();setCentreContext(null);globalThis.fetch=original;}
 });

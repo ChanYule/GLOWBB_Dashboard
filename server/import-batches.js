@@ -113,7 +113,7 @@ export function importBatchResult(parsed, batch, summary, currentAfter) {
     total[key] = (parsed.batch.summary[key] || 0) + (summary[key] || 0);
   parsed.batch.cursor = batch.end;
   parsed.batch.summary = total;
-  parsed.batch.fingerprint = importFingerprint(currentAfter);
+  if (!batch.complete) parsed.batch.fingerprint = importFingerprint(currentAfter);
   return {
     ...total,
     pending: !batch.complete,

@@ -7,7 +7,7 @@ const median = (values) => {
     ? (v[Math.floor(v.length / 2)] + v[Math.floor((v.length - 1) / 2)]) / 2
     : null;
 };
-function windowStart(date) {
+export function windowStart(date) {
   const d = new Date(date + "T00:00:00Z"),
     day = d.getUTCDate();
   d.setUTCDate(1);
@@ -64,7 +64,7 @@ export function sppbParticipationAnalysis(members, states, asOf) {
       if (!first || date < first) first = date;
       if (!last || date > last) last = date;
     }
-    coverage.set(state.id, { first, last });
+    coverage.set(state.id, state.coverage||{ first, last });
     const data = performanceData(
         projectReportingData(state.data, {
           settings: state.settings,

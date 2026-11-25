@@ -202,9 +202,11 @@ export function saveImport(db, parsed, inspection, user, {transaction = true} = 
         "preferredLanguage",
         "registrationDate",
         "cfsAssessedOn",
+        "residentialObservation",
       ]) {
+        const value = field === "residentialObservation" ? r.residentialObservation : r.participant[field];
         if (
-          !(field in r.participant) ||
+          (field === "residentialObservation" ? !value : !(field in r.participant)) ||
           !db
             .prepare("SELECT id FROM participants WHERE id=?")
             .get(r.participant.id)
@@ -213,12 +215,10 @@ export function saveImport(db, parsed, inspection, user, {transaction = true} = 
         db.prepare(
           "INSERT OR IGNORE INTO profile_observations VALUES(?,?,?,?,?)",
         ).run(
-          hash([r.participant.id, field, r.participant[field]]),
+          hash([r.participant.id, field, value]),
           r.participant.id,
           field,
-          typeof r.participant[field] === "boolean"
-            ? String(r.participant[field])
-            : r.participant[field],
+          typeof value === "boolean" ? String(value) : value,
           new Date().toISOString(),
         );
       }
