@@ -104,7 +104,7 @@ summary {
   text-align: left;
 }
 .app tbody tr:hover {
-  background: #f1f7f9;
+  background: light-dark(#f1f7f9, #223247);
 }
 .app main,
 .app .main-shell,
@@ -147,7 +147,7 @@ summary {
   gap: 12px;
 }
 .management-kpi {
-  background: white;
+  background: light-dark(white, #192638);
   border: 1px solid var(--line);
   border-top: 3px solid var(--teal);
   border-radius: 12px;
@@ -215,7 +215,7 @@ summary {
 .coverage-bar {
   display: flex;
   overflow: hidden;
-  background: #e6edf5;
+  background: light-dark(#e6edf5, #223247);
   border-radius: 8px;
   height: 38px;
   margin: 22px 0 14px;
@@ -283,13 +283,13 @@ summary {
 .app .modal header {
   position: sticky;
   top: 0;
-  background: white;
+  background: light-dark(white, #192638);
   z-index: 2;
 }
 .app .modal form > .work-actions:last-child {
   position: sticky;
   bottom: 0;
-  background: white;
+  background: light-dark(white, #192638);
   padding: 14px 0;
   border-top: 1px solid var(--line);
 }
@@ -305,7 +305,7 @@ summary {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: white;
+  background: light-dark(white, #192638);
   border-bottom: 1px solid var(--line);
   padding: 12px 24px;
   display: flex;
@@ -324,7 +324,7 @@ summary {
   color: var(--ink);
 }
 .report-slide {
-  background: white;
+  background: light-dark(white, #192638);
   max-width: 1200px;
   margin: 28px auto;
   padding: 48px;
@@ -413,7 +413,7 @@ summary {
   }
   body.presenting {
     overflow: visible !important;
-    background: white;
+    background: light-dark(white, #192638);
   }
   body.presenting .sidebar,
   body.presenting .main-shell,
@@ -424,7 +424,7 @@ summary {
   .presentation {
     position: static;
     overflow: visible;
-    background: white;
+    background: light-dark(white, #192638);
   }
   .report-slide {
     box-shadow: none;
@@ -482,7 +482,7 @@ summary {
   place-items: center;
   width: 26px;
   height: 26px;
-  background: #e8edf4;
+  background: light-dark(#e8edf4, #223247);
   border-radius: 50%;
 }
 .import-progress .current {
@@ -501,7 +501,7 @@ summary {
   left: 20px;
   z-index: 500;
   padding: 12px;
-  background: white;
+  background: light-dark(white, #192638);
   color: var(--ink);
 }
 .skip-link:focus {
@@ -540,7 +540,7 @@ summary {
 .participation-table-scroll thead th {
   position: sticky;
   top: 0;
-  background: #edf4f7;
+  background: light-dark(#edf4f7, #223247);
   z-index: 1;
   white-space: nowrap;
   font-size: 13px;
@@ -557,14 +557,14 @@ summary {
 .participation-table-scroll tfoot td {
   position: sticky;
   bottom: 0;
-  background: #e6f4ef;
+  background: light-dark(#e6f4ef, #223247);
   color: var(--ink);
   font-weight: 750;
   border-top: 2px solid var(--teal);
 }
 .participation-table-scroll .summary-unavailable {
   color: var(--muted);
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
 }
 .participation-summary details {
   margin-top: 14px;
@@ -614,7 +614,7 @@ summary {
   margin: 18px 0;
   border: 1px solid var(--line, #dce5ed);
   border-radius: 12px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
 }
 .app .programme-table table {
   width: 100%;
@@ -632,8 +632,8 @@ summary {
 .app .programme-table thead th {
   padding-top: 15px;
   padding-bottom: 15px;
-  background: #f3f7f9;
-  color: #486078;
+  background: light-dark(#f3f7f9, #223247);
+  color: light-dark(#486078, #e4edf8);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
@@ -644,7 +644,7 @@ summary {
   text-align: left;
 }
 .app .programme-table tbody td {
-  color: #213b55;
+  color: light-dark(#213b55, #e4edf8);
   font-size: 15px;
   white-space: nowrap;
 }
@@ -655,7 +655,7 @@ summary {
   border-bottom: 0;
 }
 .app .programme-table tbody tr:hover {
-  background: #f7fbfb;
+  background: light-dark(#f7fbfb, #223247);
 }
 .app .programme-table .programme-name {
   display: block;
@@ -664,7 +664,7 @@ summary {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #163c55;
+  color: light-dark(#163c55, #e4edf8);
   font: inherit;
   font-weight: 600;
   line-height: 1.55;
@@ -673,7 +673,7 @@ summary {
   overflow-wrap: anywhere;
 }
 .app .programme-table .programme-name:hover {
-  color: #087e78;
+  color: light-dark(#087e78, #e4edf8);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -694,8 +694,8 @@ summary {
   padding: 3px 9px;
   border: 1px solid #d3e9e5;
   border-radius: 6px;
-  background: #edf7f5;
-  color: #31655f;
+  background: light-dark(#edf7f5, #223247);
+  color: light-dark(#31655f, #e4edf8);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.5;

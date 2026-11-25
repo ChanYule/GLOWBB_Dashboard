@@ -4,9 +4,9 @@ import {MAX_IMPORT_BYTES,MAX_IMPORT_MB,DIRECT_UPLOAD_BYTES,UPLOAD_CHUNK_BYTES} f
 let selectedCentre: Centre | null = null;
 let centreGeneration = 0;
 let reportMode:'official'|'exploratory'='official';
-export function setReportingMode(mode:'official'|'exploratory'){reportMode=mode;centreGeneration++;inFlight.clear();invalidateReadCache();}
+export function setReportingMode(mode:'official'|'exploratory'){reportMode=mode;centreGeneration++;cancelPendingReads();invalidateReadCache();}
 export const currentCentre = () => selectedCentre;
-export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;inFlight.clear();invalidateReadCache();}
+export function setCentreContext(centre:Centre|null){selectedCentre=centre;reportMode='official';centreGeneration++;cancelPendingReads();invalidateReadCache();}
 export function centreUrl(url:string){
   if(!selectedCentre||!url.startsWith('/api/')||/^\/api\/(me|login|logout|users|centres)(?:[/?]|$)/.test(url))return url;
   const parsed=new URL(url,'http://centre.local');if(!(parsed.pathname.startsWith('/api/sppb/')&&parsed.searchParams.get('centre')==='all'))parsed.searchParams.set('centre',selectedCentre.id);if(isReportingPath(parsed.pathname)||/^\/api\/clients\/(report|outreach|priorities|followups)$/.test(parsed.pathname)){parsed.searchParams.set('reportingMode',reportMode);if(reportMode==='exploratory')parsed.searchParams.set('includeExcluded','1');}return parsed.pathname+parsed.search;
@@ -107,7 +107,21 @@ export function invalidateReadCache(){readEpoch++;recentReads.clear();}
 
 // Coalesce only concurrent GETs. Never persist protected results across sessions
 // and never share a cancellable request with another caller.
-const inFlight = new Map<string, Promise<unknown>>();
+const inFlight = new Map<string,{controller:AbortController;promise:Promise<unknown>;subscribers:Set<symbol>}>();
+function cancelPendingReads(){for(const entry of inFlight.values())entry.controller.abort();inFlight.clear();}
+function sharedRead<T>(url:string,signal?:AbortSignal|null):Promise<T>{
+ if(signal?.aborted)return Promise.reject(new DOMException('Request cancelled.','AbortError'));
+ let entry=inFlight.get(url);
+ if(!entry){const controller=new AbortController();const created={controller,promise:request<unknown>(url,{signal:controller.signal}),subscribers:new Set<symbol>()};entry=created;inFlight.set(url,created);void created.promise.finally(()=>{if(inFlight.get(url)===created)inFlight.delete(url);}).catch(()=>{});}
+ const active=entry,token=Symbol();active.subscribers.add(token);
+ return new Promise<T>((resolve,reject)=>{
+  const detach=()=>{signal?.removeEventListener('abort',abort);active.controller.signal.removeEventListener('abort',abort);active.subscribers.delete(token);};
+  const abort=()=>{detach();reject(new DOMException('Request cancelled.','AbortError'));if(!active.subscribers.size){active.controller.abort();if(inFlight.get(url)===active)inFlight.delete(url);}};
+  signal?.addEventListener('abort',abort,{once:true});active.controller.signal.addEventListener('abort',abort,{once:true});
+  if(signal?.aborted||active.controller.signal.aborted)abort();
+  active.promise.then(value=>{if(active.subscribers.has(token)){detach();resolve(structuredClone(value) as T);}},error=>{if(active.subscribers.has(token)){detach();reject(error);}});
+ });
+}
 async function uploadInChunks<T>(url:string,options:RequestInit,file:File):Promise<T>{
   const generation=centreGeneration;
   const active=()=>{if(generation!==centreGeneration||options.signal?.aborted)throw new DOMException('Upload cancelled because the workspace changed.','AbortError');};
@@ -123,10 +137,11 @@ async function uploadInChunks<T>(url:string,options:RequestInit,file:File):Promi
     active();return await request<T>(url,{...options,body:JSON.stringify({uploadId:session.id}),headers:{...options.headers,'Content-Type':'application/json'}});
   }finally{await request('/api/centres/uploads/'+session.id,{method:'DELETE'}).catch(()=>{});}
 }
+const isReadOnlyPost=(url:string,method:string)=>method==='POST'&&/^\/api\/(?:clients\/(?:report|outreach|priorities|followups|data-quality)|participants\/lookup)(?:\?|$)/.test(url);
 function requestApi<T>(url: string, options: RequestInit = {}): Promise<T> {
   url=centreUrl(url);
   if ((options.method || "GET") !== "GET") {
-    inFlight.clear();
+    if(!isReadOnlyPost(url,options.method||'GET'))cancelPendingReads();
     if(options.body instanceof FormData){
       const file=options.body.get('file');
       if(file&&typeof file!=='string'){
@@ -139,26 +154,20 @@ function requestApi<T>(url: string, options: RequestInit = {}): Promise<T> {
     }
     return request<T>(url, options);
   }
-  if (options.signal || options.headers || options.body)
-    return request<T>(url, options);
-  const existing = inFlight.get(url);
-  if (existing) return existing as Promise<T>;
-  const pending = request<T>(url, options).finally(() => {
-    if (inFlight.get(url) === pending) inFlight.delete(url);
-  });
-  inFlight.set(url, pending);
-  return pending;
+  if (options.headers || options.body)return request<T>(url,options);
+  return sharedRead<T>(url,options.signal);
 }
 export function api<T>(url:string,options:RequestInit & {reuseForMs?:number}={}):Promise<T>{
   const {reuseForMs=0,...init}=options;
-  if((init.method||'GET')!=='GET')invalidateReadCache();
+  if((init.method||'GET')!=='GET'&&!isReadOnlyPost(url,init.method||'GET'))invalidateReadCache();
   const scoped=centreUrl(url),generation=centreGeneration,epoch=readEpoch;
   const allowed=(init.method||'GET')==='GET'&&reuseForMs>0&&!init.headers&&!init.body&&/^\/api\/(dashboard|reporting\/briefing|programme-domains\/report|sppb\/overview)(?:\?|$)/.test(scoped);
-  const key=generation+':'+scoped,prior=allowed?recentReads.get(key):null;
+  const cacheable=allowed&&(!/^\/api\/sppb\/overview(?:\?|$)/.test(scoped)||new URL(scoped,'http://centre.local').searchParams.get('summaryOnly')==='1');
+  const key=generation+':'+scoped,prior=cacheable?recentReads.get(key):null;
   if(init.signal?.aborted)return requestApi<T>(url,init);
   if(prior&&prior.expires>Date.now())return Promise.resolve(structuredClone(prior.value) as T);
   return requestApi<T>(url,init).then(value=>{
-    if(allowed&&epoch===readEpoch&&generation===centreGeneration&&!init.signal?.aborted){
+    if(cacheable&&epoch===readEpoch&&generation===centreGeneration&&!init.signal?.aborted){
       if(recentReads.size>=12)recentReads.delete(recentReads.keys().next().value!);
       recentReads.set(key,{expires:Date.now()+Math.min(reuseForMs,15000),value:structuredClone(value)});
     }

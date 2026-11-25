@@ -1,3 +1,5 @@
+import {DisplaySettings} from "./display-settings";
+import "./display-settings.css";
 import {
   useCallback,
   useEffect,
@@ -30,6 +32,7 @@ import { api, setCentreContext, setReportingMode } from "./api";
 import type { Centre } from "../shared/centres.js";
 import "./platform.css";
 import "./professional-ui.css";
+const PerformanceDiagnostics=lazy(()=>import('./performance-diagnostics').then(m=>({default:m.PerformanceDiagnostics})));
 import './experience.css';
 const CentreTools = lazy(() =>
   import("./centre-tools").then((m) => ({ default: m.CentreTools })),
@@ -52,6 +55,7 @@ export function PlatformApp() {
     [error, setError] = useState(""),
     [page, setPage] = useState("Overview"),
     [adminSection,setAdminSection]=useState("data"),
+    [showDiagnostics,setShowDiagnostics]=useState(false),
     [mode, setMode] = useState<"official" | "exploratory">("official"),
     [revision, setRevision] = useState(0),
     [menu, setMenu] = useState(false),
@@ -112,6 +116,7 @@ export function PlatformApp() {
     return () => document.removeEventListener("keydown", close);
   }, [menu]);
   const navigate = (id: string) => {
+    setShowDiagnostics(false);
     const resolved=staffPage(id,staff?.role);
     if(id.startsWith('__')||resolved==='Data management'){
       setAdminSection(id==='__centres'?'centres':id==='__config'||id==='__sync'?'configuration':resolved==='Data management'?'data':adminSection);
@@ -121,7 +126,7 @@ export function PlatformApp() {
     document.scrollingElement?.scrollTo?.({ top: 0, behavior: "instant" });
   };
   const openModal = (modal: string) => {
-    if (page.startsWith("__")) setPage("Overview");
+    if (page.startsWith("__")) setPage("Overview");setShowDiagnostics(false);
     setCommand({ id: Date.now(), modal });
     setMenu(false);
   };
@@ -252,7 +257,7 @@ export function PlatformApp() {
                 setCentreContext(next);
                 setCentre(next);
                 setMode("official");
-                setPage("Overview");
+                setPage("Overview");setShowDiagnostics(false);
                 setMenu(false);
                 api("/api/centres/preference", {
                   method: "PUT",
@@ -304,6 +309,8 @@ export function PlatformApp() {
             <Download size={16} />
             <span>Export</span>
           </button>
+          <DisplaySettings />
+          {centre?.id === "seen_nanyang" && staff.role !== "viewer" && <button className="button" onClick={()=>openModal("seen-presentation")}>Present</button>}
           <details className="shell-account">
             <summary aria-label="Account menu">
               <span className="shell-avatar">
@@ -364,7 +371,7 @@ export function PlatformApp() {
             <span>Change mode in the account menu</span>
           </div>
           {administrative?<>
-            <section className="panel staff-admin-heading"><h1>Data &amp; settings</h1><p>Manage source data, reporting definitions and centre access.</p>{activeAdmin&&<label>Manage<select aria-label="Administration workspace" value={activeAdmin.id} onChange={e=>setAdminSection(e.target.value)}>{adminChoices.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}</section>
+            <section className="panel staff-admin-heading"><h1>Data &amp; settings</h1><p>Manage source data, reporting definitions and centre access.</p>{activeAdmin&&<label>Manage<select aria-label="Administration workspace" value={activeAdmin.id} onChange={e=>setAdminSection(e.target.value)}>{adminChoices.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}{staff.role==='admin'&&centre&&<details onToggle={e=>setShowDiagnostics(e.currentTarget.open)}><summary>Performance diagnostics</summary>{showDiagnostics&&<Suspense fallback={<p>Loading diagnostics...</p>}><PerformanceDiagnostics key={centre.id}/></Suspense>}</details>}</section>
             <Suspense fallback={<div className="page-skeleton" role="status">Loading workspace tools...</div>}>
               {activeAdmin?.id==='centres'?<CentreTools staff={staff} onChanged={load}/>:activeAdmin?.id==='configuration'&&centre?<ConfigurationCentre key={centre.id} centre={centre} centres={staff.centres} user={staff} initialTab="activities" onChanged={()=>{setReportingMode(mode);setRevision(n=>n+1);}} onReturn={()=>navigate('Overview')}/>:activeAdmin?.id==='data'?renderWorkspace('Data management'):<p>No workspace tools are available for your access.</p>}
             </Suspense>

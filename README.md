@@ -1,5 +1,8 @@
 # Programme & Outreach Dashboard
 
+**Supabase egress optimisation - 24 November 2026:** SQL dashboard summaries, revision-aware aggregate caching, scoped profile/SPPB queries and administrator diagnostics. Run additive migration **008_analytics_egress.sql** in Supabase before deploying the updated Render service. [Audit, measurements, limitations and deployment instructions](docs/EGRESS-OPTIMISATION.md).
+
+
 **Simplified staff workspace - 23 November 2026:** Six analysis sections cover the main staff questions. Imports, reporting configuration and centre administration are grouped under **Data & settings**. [Current navigation and staff guide](docs/STAFF-WORKSPACE.md). No new migration is required. Older release notes below describe earlier navigation.
 
 

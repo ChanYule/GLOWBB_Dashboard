@@ -1,3 +1,4 @@
+import {useChartMode} from "./display-settings";
 import {useChartWidth,chartColours} from "./chart-system";
 import { useId, useState } from "react";
 import {
@@ -646,7 +647,9 @@ export function DemographicBars({
   denominator: number;
   onSelect?: (label: string) => void;
 }) {
-  const [percentage, setPercentage] = useState(false);
+  const [mode] = useChartMode();
+  const [localPercentage, setPercentage] = useState<boolean|null>(null);
+  const percentage = localPercentage ?? mode === "percentage";
   if (!denominator || !items.length)
     return (
       <div className="chart-empty">
@@ -687,11 +690,6 @@ export function DemographicBars({
                   {percentage
                     ? `${fmt((item.value / denominator) * 100)}%`
                     : fmt(item.value)}
-                  <small>
-                    {percentage
-                      ? `${fmt(item.value)} seniors`
-                      : `${fmt((item.value / denominator) * 100)}%`}
-                  </small>
                 </strong>
               </div>
               <div className="bar-track">

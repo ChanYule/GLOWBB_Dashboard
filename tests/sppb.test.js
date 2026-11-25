@@ -1,4 +1,5 @@
 import test from "node:test";
+import {analyticsRevision} from "../server/analytics-revisions.js";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import ExcelJS from "exceljs";
@@ -823,6 +824,9 @@ for (const engine of ["SQLite", "PostgreSQL"])
       assert.equal(resolvedPreview.conflicts, 0);
       const reprocessed = await f.json("/api/sppb/reprocess", {});
       assert.equal(reprocessed.linked, 1);
+      const revisionBefore=await analyticsRevision(f.control);
+      const unchanged=await f.json("/api/sppb/reprocess",{});assert.equal(unchanged.linked,0);
+      assert.equal(await analyticsRevision(f.control),revisionBefore,"unchanged relinking must not rewrite shared assessment records");
       assert.equal((await f.json("/api/sppb/review")).unmatchedMembers, 0);
       const xlsx = await f.request(
         "/api/sppb/export?centre=" + centre + "&format=xlsx",
@@ -983,7 +987,7 @@ for(const engine of ['SQLite','PostgreSQL'])test(`${engine}: SPPB scores join cu
   }
   await f.save(matrix(row('linked-a','2026-10-01',[4,8,4,16]),row('linked-b','2026-10-01',[2,2,2,6]),row('other-centre-private','2026-10-01')));
   let snapshots=0;if(db.storage){const read=db.storage.readPlanningState;db.storage.readPlanningState=async(...args)=>{snapshots++;return read(...args);};}
-  const report=await f.json('/api/sppb/overview?centre='+centre);assert.equal(report.analysis.population,2);assert.equal(report.analysis.scored,2);const source=report.analysis.sourceGroups[0];assert.equal(source.medianTotal,11);assert.equal(source.cohorts.attendance.find(c=>c.label==='Two or more sessions').medianSessions,2);assert.equal(source.cohorts.cfs.find(c=>c.label==='5').members,1);assert.equal(source.cohorts.srf.find(c=>c.label==='0').members,1);assert.equal(source.cohorts.age.find(c=>c.label==='80+').members,1);assert.equal(source.domains.find(d=>d.label==='Cognitive').attended.members,1);assert.equal(source.programmes[0].sessions,2);assert.equal(JSON.stringify(report).includes('other-centre-private'),false);if(db.storage)assert.equal(snapshots,1);
+  const report=await f.json('/api/sppb/overview?centre='+centre);assert.equal(report.analysis.population,2);assert.equal(report.analysis.scored,2);const source=report.analysis.sourceGroups[0];assert.equal(source.medianTotal,11);assert.equal(source.cohorts.attendance.find(c=>c.label==='Two or more sessions').medianSessions,2);assert.equal(source.cohorts.cfs.find(c=>c.label==='5').members,1);assert.equal(source.cohorts.srf.find(c=>c.label==='0').members,1);assert.equal(source.cohorts.age.find(c=>c.label==='80+').members,1);assert.equal(source.domains.find(d=>d.label==='Cognitive').attended.members,1);assert.equal(source.programmes[0].sessions,2);assert.equal(JSON.stringify(report).includes('other-centre-private'),false);if(db.storage)assert.equal(snapshots,0,'SPPB uses membership metadata and bounded attendance windows instead of a full planning snapshot');
   const file=await f.request('/api/sppb/export?centre='+centre+'&format=xlsx');assert.equal(file.status,200);const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(Buffer.from(await file.arrayBuffer()));assert.ok(workbook.getWorksheet('Scores and participation').rowCount>1);
   const pdf=await f.request('/api/sppb/export?centre='+centre+'&format=pdf');assert.equal(pdf.status,200);assert.match(await pdf.text(),/Scores and programme participation/);
   const viewer=await f.json('/api/sppb/overview?centre='+centre,undefined,'viewer');assert.equal(viewer.analysis,undefined);assert.equal(viewer.rows,undefined);

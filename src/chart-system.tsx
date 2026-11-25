@@ -1,10 +1,13 @@
+import { downloadRankingChart } from "./chart-download";
+import { currentCentre } from "./api";
+import { useChartMode } from "./display-settings";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode, CSSProperties } from "react";
 import "./chart-system.css";
 export const chartColours = {
-  reach: "#2563eb",
-  attendance: "#0f766e",
-  demographic: "#6d5ae6",
+  reach: "var(--chart-reach, #2563eb)",
+  attendance: "var(--chart-attendance, #0f766e)",
+  demographic: "var(--chart-demographic, #6d5ae6)",
   review: "#b45309",
   unknown: "#94a3b8",
 };
@@ -128,7 +131,7 @@ export type RankingRow = {
   value: number | null;
   detail?: string;
   displayValue?: string;
-  colour?:string;
+  colour?: string;
 };
 export function HorizontalRankingChart({
   rows,
@@ -138,6 +141,12 @@ export function HorizontalRankingChart({
   tone = "reach",
   onSelect,
   label = "Category comparison",
+  denominator,
+  chartId,
+  context,
+  hideOverride = false,
+  allowChartActions = true,
+  allowDownload = false,
 }: {
   rows: RankingRow[];
   maxValue?: number;
@@ -146,21 +155,87 @@ export function HorizontalRankingChart({
   tone?: keyof typeof chartColours;
   onSelect?: (label: string) => void;
   label?: string;
+  denominator?: number | null;
+  chartId?: string;
+  context?: string;
+  hideOverride?: boolean;
+  allowChartActions?: boolean;
+  allowDownload?: boolean;
 }) {
+  const [mode, override, setOverride] = useChartMode(chartId);
+  const percentage = denominator !== undefined && mode === "percentage";
+  const chartRows = percentage
+    ? rows.map((row) => ({
+        ...row,
+        detail: undefined,
+        displayValue: undefined,
+        value:
+          row.value != null && denominator != null && denominator > 0
+            ? (row.value / denominator) * 100
+            : null,
+      }))
+    : rows;
+  if (percentage) {
+    unit = "%";
+    maxValue = 100;
+  }
+  const [zoom, setZoom] = useState(false);
+  const [table, setTable] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (zoom && dialog.current && !dialog.current.open)
+      dialog.current.showModal();
+  }, [zoom]);
+  const [downloadError, setDownloadError] = useState("");
+  const exportChart = (format: "png" | "svg") => {
+    setDownloadError("");
+    void downloadRankingChart(
+      [currentCentre()?.name, label, context].filter(Boolean).join(" / "),
+      expanded ? chartRows : chartRows.slice(0, limit),
+      unit,
+      denominator,
+      format,
+    ).catch(() =>
+      setDownloadError("This browser could not create the chart image."),
+    );
+  };
   const [expanded, setExpanded] = useState(false);
   const id = useId();
-  const numbers = rows.flatMap((r) => (r.value == null ? [] : [r.value])),
+  const numbers = chartRows.flatMap((r) => (r.value == null ? [] : [r.value])),
     min = Math.min(0, ...numbers),
     max = Math.max(maxValue || 1, ...numbers),
     range = max - min,
     zero = (-min / range) * 100;
   if (!rows.length) return <EmptyChartState />;
-  return (
+  const content = (suffix = "") => (
     <div
       className={"horizontal-ranking report-bars tone-" + tone}
       role="group"
       aria-label={label}
     >
+      {denominator !== undefined && chartId && !hideOverride && (
+        <label className="chart-mode">
+          Values{" "}
+          <select
+            aria-label={label + " display"}
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+          >
+            <option value="default">Use dashboard setting</option>
+            <option value="number">Number</option>
+            <option value="percentage">Percentage</option>
+          </select>
+        </label>
+      )}
+      {percentage && (
+        <p className="chart-denominator">
+          {denominator != null && denominator > 0
+            ? "Share of the overall " +
+              chartNumber(denominator) +
+              " in this selection."
+            : "Percentage unavailable for this selection."}
+        </p>
+      )}
       <div className="ranking-axis" aria-hidden="true">
         <span>{chartNumber(min, unit)}</span>
         <span>{chartNumber(max, unit)}</span>
@@ -169,7 +244,7 @@ export function HorizontalRankingChart({
         className={"ranking-rows" + (!expanded ? " ranking-limited" : "")}
         style={{ "--ranking-visible": limit } as CSSProperties}
       >
-        {rows.map((r, i) => (
+        {chartRows.map((r, i) => (
           <div
             className={
               "ranking-row" + (i >= limit && !expanded ? " ranking-extra" : "")
@@ -202,12 +277,12 @@ export function HorizontalRankingChart({
                 (r.displayValue ?? chartNumber(r.value, unit)) +
                 (r.detail ? ". " + r.detail : "")
               }
-              aria-describedby={id + "-" + i}
+              aria-describedby={id + suffix + "-" + i}
             >
               {r.value != null && (
                 <i
                   style={{
-                    backgroundColor:r.colour,
+                    backgroundColor: r.colour,
                     left: Math.min(zero, ((r.value - min) / range) * 100) + "%",
                     width: (Math.abs(r.value) / range) * 100 + "%",
                   }}
@@ -216,12 +291,15 @@ export function HorizontalRankingChart({
               {min < 0 && (
                 <b className="ranking-zero" style={{ left: zero + "%" }} />
               )}
-              <span className="chart-tooltip" id={id + "-" + i} role="tooltip">
+              <span
+                className="chart-tooltip"
+                id={id + suffix + "-" + i}
+                role="tooltip"
+              >
                 {r.label}: {r.displayValue ?? chartNumber(r.value, unit)}
                 {r.detail && <small>{r.detail}</small>}
               </span>
             </div>
-            {r.detail && <small className="ranking-detail">{r.detail}</small>}
           </div>
         ))}
       </div>
@@ -237,6 +315,93 @@ export function HorizontalRankingChart({
         </button>
       )}
     </div>
+  );
+  return (
+    <>
+      {allowChartActions && (
+        <div className="chart-actions">
+          <button className="text-button" onClick={() => setZoom(true)}>
+            Expand chart
+          </button>
+          {allowDownload && (
+            <button className="text-button" onClick={() => exportChart("png")}>
+              Download chart
+            </button>
+          )}
+        </div>
+      )}
+      {content()}
+      {!zoom && downloadError && <p role="alert">{downloadError}</p>}
+      {zoom && (
+        <dialog
+          ref={dialog}
+          className="expanded-dashboard-chart"
+          aria-label={label}
+          onCancel={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setZoom(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") event.stopPropagation();
+          }}
+        >
+          <header>
+            <h2>{label}</h2>
+            <p>
+              {[currentCentre()?.name, context].filter(Boolean).join(" / ")}
+            </p>
+            <div className="work-actions">
+              <button
+                autoFocus
+                className="button"
+                onClick={() => setZoom(false)}
+              >
+                Close chart
+              </button>
+              <button className="button" onClick={() => setTable(!table)}>
+                {table ? "Show chart" : "Show table"}
+              </button>
+              {allowDownload && (
+                <button className="button" onClick={() => exportChart("svg")}>
+                  Download SVG
+                </button>
+              )}
+              {allowDownload && (
+                <button className="button" onClick={() => exportChart("png")}>
+                  Download PNG
+                </button>
+              )}
+            </div>
+          </header>
+          {downloadError && <p role="alert">{downloadError}</p>}
+          {table ? (
+            <div className="work-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chartRows.map((row) => (
+                    <tr key={row.label}>
+                      <th>{row.label}</th>
+                      <td>
+                        {row.displayValue ?? chartNumber(row.value, unit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            content("-expanded")
+          )}
+        </dialog>
+      )}
+    </>
   );
 }
 export function CompactTrend({

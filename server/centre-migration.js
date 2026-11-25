@@ -6,6 +6,7 @@ import {
 } from "./data-management.js";
 import { hash, defaults } from "./domain.js";
 import { CENTRES, centreById } from "../shared/centres.js";
+const migrationNote = 'Choose explicit programme mappings based on source provenance. Completed allocations remain recorded; pending allocations can resume only into the reviewed centre. Source data stays in the protected legacy archive. The earlier registry is GLOW Bukit Batok only.';
 const fail = (status, message) => Object.assign(Error(message), { status });
 async function snapshot(db) {
   return dataTransaction(
@@ -33,6 +34,25 @@ export function mountCentreMigration(
   };
   app.get("/api/centres/migration", async (req, res) => {
     admin(req);
+    if (control.dialect === "postgres") {
+      const {rows:[result]} = await control.query(`WITH session_counts AS (
+        SELECT programme_id,COUNT(*)::int AS sessions FROM glowbb.sessions GROUP BY programme_id
+      ), attendance_counts AS (
+        SELECT s.programme_id,COUNT(*)::int AS attendance
+        FROM glowbb.attendance a JOIN glowbb.sessions s ON s.id=a.session_id GROUP BY s.programme_id
+      ), catalogue AS (
+        SELECT p.id,p.name,l.centre_id AS "assignedCentreId",l.status AS "assignmentStatus",
+          COALESCE(s.sessions,0) AS sessions,COALESCE(a.attendance,0) AS attendance
+        FROM glowbb.programmes p LEFT JOIN glowbb.legacy_allocations l ON l.programme_id=p.id
+        LEFT JOIN session_counts s ON s.programme_id=p.id LEFT JOIN attendance_counts a ON a.programme_id=p.id
+      )
+      SELECT (SELECT COUNT(*)::int FROM glowbb.attendance) AS "legacyAttendance",
+        (SELECT COUNT(*)::int FROM glowbb.participants) AS participants,
+        (SELECT COUNT(*)::int FROM glowbb.member_registry) AS registry,
+        (SELECT COALESCE(SUM(attendance),0)::int FROM catalogue WHERE "assignmentStatus" IS DISTINCT FROM 'Complete') AS attendance,
+        (SELECT COALESCE(json_agg(c ORDER BY c.id),'[]') FROM catalogue c) AS programmes`);
+      return res.json({...result,note: migrationNote});
+    }
     const state = await snapshot(control),
       t = state.tables,
       allocations = await control
@@ -68,7 +88,7 @@ export function mountCentreMigration(
           ),
         ).length,
       })),
-      note: "Choose explicit programme mappings based on source provenance. Completed allocations remain recorded; pending allocations can resume only into the reviewed centre. Source data stays in the protected legacy archive. The earlier registry is GLOW Bukit Batok only.",
+      note: migrationNote,
     });
   });
   app.post("/api/centres/migration/preview", async (req, res) => {

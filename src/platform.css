@@ -1,5 +1,5 @@
 .platform-header {
-  background: #fff;
+  background: light-dark(#fff, #192638);
   border-bottom: 1px solid #d3dfe8;
   padding: 1rem 1.5rem;
   display: flex;
@@ -9,7 +9,7 @@
   position: sticky;
   top: 0;
   z-index: 30;
-  color: #17314b;
+  color: light-dark(#17314b, #e4edf8);
 }
 .platform-header > div {
   flex: 1;
@@ -31,11 +31,11 @@
   padding: 0.65rem;
   border: 1px solid #b8cad8;
   border-radius: 7px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
 }
 .selected-centre-name {
-  background: #e7f4f2;
-  color: #12615c;
+  background: light-dark(#e7f4f2, #223247);
+  color: light-dark(#12615c, #e4edf8);
   padding: 0.5rem 1.5rem;
   font-weight: 700;
   padding-left: 260px;
@@ -108,7 +108,7 @@
 .centre-report-scope {
   font-weight: 700;
   margin: 1rem 0;
-  color: #17314b;
+  color: light-dark(#17314b, #e4edf8);
 }
 .centre-import-summary {
   display: grid;

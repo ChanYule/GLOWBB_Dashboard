@@ -7,7 +7,7 @@ import { eventTypeReport, programmeDomainReport, validateEventQuery } from "./ev
 import { ensureLocations, locationRow } from "./location-store.js";
 import { decodeLocations } from "./location-model.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
-export function mountEventTypes(app, { db, storage }) {
+export function mountEventTypes(app, { db, storage,aggregateCache }) {
   const allowed = (req) => {
     if (!["admin", "planner"].includes(req.user.role))
       throw fail(
@@ -43,9 +43,9 @@ export function mountEventTypes(app, { db, storage }) {
   }
   app.get("/api/event-types/report", async (req, res) => {
     allowed(req);
-    res.json(await report(req.query,req.user));
+    res.json(await (aggregateCache?aggregateCache.run(req,'event-types',()=>report(req.query,req.user)):report(req.query,req.user)));
   });
-  app.get('/api/programme-domains/report',async(req,res)=>{allowed(req);res.json(await report(req.query,req.user,true));});
+  app.get('/api/programme-domains/report',async(req,res)=>{allowed(req);res.json(await (aggregateCache?aggregateCache.run(req,'programme-domains',()=>report(req.query,req.user,true)):report(req.query,req.user,true)));});
   app.get('/api/programme-domains/export',async(req,res)=>{
     allowed(req);const q=validateEventQuery(req.query);
     if(['factor','group','gender','race','cfs','ageBand','client','boundary'].some(key=>q[key])||['male','minority'].includes(q.target))throw fail(403,'Reset participant-group filters before sharing this domain report.');

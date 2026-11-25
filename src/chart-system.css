@@ -42,7 +42,7 @@
   justify-content: center;
   text-align: center;
   padding: 20px;
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   border: 1px dashed var(--line);
   border-radius: 8px;
 }
@@ -61,7 +61,7 @@
 .chart-skeleton i {
   display: block;
   height: 14px;
-  background: #e9eef5;
+  background: light-dark(#e9eef5, #223247);
   border-radius: 4px;
 }
 .chart-skeleton i:nth-child(2) {
@@ -133,7 +133,7 @@
 .ranking-track {
   position: relative;
   height: 9px;
-  background: #eef2f7;
+  background: light-dark(#eef2f7, #223247);
   border-radius: 3px;
   outline-offset: 4px;
 }

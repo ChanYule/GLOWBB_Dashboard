@@ -4,9 +4,10 @@ import { rootCertificates } from "node:tls";
 import { readFileSync } from "node:fs";
 import { inspectImport, defaults, hash } from "./domain.js";
 import { expiredPreview } from "./previews.js";
+import {measuredPool} from './database-metrics.js';
 
 const tables =
-  /\b(sppb_records|sppb_batches|sppb_configuration|legacy_allocations|centres|centre_access|platform_preferences|platform_configuration|schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
+  /\b(analytics_revisions|sppb_records|sppb_batches|sppb_configuration|legacy_allocations|centres|centre_access|platform_preferences|platform_configuration|schema_version|users|logins|participants|programmes|sessions|attendance|imports|settings|targets|decisions|opportunity_decisions|audit|import_previews|assessment_monthly|operational_settings|operational_targets|staff_preferences|attendance_backups|risk_observations|participant_profiles|profile_history|profile_observations|participant_feedback|needs_actions|member_registry|location_store)\b/g;
 
 const supabaseCa = readFileSync(
   new URL("./supabase-ca.crt", import.meta.url),
@@ -58,7 +59,7 @@ export function postgresStatement(statement) {
   return sql;
 }
 
-export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {}) {
+export function openPostgres(connectionString, { pool, schema = 'glowbb', measured=false } = {}) {
   if (!pool) {
     pool = new pg.Pool(postgresOptions(connectionString));
     pool.on("error", () =>
@@ -66,13 +67,17 @@ export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {})
     );
   }
   if(!/^(glowbb|centre_(?:glow|seen)_(?:bukit_batok|nanyang))$/.test(schema))throw Error('Unsupported workspace schema.');
+  if(!measured)pool=measuredPool(pool);
   const rawPool=pool;
   if(schema!=='glowbb'){
     const wrap=client=>({query:(sql,values)=>client.query(sql.replace(/\bglowbb\./g,schema+'.'),values),release:()=>client.release()});
     pool={query:(sql,values)=>rawPool.query(sql.replace(/\bglowbb\./g,schema+'.'),values),connect:async()=>wrap(await rawPool.connect()),end:()=>Promise.resolve()};
   }
   const db = adapter(pool);
-  db.centreConnection = id => openPostgres(connectionString,{pool:rawPool,schema:'centre_'+id});
+  db.dialect='postgres';
+  db.namespace=schema;
+  db.databaseDiagnostics=()=>rawPool.diagnostics(schema);
+  db.centreConnection = id => openPostgres(connectionString,{pool:rawPool,schema:'centre_'+id,measured:true});
   db.close = () => pool.end();
   db.transaction = async (work, { readOnly = false } = {}) => {
     const client = await pool.connect();
@@ -150,7 +155,7 @@ export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {})
           throw Object.assign(Error('Session metadata changed after preview. Review a fresh preview.'),{status:409});
         const summary=await saveImport(tx,batch?.parsed||parsed,batch?.inspection||inspection,user);
         if(batch){
-          const response=importBatchResult(parsed,batch,summary,await readData(tx));
+          const response=importBatchResult(parsed,batch,summary,batch.complete?null:await readData(tx));
           if(batch.complete){
             await tx.prepare('UPDATE imports SET summary=? WHERE id=(SELECT MAX(id) FROM imports)').run(JSON.stringify({...summary,platformTotals:response}));
             await tx.prepare('DELETE FROM import_previews WHERE id=?').run(id);
@@ -166,7 +171,8 @@ export function openPostgres(connectionString, { pool, schema = 'glowbb' } = {})
 
 function adapter(client) {
   return {
-    storage: { readData, readPlanningState, getSettings, audit },
+    dialect:'postgres',
+    storage: { readData, readPlanningState, readMembershipState,readParticipantState,readSppbAttendance,getSettings, audit },
     query: (sql, values) => client.query(sql, values),
     prepare(statement) {
       const sql = postgresStatement(statement);
@@ -186,7 +192,7 @@ function adapter(client) {
 const coreSnapshot = `(SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.participants p) AS participants,
 (SELECT COALESCE(json_agg(p),'[]'::json) FROM glowbb.programmes p) AS programmes,
 (SELECT COALESCE(json_agg(s),'[]'::json) FROM glowbb.sessions s) AS sessions,
-(SELECT COALESCE(json_agg(a),'[]'::json) FROM glowbb.attendance a) AS attendance`;
+(SELECT COALESCE(json_agg(json_build_object('id',a.id,'participant_id',a.participant_id,'session_id',a.session_id)),'[]'::json) FROM glowbb.attendance a) AS attendance`;
 async function readData(db) {
   if (db.transaction) return db.transaction(readData, { readOnly: true });
   const {
@@ -245,6 +251,37 @@ async function getSettings(db) {
       (await db.prepare("SELECT value FROM settings WHERE id=1").get()).value,
     ),
   };
+}
+async function readMembershipState(db,participantId=null,compact=false){
+ if(db.transaction)return db.transaction(tx=>readMembershipState(tx,participantId,compact),{readOnly:true});
+ const {rows:[s]}=await db.query(`SELECT
+ (SELECT COALESCE(json_agg(CASE WHEN $2::boolean THEN jsonb_build_object('id',p.id,'details',COALESCE((SELECT jsonb_object_agg(k,v) FROM jsonb_each(p.details::jsonb) e(k,v) WHERE k IN ('memberId','age','cfs','gender','race','riskRaw','livingRaw')),'{}'::jsonb)::text) ELSE to_jsonb(p) END),'[]') FROM glowbb.participants p WHERE $1::text IS NULL OR p.id=$1) participants,
+ (SELECT COALESCE(json_agg(CASE WHEN $2::boolean THEN to_jsonb(p)||jsonb_build_object('details',jsonb_build_object('basic',COALESCE(p.details::jsonb->'basic','{}'::jsonb))::text) ELSE to_jsonb(p) END),'[]') FROM glowbb.participant_profiles p WHERE $1::text IS NULL OR p.participant_id=$1) profiles,
+ (SELECT COALESCE(json_agg(CASE WHEN $2::boolean THEN to_jsonb(r)||jsonb_build_object('details',COALESCE((SELECT jsonb_object_agg(k,v) FROM jsonb_each(r.details::jsonb) e(k,v) WHERE k IN ('memberId','age','cfs','gender','race','riskRaw','livingRaw','registrationDate','client','membershipStatus')),'{}'::jsonb)::text) ELSE to_jsonb(r) END),'[]') FROM glowbb.member_registry r WHERE $1::text IS NULL OR r.participant_id=$1) registry,
+ (SELECT value FROM glowbb.settings WHERE id=1) settings`,[participantId,compact]);
+ return {data:decodeData({...s,programmes:[],sessions:[],attendance:[]}),profiles:s.profiles,registry:s.registry,feedback:[],settings:{...defaults,...JSON.parse(s.settings)}};
+}
+async function readParticipantState(db,id){
+ if(db.transaction)return db.transaction(tx=>readParticipantState(tx,id),{readOnly:true});
+ const state=await readMembershipState(db,id);
+ const {rows:[s]}=await db.query(`WITH own AS (SELECT id,participant_id,session_id FROM glowbb.attendance WHERE participant_id=$1),
+ own_sessions AS (SELECT s.* FROM glowbb.sessions s WHERE EXISTS(SELECT 1 FROM own a WHERE a.session_id=s.id))
+ SELECT (SELECT COALESCE(json_agg(a),'[]') FROM own a) attendance,
+ (SELECT COALESCE(json_agg(s),'[]') FROM own_sessions s) sessions,
+ (SELECT COALESCE(json_agg(p),'[]') FROM glowbb.programmes p WHERE EXISTS(SELECT 1 FROM own_sessions s WHERE s.programme_id=p.id)) programmes,
+ (SELECT COALESCE(json_agg(f ORDER BY f.date,f.created),'[]') FROM glowbb.participant_feedback f WHERE participant_id=$1) feedback`,[id]);
+ return {...state,data:{...decodeData({...s,participants:[]}),participants:state.data.participants},feedback:s.feedback};
+}
+async function readSppbAttendance(db,windows,asOf){
+ if(db.transaction)return db.transaction(tx=>readSppbAttendance(tx,windows,asOf),{readOnly:true});
+ const {rows:[s]}=await db.query(`WITH bounds AS (SELECT * FROM jsonb_to_recordset($1::jsonb) w(id text,lo text,hi text)),
+ own AS (SELECT DISTINCT a.participant_id,a.session_id FROM glowbb.attendance a JOIN glowbb.sessions s ON s.id=a.session_id JOIN bounds b ON b.id=a.participant_id AND s.date>=b.lo AND s.date<=b.hi),
+ own_sessions AS (SELECT s.* FROM glowbb.sessions s WHERE EXISTS(SELECT 1 FROM own a WHERE a.session_id=s.id))
+ SELECT (SELECT COALESCE(json_agg(json_build_object('id',a.participant_id||':'||a.session_id,'participant_id',a.participant_id,'session_id',a.session_id)),'[]') FROM own a) attendance,
+ (SELECT COALESCE(json_agg(s),'[]') FROM own_sessions s) sessions,
+ (SELECT COALESCE(json_agg(p),'[]') FROM glowbb.programmes p WHERE EXISTS(SELECT 1 FROM own_sessions s WHERE s.programme_id=p.id)) programmes,
+ (SELECT json_build_object('first',MIN(s.date),'last',MAX(s.date)) FROM glowbb.sessions s WHERE s.date<=$2 AND EXISTS(SELECT 1 FROM glowbb.attendance a WHERE a.session_id=s.id)) coverage`,[JSON.stringify(windows),asOf]);
+ return {data:decodeData({...s,participants:[]}),coverage:s.coverage};
 }
 async function audit(db, user, action, details = {}) {
   await db
@@ -413,20 +450,19 @@ async function saveImport(db, parsed, inspection, user) {
           "preferredLanguage",
           "registrationDate",
           "cfsAssessedOn",
+          "residentialObservation",
         ]
-          .filter((field) => field in r.participant)
+          .filter((field) => field === "residentialObservation" ? Boolean(r.residentialObservation) : field in r.participant)
           .map((field) => {
-            const id = hash([r.participant.id, field, r.participant[field]]);
+            const value = field === "residentialObservation" ? r.residentialObservation : r.participant[field];
+            const id = hash([r.participant.id, field, value]);
             return [
               id,
               {
                 id,
                 participant_id: r.participant.id,
                 field,
-                raw:
-                  typeof r.participant[field] === "boolean"
-                    ? String(r.participant[field])
-                    : r.participant[field],
+                raw: typeof value === "boolean" ? String(value) : value,
                 recorded: new Date().toISOString(),
               },
             ];

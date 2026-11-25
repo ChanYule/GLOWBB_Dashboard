@@ -244,7 +244,7 @@ export async function writeTransaction(db, work) {
     throw e;
   }
 }
-export function mountNeeds(app, { db, storage, filters, previews, upload }) {
+export function mountNeeds(app, { db, storage, filters, previews, upload,aggregateCache }) {
   const readState = async (connection = db) => {
     if (storage.readPlanningState) return storage.readPlanningState(connection);
     if (connection.transaction)
@@ -335,7 +335,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
   );
   app.get("/api/needs/overview", async (req, res) => {
     privileged(req);
-    res.json(await report(req));
+    res.json(await (aggregateCache?aggregateCache.run(req,'needs-overview',()=>report(req)):report(req)));
   });
   app.post("/api/participants/lookup", async (req, res) => {
     privileged(req);
@@ -385,7 +385,7 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
   });
   app.get("/api/participants/:id", async (req, res) => {
     privileged(req);
-    const state = await readState(),
+    const state = storage.readParticipantState?await storage.readParticipantState(db,req.params.id):await readState(),
       base = state.data.participants.find((p) => p.id === req.params.id);
     if (!base) throw fail(404, "Participant not found.");
     const profile = state.profiles.find((p) => p.participant_id === base.id);
@@ -881,6 +881,10 @@ export function mountNeeds(app, { db, storage, filters, previews, upload }) {
   });
   app.get("/api/needs/settings", async (req, res) => {
     admin(req);
+    if(db.dialect==='postgres'){
+      const {rows:[raw]}=await db.query(`SELECT (SELECT COALESCE(json_agg(v ORDER BY v),'[]') FROM (SELECT DISTINCT details::jsonb->>'cfs' v FROM glowbb.participants WHERE COALESCE(details::jsonb->>'cfs','')<>'') a) cfs,(SELECT COALESCE(json_agg(v ORDER BY v),'[]') FROM (SELECT DISTINCT details::jsonb->>'livingRaw' v FROM glowbb.participants WHERE COALESCE(details::jsonb->>'livingRaw','')<>'') b) living,(SELECT COALESCE(json_agg(v ORDER BY v),'[]') FROM (SELECT DISTINCT domain v FROM glowbb.programmes) c) domains`);
+      return res.json({settings:await storage.getSettings(db),raw});
+    }
     const data = await storage.readData(db);
     res.json({
       settings: await storage.getSettings(db),

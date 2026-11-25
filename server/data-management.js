@@ -300,42 +300,45 @@ export function mountDataManagement(app, { db }) {
   });
   app.get("/api/data-management", async (req, res) => {
     admin(req);
+    const page = Number(req.query.backupPage || 1);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw fail(400,"Choose a valid backup page.");
     res.json(
       await transaction(
         db,
         function* (tx) {
-          const state = yield* snapshot(tx);
-          const backups = yield tx
-            .prepare(
-              "SELECT id,created,payload FROM attendance_backups ORDER BY created DESC",
-            )
-            .all();
+          const countTables = {
+            attendance: "attendance", participants: "participants", programmes: "programmes",
+            sessions: "sessions", profiles: "participant_profiles", feedback: "participant_feedback",
+            actions: "needs_actions", registryRows: "member_registry", assessments: "assessment_monthly",
+          };
+          const columns = Object.entries(countTables).map(([key, table]) =>
+            `(SELECT COUNT(*) FROM ${table}) AS "count_${key}"`);
+          const result = yield tx.prepare(`SELECT ${columns.join(",")},
+            (SELECT COUNT(*) FROM targets)+(SELECT COUNT(*) FROM operational_targets) AS count_targets,
+            (SELECT MIN(s.date) FROM sessions s WHERE EXISTS(SELECT 1 FROM attendance a WHERE a.session_id=s.id)) AS "from",
+            (SELECT MAX(s.date) FROM sessions s WHERE EXISTS(SELECT 1 FROM attendance a WHERE a.session_id=s.id)) AS "to"`).get();
+          const counts = {from:result.from,to:result.to};
+          for (const key of [...Object.keys(countTables), "targets"]) counts[key] = Number(result["count_"+key]);
+          const imports = yield tx.prepare(`SELECT i.id,i.created,i.summary,
+            (SELECT COUNT(*) FROM attendance a WHERE a.import_id=i.id) AS remaining
+            FROM imports i ORDER BY i.id DESC LIMIT 100`).all();
+          const postgres = tx.dialect === "postgres";
+          const kind = postgres ? "payload::jsonb->>'kind'" : "json_extract(payload,'$.kind')";
+          const reason = postgres ? "payload::jsonb->>'reason'" : "json_extract(payload,'$.reason')";
+          const count = postgres
+            ? "jsonb_array_length(COALESCE(payload::jsonb#>'{tables,attendance}',payload::jsonb->'attendance','[]'::jsonb))"
+            : "COALESCE(json_array_length(payload,'$.tables.attendance'),json_array_length(payload,'$.attendance'),0)";
+          const backupColumns = `SELECT id,created,${kind} AS kind,${reason} AS reason,${count} AS attendance`;
+          const backups = postgres
+            ? (yield tx.query(backupColumns + " FROM glowbb.attendance_backups ORDER BY created DESC,id DESC LIMIT $1 OFFSET $2", [26,(page-1)*25])).rows
+            : yield tx.prepare(backupColumns + " FROM attendance_backups ORDER BY created DESC,id DESC LIMIT ? OFFSET ?").all(26,(page-1)*25);
           return {
-            counts: summary(state),
-            imports: [...state.tables.imports]
-              .reverse()
-              .slice(0, 100)
-              .map((i) => ({
-                id: i.id,
-                created: i.created,
-                imported: JSON.parse(i.summary).imported || 0,
-                remaining: state.tables.attendance.filter(
-                  (a) => a.import_id === i.id,
-                ).length,
-              })),
-            backups: backups.map((b) => {
-              const data = JSON.parse(b.payload);
-              return {
-                id: b.id,
-                created: b.created,
-                restorable: data.kind === backupKind,
-                reason: data.reason || "Before attendance replacement",
-                attendance:
-                  data.kind === backupKind
-                    ? data.tables.attendance.length
-                    : data.attendance?.length || 0,
-              };
-            }),
+            counts,
+            imports: imports.map(i => ({id:i.id,created:i.created,imported:JSON.parse(i.summary).imported || 0,remaining:Number(i.remaining)})),
+            backups: backups.slice(0,25).map(b => ({id:b.id,created:b.created,restorable:b.kind===backupKind,
+              reason:b.reason || "Before attendance replacement",attendance:Number(b.attendance)})),
+            backupPage: page,
+            hasMoreBackups: backups.length>25,
           };
         },
         true,

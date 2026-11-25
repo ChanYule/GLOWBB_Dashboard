@@ -133,6 +133,7 @@ export function SppbLinkedAnalysis({
           </div>
           <HorizontalRankingChart
             label="Median recorded SPPB totals by selected group"
+            allowChartActions={false}
             rows={cohorts.map((c) => ({
               label: `${c.label} (n=${c.members})`,
               value: c.medianTotal,

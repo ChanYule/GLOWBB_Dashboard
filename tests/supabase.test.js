@@ -33,7 +33,7 @@ async function database() {
   await engine.exec(needsMigration);
   await engine.exec(needsMigration);
   const query = async (sql, values) => {
-    if (!values && sql.trim().startsWith("BEGIN;")) {
+    if (!values && sql.includes(";")) {
       const results = await engine.exec(sql);
       return {
         rows: results.at(-1)?.rows || [],

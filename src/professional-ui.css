@@ -89,7 +89,7 @@ body {
 }
 .dashboard-shell .button {
   border: 1px solid #d5deea;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   color: var(--ink);
   border-radius: 7px;
   min-height: 38px;
@@ -101,7 +101,7 @@ body {
 }
 .dashboard-shell .button:hover:not(:disabled) {
   border-color: #a7bacb;
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
 }
 .dashboard-shell .button.primary {
   background: var(--primary);
@@ -123,7 +123,7 @@ body {
   font: inherit;
   border: 1px solid #cbd5e1;
   border-radius: 7px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   color: var(--ink);
   padding: 8px 10px;
   min-height: 38px;
@@ -282,7 +282,7 @@ body {
   z-index: 35;
   height: 68px;
   min-height: 68px;
-  background: #ffffffef;
+  background: light-dark(#ffffffef, #192638f5);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
   padding: 0 25px;
@@ -330,10 +330,10 @@ body {
   width: 155px;
   font-size: 12px;
   border-color: var(--line);
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   min-height: 33px;
   padding: 5px 8px;
-  color: #475569;
+  color: light-dark(#475569, #e4edf8);
 }
 .shell-topbar .shell-export {
   display: flex;
@@ -364,8 +364,8 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: #e8edf5;
-  color: #334155;
+  background: light-dark(#e8edf5, #223247);
+  color: light-dark(#334155, #e4edf8);
   font-size: 10px;
   font-weight: 650;
 }
@@ -379,7 +379,7 @@ body {
   gap: 5px;
   width: 220px;
   padding: 16px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   border: 1px solid var(--line);
   border-radius: 9px;
   box-shadow: 0 8px 28px #14263d1a;
@@ -390,7 +390,7 @@ body {
 }
 .shell-account button {
   border: 0;
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   padding: 8px;
   text-align: left;
   font-size: 12px;
@@ -426,7 +426,7 @@ body {
   color: var(--muted);
 }
 .workspace-loading-mark {
-  background: #e0f2ef;
+  background: light-dark(#e0f2ef, #223247);
   color: var(--primary);
   padding: 18px;
   border-radius: 15px;
@@ -535,7 +535,7 @@ body {
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   gap: 12px;
   margin-bottom: 16px;
   box-shadow: none;
@@ -550,7 +550,7 @@ body {
 }
 .dashboard-shell .fetch-status {
   position: static;
-  background: #f0f7ff;
+  background: light-dark(#f0f7ff, #223247);
   color: #2563eb;
   border: 1px solid #dbeafe;
   box-shadow: none;
@@ -582,7 +582,7 @@ body {
   border-radius: 10px;
   padding: 17px 18px;
   min-height: 122px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   box-shadow: none;
   min-width: 0;
 }
@@ -592,7 +592,7 @@ body {
 .dashboard-shell .patterns-kpis span,
 .dashboard-shell .needs-kpi > span {
   font-size: 12px;
-  color: #52657b;
+  color: light-dark(#52657b, #e4edf8);
   font-weight: 500;
   margin: 0;
   line-height: 1.5;
@@ -624,7 +624,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: #f1f5f9;
+  background: light-dark(#f1f5f9, #223247);
   color: var(--primary);
 }
 .dashboard-shell .metric-card .metric-comparison {
@@ -695,7 +695,7 @@ body {
 }
 .dashboard-shell .analysis-stamp strong {
   font-weight: 550;
-  color: #475569;
+  color: light-dark(#475569, #e4edf8);
 }
 .dashboard-shell .work-table,
 .dashboard-shell .table-scroll,
@@ -718,11 +718,11 @@ body {
   color: var(--muted);
 }
 .dashboard-shell table thead {
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
 }
 .dashboard-shell table th {
   font-weight: 550;
-  color: #475569;
+  color: light-dark(#475569, #e4edf8);
 }
 .dashboard-shell table td,
 .dashboard-shell table th {
@@ -752,7 +752,7 @@ body {
   text-align: left;
 }
 .dashboard-shell table tbody tr:hover {
-  background: #f7fafc;
+  background: light-dark(#f7fafc, #223247);
 }
 .dashboard-shell table tbody tr:last-child td,
 .dashboard-shell table tbody tr:last-child th {
@@ -763,7 +763,7 @@ body {
   padding: 4px;
   margin-bottom: 20px;
   flex-wrap: wrap;
-  background: #eaf0f6;
+  background: light-dark(#eaf0f6, #223247);
   border-radius: 9px;
 }
 .dashboard-shell .section-tabs .button {
@@ -773,7 +773,7 @@ body {
   min-height: 34px;
 }
 .dashboard-shell .section-tabs .button.primary {
-  background: #fff;
+  background: light-dark(#fff, #192638);
   color: var(--primary);
   border-color: #dce5ef;
   box-shadow: 0 1px 3px #14263d06;
@@ -782,19 +782,19 @@ body {
 .dashboard-shell .table-note {
   font-size: 12px;
   line-height: 1.65;
-  color: #52657b;
+  color: light-dark(#52657b, #e4edf8);
 }
 .dashboard-shell .note {
   padding: 12px 14px;
   border: 1px solid #dce7ee;
   border-left: 3px solid #94b6c2;
   border-radius: 7px;
-  background: #f4f8fb;
+  background: light-dark(#f4f8fb, #223247);
 }
 .dashboard-shell .error {
   font-size: 13px;
   border: 1px solid #fecaca;
-  background: #fff7f6;
+  background: light-dark(#fff7f6, #223247);
   padding: 13px 16px;
   border-radius: 8px;
   color: #9f3030;
@@ -833,15 +833,15 @@ body {
   min-height: 36px;
 }
 .dashboard-shell .configuration-tabs button[aria-selected="true"] {
-  background: #e8f4f1;
+  background: light-dark(#e8f4f1, #223247);
   border-color: #aacfc8;
-  color: #0f766e;
+  color: light-dark(#0f766e, #e4edf8);
 }
 .dashboard-shell .configuration-editor,
 .dashboard-shell .configuration-impact,
 .dashboard-shell .configuration-reason,
 .dashboard-shell .configuration-preview {
-  background: #f8fafc;
+  background: light-dark(#f8fafc, #223247);
   border-color: var(--line);
   padding: 18px;
 }
@@ -858,7 +858,7 @@ body {
 .dashboard-shell .composition-row .bar-track {
   height: 8px;
   border-radius: 3px;
-  background: #edf0f7;
+  background: light-dark(#edf0f7, #223247);
 }
 .dashboard-shell .composition-row .bar-fill {
   background: var(--purple) !important;
@@ -882,7 +882,7 @@ body {
   border-radius: 3px;
 }
 .dashboard-shell .participation-reliability .reliability-fill {
-  background: #e5e2fb;
+  background: light-dark(#e5e2fb, #223247);
 }
 .dashboard-shell .reliability-dot {
   background: var(--purple);
@@ -907,8 +907,8 @@ body {
   height: 25px;
 }
 .dashboard-shell .reliability-warning {
-  color: #9a5b16;
-  background: #fff8e8;
+  color: light-dark(#9a5b16, #e4edf8);
+  background: light-dark(#fff8e8, #223247);
   border: 0;
   padding: 6px 9px;
   border-radius: 5px;
@@ -921,7 +921,7 @@ body {
 }
 .dashboard-shell .session-histogram-track {
   height: 9px;
-  background: #edf2f7;
+  background: light-dark(#edf2f7, #223247);
   border-radius: 3px;
 }
 .dashboard-shell .session-histogram-track i {
@@ -1113,7 +1113,7 @@ body {
 }
 .dashboard-shell .management-findings > article {
   padding: 18px;
-  background: #fff;
+  background: light-dark(#fff, #192638);
   border: 1px solid var(--line);
   border-radius: 10px;
 }
@@ -1157,7 +1157,7 @@ body {
   margin: 16px 0 0;
 }
 .dashboard-shell .simple-next-step {
-  background: #f0f7f5;
+  background: light-dark(#f0f7f5, #223247);
   border-color: #d6e9e4;
 }
 .modal-backdrop {
@@ -1572,7 +1572,7 @@ body {
     display: none;
   }
   body {
-    background: white;
+    background: light-dark(white, #192638);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1626,11 +1626,11 @@ body {
     gap: 8px;
     padding: 8px 14px 0;
     font-size: 10px;
-    color: #52657b;
+    color: light-dark(#52657b, #e4edf8);
   }
   .mobile-reporting-context > span {
     font-size: 9px;
-    color: #64748b;
+    color: light-dark(#64748b, #e4edf8);
   }
 }
 

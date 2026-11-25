@@ -129,7 +129,7 @@ function validateViews(views) {
     );
   }
 }
-export function mountClients(app, { db, storage, upload }) {
+export function mountClients(app, { db, storage, upload,aggregateCache }) {
   app.use(["/api/clients", "/api/client-registry"], async (req, _res, next) => {
     privileged(req);
     await ensureOperations(db);
@@ -385,13 +385,13 @@ export function mountClients(app, { db, storage, upload }) {
   });
   app.post("/api/clients/report", async (req, res) =>
     res.json(
-      await dataTransaction(
+      await (aggregateCache?aggregateCache.run(req,'client-report',()=>dataTransaction(
         db,
         function* (tx) {
           return clientReport(staffAnalysisState(yield* readState(tx, storage),req.user), req.body || {});
         },
         true,
-      ),
+      )):dataTransaction(db,function*(tx){return clientReport(staffAnalysisState(yield* readState(tx,storage),req.user),req.body||{});},true)),
     ),
   );
   app.post('/api/clients/outreach',async(req,res)=>{
@@ -601,7 +601,7 @@ export function mountClients(app, { db, storage, upload }) {
       await dataTransaction(
         db,
         function* (tx) {
-          const state = yield* readState(tx, storage);
+          const state = storage.readMembershipState?yield storage.readMembershipState(tx):yield* readState(tx, storage);
           return {
             zones: state.settings.clientZones || {},
             documentation: state.settings.clientZoneDocumentation || "",

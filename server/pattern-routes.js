@@ -7,7 +7,7 @@ import { ensureLocations, locationRow } from "./location-store.js";
 import { decodeLocations } from "./location-model.js";
 import { normalizePatternPreferences } from "../shared/participation-compat.js";
 
-export function mountPatterns(app, { db, storage }) {
+export function mountPatterns(app, { db, storage,aggregateCache }) {
   const allowed = (req) => {
     if (!["admin", "planner"].includes(req.user.role))
       throw Object.assign(
@@ -57,7 +57,7 @@ export function mountPatterns(app, { db, storage }) {
   };
   app.get("/api/participation-patterns", async (req, res) => {
     allowed(req);
-    res.json(await report(req.query,req.user));
+    res.json(await (aggregateCache?aggregateCache.run(req,'participation-patterns',()=>report(req.query,req.user)):report(req.query,req.user)));
   });
   // Shared preferences table; partial updates preserve other staff workspaces.
   app.put("/api/participation-patterns/preferences", async (req, res) => {

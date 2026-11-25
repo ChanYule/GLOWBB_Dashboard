@@ -123,13 +123,14 @@ test("GET coalescing lasts only while pending, mutation invalidates it, and abor
     release();
     await third;
     const pending = api("/session-data");
+    const cancelled=assert.rejects(pending,e=>e.name==="AbortError");
     const releaseOld = release;
     globalThis.fetch = async () => Response.json({ ok: true });
     await api("/api/logout", { method: "POST" });
     const fresh = await api("/session-data");
     assert.deepEqual(fresh, { ok: true });
     releaseOld();
-    await pending;
+    await cancelled;
     const controller = new AbortController();
     controller.abort();
     const abort = new DOMException("Cancelled", "AbortError");
@@ -138,7 +139,7 @@ test("GET coalescing lasts only while pending, mutation invalidates it, and abor
     };
     await assert.rejects(
       api("/cancel", { signal: controller.signal }),
-      (e) => e === abort,
+      (e) => e.name === "AbortError",
     );
   } finally {
     globalThis.fetch = original;

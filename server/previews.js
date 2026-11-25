@@ -86,7 +86,7 @@ export function sqlitePreviews(db) {
         );
         let response = result;
         if (batch) {
-          response = importBatchResult(parsed, batch, result, readData(db));
+          response = importBatchResult(parsed, batch, result, batch.complete ? null : readData(db));
           if (batch.complete) {
             db.prepare(
               "UPDATE imports SET summary=? WHERE id=(SELECT MAX(id) FROM imports)",

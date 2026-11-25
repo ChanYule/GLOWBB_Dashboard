@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { AnalysisStamp } from "./analysis-stamp";
 import { currentCentre, api } from "./api";
 import { createPortal } from "react-dom";
@@ -12,7 +12,7 @@ const fmt = (n: number | null | undefined) =>
     ? "Unavailable"
     : new Intl.NumberFormat("en-SG", { maximumFractionDigits: 1 }).format(n);
 function usePresentation(close: () => void) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const old = document.title;
     document.title =
       (currentCentre()?.name || "Programme & Outreach Dashboard") +
@@ -28,7 +28,7 @@ function usePresentation(close: () => void) {
     ];
     underlying.forEach((e) => (e.inert = true));
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape" && !document.querySelector(".expanded-dashboard-chart[open]")) close();
       if (e.key === "Tab") {
         const controls = [
           ...document.querySelectorAll<HTMLElement>(
@@ -61,10 +61,12 @@ export function PresentationFrame({
   title,
   close,
   children,
+  printReady = true,
 }: {
   title: string;
   close: () => void;
   children: ReactNode;
+  printReady?: boolean;
 }) {
   usePresentation(close);
   useEffect(() => {
@@ -83,7 +85,7 @@ export function PresentationFrame({
           Back to analysis
         </button>
         <strong>{title}</strong>
-        <button className="button primary" onClick={() => window.print()}>
+        <button className="button primary" disabled={!printReady} onClick={() => window.print()}>
           Print / Save as PDF
         </button>
       </div>

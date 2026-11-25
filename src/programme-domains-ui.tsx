@@ -5,7 +5,7 @@ import type { EventReport } from "./event-types-ui";
 import { PROGRAMME_DOMAINS } from "../shared/activity-domains.js";
 import { populations } from "../shared/participation-compat.js";
 import { ProgrammeClassificationTable } from "./programme-classification-table";
-import { ReportBars } from "./management";
+import { HorizontalRankingChart } from "./chart-system";
 import "./patterns.css";
 const ProgrammeDialog = lazy(() =>
   import("./main").then((m) => ({ default: m.ProgrammeDialog })),
@@ -48,6 +48,9 @@ const factors: Record<string, string> = {
   distance: "Distance",
   block: "Residential area",
 };
+const domainMeasures = ["programmes","sessions","unique","attendance"] as const;
+const domainMeasureLabels = {programmes:"Programmes",sessions:"Delivered sessions",unique:"Unique participants",attendance:"Attendance entries"};
+
 export function ProgrammeDomainAnalysis({
   user,
   revision = 0,
@@ -55,6 +58,7 @@ export function ProgrammeDomainAnalysis({
   onProgramme,
   patterns = false,
 }: Props) {
+  const [rankingView,setRankingView] = useState("table");
   const [q, setQ] = useState<Record<string, string>>({
     scope: initial.scope || (patterns ? "clients" : "overall"),
     target: initial.target || (patterns ? "all" : "senior"),
@@ -186,6 +190,7 @@ export function ProgrammeDomainAnalysis({
       setError((e as Error).message);
     }
   }
+  const allowChartDownload = !["factor","group","gender","race","cfs","ageBand","client","boundary"].some(key => initial[key] || q[key]) && !["male","minority"].includes(initial.target||q.target);
   const body = (r: Report, printing = false) => (
     <>
       <h2>What Types of Programmes Are We Offering?</h2>
@@ -202,14 +207,16 @@ export function ProgrammeDomainAnalysis({
         . {fmt(r.total.unique)} unique participants; {fmt(r.total.attendance)}{" "}
         attendance records.
       </p>
-      <ReportBars
-        rows={r.domains.map((d) => ({
-          label: d.label,
-          value: d[measure],
-          colour: colours[d.label],
-          detail: `${fmt(d[measure])} ${measure === "unique" ? "unique participants" : measure}`,
-        }))}
-      />
+      <div className={currentCentre()?.id === "seen_nanyang" ? "seen-chart-grid" : undefined}>
+        {(currentCentre()?.id === "seen_nanyang" ? domainMeasures : [measure]).map(metric => (
+          <section className="domain-comparison-chart" key={metric}>
+            <h3>{domainMeasureLabels[metric]}</h3>
+            <HorizontalRankingChart label={domainMeasureLabels[metric]} allowDownload={allowChartDownload && !printing} chartId={"domain."+metric} context={(r.period.from||"Available history")+" to "+(r.period.to||"latest records")+" / "+(r.target==="senior"?"Seniors":"Selected participants")}
+              denominator={r.total[metric]} hideOverride={printing}
+              rows={r.domains.map(d=>({label:d.label,value:d[metric],colour:colours[d.label]}))}/>
+          </section>
+        ))}
+      </div>
       <p className="note">
         Programmes may belong to more than one domain. Domain totals may
         overlap. Overall totals count each attendance record and participant
@@ -226,26 +233,22 @@ export function ProgrammeDomainAnalysis({
         . Only sessions classified as {r.selectedDomain} contribute to this
         ranking.
       </p>
-      <ol className="domain-programme-ranking">
-        {r.rankings.rows.slice(0, 5).map((p) => (
-          <li key={p.id}>
-            <button
-              className="text-button"
-              disabled={printing}
-              onClick={() => void openProgramme(p.id)}
-            >
-              {p.label}
-            </button>{" "}
-            <strong>
-              {fmt(p[r.rankingMetric as "unique" | "attendance" | "repeat"])}
-            </strong>{" "}
-            <small>
-              {fmt(p.sessions)} sessions · {fmt(p.unique)} unique ·{" "}
-              {fmt(p.repeat)} repeat
-            </small>
-          </li>
-        ))}
-      </ol>
+      {!printing && <label>Ranking view <select value={rankingView} onChange={e=>setRankingView(e.target.value)}>
+        <option value="table">Table</option><option value="chart">Chart</option>
+      </select></label>}
+      {rankingView === "chart" && !printing ? <HorizontalRankingChart
+        label={r.selectedDomain + " programme rankings"}
+        allowDownload={allowChartDownload} chartId={"programme-ranking."+r.rankingMetric} context={(r.period.from||"Available history")+" to "+(r.period.to||"latest records")}
+        denominator={r.rankingMetric === "repeat" ? undefined : r.domains.find(d=>d.label===r.selectedDomain)?.[r.rankingMetric as "unique"|"attendance"] ?? null}
+        rows={r.rankings.rows.map(p=>({label:p.label,value:p[r.rankingMetric as "unique"|"attendance"|"repeat"]}))}
+        onSelect={label=>{const row=r.rankings.rows.find(p=>p.label===label);if(row)void openProgramme(row.id);}}
+      /> : <div className="work-table domain-programme-ranking"><table>
+        <thead><tr><th>Programme</th><th>Sessions</th><th>Unique participants</th><th>Attendance</th><th>Repeat</th></tr></thead>
+        <tbody>{r.rankings.rows.map(p=><tr key={p.id}>
+          <th>{printing ? p.label : <button className="text-button" onClick={()=>void openProgramme(p.id)}>{p.label}</button>}</th>
+          <td>{fmt(p.sessions)}</td><td>{fmt(p.unique)}</td><td>{fmt(p.attendance)}</td><td>{fmt(p.repeat)}</td>
+        </tr>)}</tbody>
+      </table></div>}
       {!r.rankings.rows.length && (
         <p>No qualifying programmes in this selection.</p>
       )}
@@ -375,7 +378,7 @@ export function ProgrammeDomainAnalysis({
             <option value="all">All ages</option>
           </select>
         </label>
-        <label>
+        {currentCentre()?.id !== "seen_nanyang" && <label>
           Domain mix measure
           <select
             value={measure}
@@ -386,7 +389,7 @@ export function ProgrammeDomainAnalysis({
             <option value="unique">Unique participants</option>
             <option value="attendance">Attendance</option>
           </select>
-        </label>
+        </label>}
         <label>
           Programme Domain
           <select

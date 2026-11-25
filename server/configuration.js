@@ -461,7 +461,7 @@ export async function saveLegacyDefinitionVersion(
 export function mountConfiguration(app, { db, storage }) {
   app.get("/api/configuration", async (req, res) => {
     staff(req);
-    const state = await configurationState(db, storage),
+    const state = {settings:await storage.getSettings(db)},
       personal = await preference(db, req.user.id);
     res.json({
       settings: state.settings,
@@ -478,7 +478,12 @@ export function mountConfiguration(app, { db, storage }) {
   });
   app.get("/api/configuration/activities", async (req, res) => {
     staff(req);
-    const state = await configurationState(db, storage),
+    const load=async(connection=db)=>{
+    const state = connection.dialect==='postgres'?await (async()=>{
+      const tx=connection;
+      const {rows:[s]}=await tx.query(`SELECT (SELECT COALESCE(json_agg(p),'[]') FROM glowbb.programmes p) programmes,(SELECT COALESCE(json_agg(s),'[]') FROM glowbb.sessions s) sessions`);
+      return {settings:await storage.getSettings(tx),data:{participants:[],attendance:[],programmes:s.programmes.map(p=>({...p,optional:JSON.parse(p.optional)})),sessions:s.sessions.map(s=>({id:s.id,programmeId:s.programme_id,date:s.date,optional:JSON.parse(s.optional)}))}};
+    })():await configurationState(connection, storage),
       period = dates(req.query),
       page = Number(req.query.page || 1),
       search = String(req.query.search || "")
@@ -493,31 +498,29 @@ export function mountConfiguration(app, { db, storage }) {
           p.domain.toLowerCase().includes(search)) &&
         (!req.query.status || p.status === req.query.status),
     );
-    res.json({
-      rows: rows.slice((page - 1) * 25, page * 25),
+    const pageRows=rows.slice((page-1)*25,page*25);
+    if(connection.dialect==='postgres'&&pageRows.length){
+      const counts=(await connection.query(`SELECT s.programme_id,COUNT(*)::int attendance,COUNT(DISTINCT a.participant_id)::int "unique" FROM glowbb.attendance a JOIN glowbb.sessions s ON s.id=a.session_id WHERE s.programme_id=ANY($1::text[]) AND ($2::text='' OR s.date>=$2) AND s.date<=$3 GROUP BY s.programme_id`,[pageRows.map(p=>p.id),period.from||'',period.to])).rows;
+      const byId=new Map(counts.map(r=>[r.programme_id,r]));for(const p of pageRows){p.attendance=byId.get(p.id)?.attendance||0;p.unique=byId.get(p.id)?.unique||0;}
+    }
+    return {
+      rows: pageRows,
       total: rows.length,
       page,
       pages: Math.max(1, Math.ceil(rows.length / 25)),
       version: reportingConfiguration(state.settings).version,
       period,
-    });
+    };
+    };
+    res.json(db.dialect==='postgres'?await db.transaction(tx=>load(tx),{readOnly:true}):await load());
   });
   app.get("/api/configuration/history", async (req, res) => {
     admin(req);
-    const rows = await db
-      .prepare(
-        "SELECT id,created,user_id,action,details FROM audit WHERE action IN ('configuration.approved','configuration.requested','configuration.request.reviewed','configuration.personal') ORDER BY id DESC",
-      )
-      .all();
-    res.json({
-      rows: rows
-        .slice(
-          (Math.max(1, Number(req.query.page) || 1) - 1) * 20,
-          Math.max(1, Number(req.query.page) || 1) * 20,
-        )
-        .map((r) => ({ ...r, details: JSON.parse(r.details) })),
-      total: rows.length,
-    });
+    const page=Number(req.query.page||1);if(!Number.isSafeInteger(page)||page<1||page>100000)throw fail(400,'Choose a valid history page.');
+    const where="action IN ('configuration.approved','configuration.requested','configuration.request.reviewed','configuration.personal')";
+    const rows=await db.prepare('SELECT id,created,user_id,action,details FROM audit WHERE '+where+' ORDER BY id DESC LIMIT ? OFFSET ?').all(20,(page-1)*20);
+    const count=await db.prepare('SELECT COUNT(*) AS total FROM audit WHERE '+where).get();
+    res.json({rows:rows.map(r=>({...r,details:JSON.parse(r.details)})),total:Number(count.total)});
   });
   app.get("/api/configuration/requests", async (req, res) => {
     admin(req);

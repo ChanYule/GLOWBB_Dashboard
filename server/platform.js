@@ -471,6 +471,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     url.searchParams.delete("centre");
     req.url = url.pathname + url.search;
     req.centreActor = req.user;
+    req.authorizedCentreId = id;
     const db = await workspaces.get(id);
     await mirrorUser(db, req.user);
     const centre = centreById(id);

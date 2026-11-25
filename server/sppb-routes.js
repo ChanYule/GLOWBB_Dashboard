@@ -9,7 +9,9 @@ import { dataTransaction } from "./data-management.js";
 import { importFileUpload } from "./large-uploads.js";
 import { sessionEventTypes } from "./event-types.js";
 import { sessionDomains,PROGRAMME_DOMAINS } from "./programme-domains.js";
-import {sppbParticipationAnalysis} from './sppb-analysis.js';
+import {boundedAnalyticsCache,configuredCacheTtl} from './analytics-cache.js';
+import {analyticsRevision} from './analytics-revisions.js';
+import {sppbParticipationAnalysis,windowStart} from './sppb-analysis.js';
 import {
   sppbDefaults,
   sppbFail as fail,
@@ -78,8 +80,8 @@ async function configuration(db) {
     revision: row.revision,
   };
 }
-async function allRecords(db,keys=null) {
-  const rows=keys===null?await db.prepare('SELECT * FROM sppb_records').all():!keys.size?[]:db.storage?(await db.query('SELECT * FROM glowbb.sppb_records WHERE member_key=ANY($1::text[])',[[...keys]])).rows:await db.prepare('SELECT * FROM sppb_records WHERE member_key IN (SELECT value FROM json_each(?))').all(JSON.stringify([...keys]));
+async function allRecords(db,keys=null,compact=false) {
+  const rows=keys===null?await db.prepare('SELECT * FROM sppb_records').all():!keys.size?[]:db.storage?(await db.query(`SELECT id,member_key,${compact?"(details::jsonb-'raw'-'sourceRow')::text":'details'} AS details FROM glowbb.sppb_records WHERE member_key=ANY($1::text[])`,[[...keys]])).rows:await db.prepare('SELECT * FROM sppb_records WHERE member_key IN (SELECT value FROM json_each(?))').all(JSON.stringify([...keys]));
   return rows.map((r) => ({
     id: r.id,
     memberKey: r.member_key,
@@ -113,7 +115,7 @@ export function mountSppb(app, { control, workspaces, access }) {
         "Individual assessments are restricted to authorised staff.",
       );
   };
-  async function context(req, all = false, existingOnly = false) {
+  async function scopeIds(req, all = false) {
     const grants = await access(req.user);
     const queryCentre = req.query.centre,
       headerCentre = req.get("x-centre-id");
@@ -131,6 +133,11 @@ export function mountSppb(app, { control, workspaces, access }) {
         : [selected];
     if (ids.some((id) => !grants.ids.includes(id)))
       throw fail(403, "Centre access is required.");
+    return ids;
+  }
+  const summaryCache=boundedAnalyticsCache({ttlMs:configuredCacheTtl(),maxEntries:32,maxBytes:8*1024*1024});
+  async function context(req, all = false, existingOnly = false, lightweight=false,memberId=null) {
+    const ids=await scopeIds(req,all);
     const people = new Map(),
       existing = new Set(),
       states = [];
@@ -142,7 +149,7 @@ export function mountSppb(app, { control, workspaces, access }) {
         for(const p of await db.prepare('SELECT id FROM participants').all())existing.add(p.id);
         continue;
       }
-      const snapshot=storage.readPlanningState?await storage.readPlanningState(db):null;
+      const snapshot=lightweight&&storage.readMembershipState?await storage.readMembershipState(db,memberId,true):storage.readPlanningState?await storage.readPlanningState(db):null;
       const data = snapshot?.data??await storage.readData(db),
         settings = snapshot?.settings??await storage.getSettings(db);
       const registry = snapshot?.registry??await db.prepare("SELECT * FROM member_registry").all();
@@ -182,6 +189,16 @@ export function mountSppb(app, { control, workspaces, access }) {
     }
     return { people, existing, complete, ids, states };
   }
+  async function linkedStates(ctx,members,asOf){
+    const windows=members.filter(m=>m.latest&&Number.isFinite(m.latest.original?.total)).map(m=>({id:m.id,lo:m.previous?.date&&m.previous.date<windowStart(m.latestDate)?m.previous.date:windowStart(m.latestDate),hi:m.latestDate}));
+    return Promise.all(ctx.states.map(async state=>{
+      const db=await workspaces.get(state.id);
+      if(!db.storage?.readSppbAttendance)return state;
+      const ownMembers=new Set(members.filter(m=>m.centres.includes(state.id)).map(m=>m.id));
+      const relevant=windows.filter(w=>ownMembers.has(w.id));
+      return {...state,...await db.storage.readSppbAttendance(db,relevant,asOf)};
+    }));
+  }
   function filterInput(req) {
     const q = req.query;
     for (const field of ["from", "to", "asOf"])
@@ -220,9 +237,9 @@ export function mountSppb(app, { control, workspaces, access }) {
   }
   async function report(req) {
     const q = filterInput(req),
-      ctx = await context(req),
+      ctx = await context(req,false,false,true),
       config = await configuration(control),
-      records = await allRecords(control,new Set(ctx.people.keys()));
+      records = await allRecords(control,new Set(ctx.people.keys()),true);
     const visible = [...ctx.people.values()].filter(
       (p) =>
         (!q.search ||
@@ -371,6 +388,16 @@ export function mountSppb(app, { control, workspaces, access }) {
     };
   }
   app.get("/api/sppb/overview", async (req, res) => {
+    const summarise=async()=>{
+      const r=await report(req);
+      return {summary:r.summary,analysis:sppbParticipationAnalysis(r.filtered,await linkedStates(r.ctx,r.filtered,r.q.asOf),r.q.asOf),recordedScores:r.recordedScores,rows:[],total:r.filtered.length,page:r.q.page,pageSize:25,monthly:r.monthly,intervalMonths:r.config.intervalMonths,note:r.note};
+    };
+    if(req.query.summaryOnly==='1'){
+      staff(req);const ids=await scopeIds(req);filterInput(req);
+      const key=hash([req.user.id,req.user.role,ids,todaySG(),req.query]);
+      const revision=async()=>{const values=await Promise.all([analyticsRevision(control),...await Promise.all(ids.map(async id=>analyticsRevision(await workspaces.get(id))))]);return values.some(v=>v===null)?null:values.join('||');};
+      return res.json(await summaryCache.run(key,revision,summarise,status=>res.set('X-Analytics-Cache',status)));
+    }
     const r = await report(req);
     if (req.user.role === "viewer") {
       // Fixed centre-level aggregates only; no identifier search or small cells.
@@ -414,7 +441,7 @@ export function mountSppb(app, { control, workspaces, access }) {
       }));
     res.json({
       summary: r.summary,
-      analysis:sppbParticipationAnalysis(r.filtered,r.ctx.states,r.q.asOf),
+      analysis:sppbParticipationAnalysis(r.filtered,await linkedStates(r.ctx,r.filtered,r.q.asOf),r.q.asOf),
       recordedScores: r.recordedScores,
       rows,
       total: r.filtered.length,
@@ -427,7 +454,7 @@ export function mountSppb(app, { control, workspaces, access }) {
   });
   app.get("/api/sppb/members/:id", async (req, res) => {
     staff(req);
-    const ctx = await context(req),
+    const ctx = await context(req,false,false,true,req.params.id),
       member = ctx.people.get(req.params.id);
     if (!member)
       throw fail(
@@ -465,7 +492,7 @@ export function mountSppb(app, { control, workspaces, access }) {
         programmes = new Set(),
         domains = new Set(),
         events = new Set();
-      for (const state of ctx.states) {
+      for (const state of await linkedStates(ctx,[summary],todaySG())) {
         const sessions = new Map(state.data.sessions.map((s) => [s.id, s])),
           catalogue = new Map(state.data.programmes.map((p) => [p.id, p]));
         for (const a of state.data.attendance)
@@ -734,11 +761,17 @@ export function mountSppb(app, { control, workspaces, access }) {
   });
   app.post("/api/sppb/reprocess", async (req, res) => {
     await globalAdmin(req);
-    const ctx = await context(req, true);
+    const ctx = await context(req, true,true);
     res.json(
       await dataTransaction(
         control,
         function* (tx) {
+          if(control.dialect==='postgres'){
+            const keys=[...ctx.existing],predicate='COALESCE(member_key=ANY($1::text[]),false)';
+            const counts=(yield tx.query(`SELECT COUNT(*) FILTER(WHERE ${predicate} AND NOT COALESCE((details::jsonb->>'linkedExisting')::boolean,false))::int linked,COUNT(*) FILTER(WHERE NOT ${predicate})::int unmatched,COUNT(*) FILTER(WHERE (details::jsonb->'linkedExisting') IS DISTINCT FROM to_jsonb(${predicate}))::int changed FROM glowbb.sppb_records`,[keys])).rows[0];
+            if(counts.changed)yield tx.query(`UPDATE glowbb.sppb_records SET details=jsonb_set(details::jsonb,'{linkedExisting}',to_jsonb(${predicate}),true)::text WHERE (details::jsonb->'linkedExisting') IS DISTINCT FROM to_jsonb(${predicate})`,[keys]);
+            const result={linked:counts.linked,unmatched:counts.unmatched};yield* log(tx,req.user,'sppb.reprocessed',result);return result;
+          }
           let linked = 0,
             unmatched = 0;
           for (const row of yield tx
@@ -748,7 +781,7 @@ export function mountSppb(app, { control, workspaces, access }) {
               matched = ctx.existing.has(row.member_key);
             if (matched && !r.linkedExisting) linked++;
             if (!matched) unmatched++;
-            yield tx
+            if(r.linkedExisting!==matched)yield tx
               .prepare("UPDATE sppb_records SET details=? WHERE id=?")
               .run(JSON.stringify({ ...r, linkedExisting: matched }), row.id);
           }
@@ -938,7 +971,7 @@ export function mountSppb(app, { control, workspaces, access }) {
   });
   app.post("/api/sppb/members/:id/followup", async (req, res) => {
     staff(req);
-    const ctx = await context(req);
+    const ctx = await context(req,false,false,true,req.params.id);
     if (!ctx.people.has(req.params.id))
       throw fail(404, "Verified client affiliation is required.");
     const { assigned, status, revision } = req.body;
