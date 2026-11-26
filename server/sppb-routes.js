@@ -136,14 +136,14 @@ export function mountSppb(app, { control, workspaces, access }) {
     return ids;
   }
   const summaryCache=boundedAnalyticsCache({ttlMs:configuredCacheTtl(),maxEntries:32,maxBytes:8*1024*1024});
-  async function context(req, all = false, existingOnly = false, lightweight=false,memberId=null) {
-    const ids=await scopeIds(req,all);
+  async function context(req, all = false, existingOnly = false, lightweight=false,memberId=null,workspace=null) {
+    const ids=workspace ? [workspace.id] : await scopeIds(req,all);
     const people = new Map(),
       existing = new Set(),
       states = [];
     let complete = ids.length > 0;
     for (const id of ids) {
-      const db = await workspaces.get(id),
+      const db = workspace?.db || await workspaces.get(id),
         storage = db.storage || { readData, getSettings };
       if(existingOnly){
         for(const p of await db.prepare('SELECT id FROM participants').all())existing.add(p.id);
@@ -235,9 +235,9 @@ export function mountSppb(app, { control, workspaces, access }) {
       throw fail(400, "Choose a valid assessment page.");
     return { ...q, page, asOf: q.asOf || todaySG() };
   }
-  async function report(req) {
+  async function report(req, workspace = null) {
     const q = filterInput(req),
-      ctx = await context(req,false,false,true),
+      ctx = await context(req,false,false,true,null,workspace),
       config = await configuration(control),
       records = await allRecords(control,new Set(ctx.people.keys()),true);
     const visible = [...ctx.people.values()].filter(
@@ -1114,4 +1114,5 @@ export function mountSppb(app, { control, workspaces, access }) {
         .replace('</html>',linkedHtml+'</html>'));
     }
   });
+  return (id, db, query) => report({ query }, { id, db });
 }

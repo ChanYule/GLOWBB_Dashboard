@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { join, resolve, dirname } from "node:path";
 import { openDb } from "./db.js";
 import { defaults } from "./domain.js";
@@ -72,6 +73,29 @@ export async function mirrorUser(db, user) {
 }
 export function centreStore(control, { directory, openWorkspace } = {}) {
   const stores = new Map();
+  const pathFor = (id) => join(directory || process.env.CENTRE_DATA_DIR ||
+    resolve(dirname(process.env.DB_PATH || resolve("data/glowbb.sqlite")), "centres"), id + ".sqlite");
+  async function withExisting(id, work) {
+    if (!centreById(id)) return null;
+    if (openWorkspace) return stores.has(id) ? work(await stores.get(id)) : null;
+    if (control.centreConnection) {
+      const exists = await control.prepare(
+        "SELECT schema_name FROM information_schema.schemata WHERE schema_name=?",
+      ).get("centre_" + id);
+      return exists ? work(control.centreConnection(id)) : null;
+    }
+    const path = pathFor(id);
+    if (!existsSync(path)) return null;
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      db.exec("BEGIN");
+      if (JSON.parse(db.prepare("SELECT value FROM settings WHERE id=1").get()?.value || "{}").centreId !== id)
+        return null;
+      return await work(db);
+    } finally {
+      db.close();
+    }
+  }
   async function get(id) {
     if (!centreById(id))
       throw Object.assign(Error("Unknown centre."), { status: 400 });
@@ -134,14 +158,7 @@ export function centreStore(control, { directory, openWorkspace } = {}) {
               }
             });
           } else {
-            const path =
-              directory ||
-              process.env.CENTRE_DATA_DIR ||
-              resolve(
-                dirname(process.env.DB_PATH || resolve("data/glowbb.sqlite")),
-                "centres",
-              );
-            db = openDb(join(path, id + ".sqlite"));
+            db = openDb(pathFor(id));
             const marker = JSON.parse(
               db.prepare("SELECT value FROM settings WHERE id=1").get().value,
             ).centreId;
@@ -159,7 +176,7 @@ export function centreStore(control, { directory, openWorkspace } = {}) {
       );
     return stores.get(id);
   }
-  return { get, stores };
+  return { get, stores, withExisting };
 }
 async function initialize(db, id) {
   const count = await db.prepare("SELECT COUNT(*) AS n FROM attendance").get();

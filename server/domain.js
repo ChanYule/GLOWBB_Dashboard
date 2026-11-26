@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import ExcelJS from "exceljs";
 import unzipper from "unzipper";
 import { parse } from "csv-parse/sync";
-import { EVENT_TYPE_HEADER, parseEventTypes,sessionEventTypes } from './event-types.js';
+import { EVENT_TYPE_HEADER, UNCLASSIFIED, parseEventTypes,sessionEventTypes } from './event-types.js';
 import { DEFAULT_RELIABILITY } from '../shared/participation-reliability.js';
 import { DEFAULT_ENGAGEMENT } from '../shared/engagement-depth.js';
 import { DEFAULT_OUTREACH_RULES } from "../shared/outreach-priority-rules.js";
@@ -584,6 +584,11 @@ function calculateAnalytics(
   }
   const isSenior = (p) => p.age !== null && p.age >= settings.seniorAge;
   const isMinority = (p) => settings.minority.includes(p.race);
+  const matchesSubdomain = (session) => {
+    if (!filters.subdomain) return true;
+    const labels = sessionEventTypes(session, settings);
+    return labels.length ? labels.includes(filters.subdomain) : filters.subdomain === UNCLASSIFIED;
+  };
   const base = all.filter(
     (a) =>
       (!filters.risk ||
@@ -606,6 +611,7 @@ function calculateAnalytics(
       (!filters.from || a.s.date >= filters.from) &&
       (!filters.to || a.s.date <= filters.to) &&
       domainMatches(filters.domain, a.s, a.pg, settings) &&
+      matchesSubdomain(a.s) &&
       matchesSelection(filters.programme, a.pg.id) &&
       matchesSelection(filters.gender, a.p.gender) &&
       matchesSelection(filters.race, a.p.race) &&
@@ -724,7 +730,7 @@ function calculateAnalytics(
     }
     return previous;
   };
-  if (summaryOnly && summaryOnly !== "overview")
+  if (summaryOnly && summaryOnly !== "overview" && summaryOnly !== "external-detail")
     return summaryOnly === "compare"
       ? { summary, previous: previousFor() }
       : { summary };
@@ -744,18 +750,19 @@ function calculateAnalytics(
         : [filters.from, filters.to];
       return { label, ...stats(r, ...bounds) };
     });
-  const period = ["day", "week", "month", "quarter"].includes(filters.interval)
+  const period = ["day", "week", "month", "quarter", "year"].includes(filters.interval)
     ? filters.interval
     : "month";
   function periodBounds(label, unit) {
     const from =
       unit === "month"
         ? label + "-01"
-        : unit === "quarter"
+        : unit === "year" ? label + "-01-01" : unit === "quarter"
           ? `${label.slice(0, 4)}-${String((Number(label.at(-1)) - 1) * 3 + 1).padStart(2, "0")}-01`
           : label;
     const next = new Date(from + "T00:00:00Z");
-    if (unit === "month" || unit === "quarter")
+    if (unit === "year") next.setUTCFullYear(next.getUTCFullYear() + 1);
+    else if (unit === "month" || unit === "quarter")
       next.setUTCMonth(next.getUTCMonth() + (unit === "quarter" ? 3 : 1));
     else next.setUTCDate(next.getUTCDate() + (unit === "week" ? 7 : 1));
     const to = new Date(+next - 86400000).toISOString().slice(0, 10);
@@ -766,6 +773,7 @@ function calculateAnalytics(
   }
   const bucket = (date) => {
     if (period === "day") return date;
+    if (period === "year") return date.slice(0, 4);
     if (period === "quarter")
       return date.slice(0, 4) + "-Q" + Math.ceil(Number(date.slice(5, 7)) / 3);
     if (period === "week") {
@@ -864,6 +872,25 @@ function calculateAnalytics(
       value: [...frequencies.values()].filter((s) => s.size >= 5).length,
     },
   ];
+  const demographics = () => ({
+    gender: breakdown((p) => p.gender),
+    race: breakdown((p) => p.race),
+    ages: breakdown((p) =>
+      p.age < settings.ageBands[0]
+        ? `${settings.seniorAge}–${settings.ageBands[0] - 1}`
+        : p.age < settings.ageBands[1]
+          ? `${settings.ageBands[0]}–${settings.ageBands[1] - 1}`
+          : `${settings.ageBands[1]}+`,
+    ),
+    clients: breakdown((p) =>
+      p.client === null ? "Unknown" : p.client ? "Existing client" : "Other attendee",
+    ),
+    boundary: breakdown((p) =>
+      p.boundary === null ? "Unknown" : p.boundary ? "Within boundary" : "Outside boundary",
+    ),
+  });
+  if (summaryOnly === "external-detail")
+    return { summary, programmes, trends, frequency, ...demographics() };
   const timing = group(
     base,
     (a) =>
@@ -988,29 +1015,7 @@ function calculateAnalytics(
     trends,
     programmes,
     domains: PROGRAMME_DOMAINS.map(label=>({label,...stats(base.filter(a=>sessionDomains(a.s,a.pg,settings).includes(label)))})),
-    gender: breakdown((p) => p.gender),
-    race: breakdown((p) => p.race),
-    ages: breakdown((p) =>
-      p.age < settings.ageBands[0]
-        ? `${settings.seniorAge}–${settings.ageBands[0] - 1}`
-        : p.age < settings.ageBands[1]
-          ? `${settings.ageBands[0]}–${settings.ageBands[1] - 1}`
-          : `${settings.ageBands[1]}+`,
-    ),
-    clients: breakdown((p) =>
-      p.client === null
-        ? "Unknown"
-        : p.client
-          ? "Existing client"
-          : "Other attendee",
-    ),
-    boundary: breakdown((p) =>
-      p.boundary === null
-        ? "Unknown"
-        : p.boundary
-          ? "Within boundary"
-          : "Outside boundary",
-    ),
+    ...demographics(),
     frequency,
     timing,
     duration: group(base, (a) =>

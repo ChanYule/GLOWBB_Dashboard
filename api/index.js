@@ -49,6 +49,8 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
     const headers = new Headers();
     for (const key of ["content-type", "accept", "origin", "cookie", "x-centre-id"])
       if (req.headers[key]) headers.set(key, req.headers[key]);
+    if (/^\/api\/reporting\/v1(?:\/|$)/i.test(target.pathname) && req.headers.authorization)
+      headers.set("authorization", req.headers.authorization);
     let body;
     if (!["GET", "HEAD"].includes(req.method)) {
       try {
@@ -127,6 +129,8 @@ export function createProxy({ backendUrl, fetchImpl = fetch } = {}) {
         "content-security-policy",
         "x-content-type-options",
         "x-frame-options",
+        "www-authenticate",
+        "allow",
       ]) {
         const value = upstream.headers.get(key);
         if (value) res.setHeader(key, value);

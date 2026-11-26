@@ -22,7 +22,7 @@ export const screeningActivities = {
   sppb: "GLOW - SPPB Assessment",
   tanita: "GLOW - Tanita Body Measurement",
 };
-const screeningActivityNames = {
+export const screeningActivityNames = {
   sppb: [screeningActivities.sppb],
   tanita: [screeningActivities.tanita, "GLOW - Tanita Body Measurements"],
 };

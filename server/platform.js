@@ -18,6 +18,7 @@ import { analytics, todaySG } from "./domain.js";
 import { clientPopulation, validDay } from "./client-domain.js";
 import { dataTransaction } from "./data-management.js";
 import { withoutRoutingQuery } from "./request-url.js";
+import { mountManagementReporting } from "./management-reporting.js";
 const fail = (status, message) => Object.assign(Error(message), { status });
 export function createPlatformApp(control = openDb(), options = {}) {
   const authRequired = options.authRequired ?? false;
@@ -60,6 +61,9 @@ export function createPlatformApp(control = openDb(), options = {}) {
     });
     next();
   });
+  let sppbReport;
+  mountManagementReporting(app, { ready, workspaces, control,
+    getSppb: () => sppbReport, config: options.managementReporting });
   app.use(express.json({ limit: "2mb" }));
   app.use("/api", async (req, _res, next) => {
     await ready;
@@ -230,7 +234,7 @@ export function createPlatformApp(control = openDb(), options = {}) {
     res.json({ ok: true });
   });
   mountLargeUploads(app,{control,access});
-  mountSppb(app, { control, workspaces, access });
+  sppbReport = mountSppb(app, { control, workspaces, access });
   mountCentreImports(app, {
     control,
     workspaces,

@@ -53,8 +53,10 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
     },
     end: () => engine.close(),
   };
+  const key = "synthetic-postgres-reporting-key-012345";
   const control = openPostgres(undefined, { pool }),
-    app = createPlatformApp(control, { authRequired: false });
+    app = createPlatformApp(control, { authRequired: false,
+      managementReporting: { key, centres: "glow_bukit_batok", scores: true } });
   await app.platform.ready;
   const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
@@ -189,6 +191,14 @@ test("PostgreSQL centre schemas isolate all existing stores and remain private; 
         .summary.attendance,
       1,
     );
+    for (const endpoint of ["summary?year=2026", "datasets", "health-assessments?year=2026", "membership?year=2026", "kpis?year=2026"]) {
+      const response = await fetch(origin + "/api/reporting/v1/" + endpoint, {
+        headers: { Authorization: "Bearer " + key },
+      });
+      const body = await response.json();
+      assert.equal(response.status, 200, JSON.stringify(body));
+      if (endpoint.startsWith("summary")) assert.equal(body.metrics.attendance.value, 0);
+    }
     assert.equal(
       (
         await engine.query(
